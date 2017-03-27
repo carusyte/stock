@@ -13,69 +13,9 @@ import (
 	"os"
 	"sync"
 	"time"
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/indc"
 )
-
-type Stock struct {
-	Code             string
-	Name             string
-	Industry         sql.NullString
-	Area             sql.NullString
-	Pe               float32
-	Outstanding      float32
-	Totals           float32
-	TotalAssets      float64
-	LiquidAssets     float64
-	FixedAssets      float64
-	Reserved         float64
-	ReservedPerShare float32
-	Esp              float32
-	Bvps             float32
-	Pb               float32
-	TimeToMarket     string
-	Undp             float64
-	Perundp          float32
-	Rev              float32
-	Profit           float32
-	Gpr              float32
-	Npr              float32
-	Holders          int64
-}
-
-type Kline struct {
-	Code   string
-	Date   string
-	Open   float32
-	High   float32
-	Close  float32
-	Low    float32
-	Volume float64
-	Amount float64
-	Factor sql.NullFloat64
-}
-
-type Klinew struct {
-	Code   string `db:",size:6"`
-	Date   string `db:",size:10"`
-	Klid   int
-	Open   float32
-	High   float32
-	Close  float32
-	Low    float32
-	Volume float64
-	Amount float64
-}
-
-type Klinem struct {
-	Code   string `db:",size:6"`
-	Date   string `db:",size:10"`
-	Klid   int
-	Open   float32
-	High   float32
-	Close  float32
-	Low    float32
-	Volume float64
-	Amount float64
-}
 
 const APP_VERSION = "0.1"
 
@@ -83,6 +23,7 @@ const APP_VERSION = "0.1"
 var versionFlag *bool = flag.Bool("v", false, "Print the version number.")
 
 func main() {
+	start := time.Now()
 	flag.Parse() // Scan the arguments list
 
 	if *versionFlag {
@@ -95,10 +36,11 @@ func main() {
 	cal(dbmap)
 
 	dbmap.Db.Close()
+	log.Printf("Time Elapsed: %f sec", time.Since(start).Seconds())
 }
 
-func getStocks(dbmap *gorp.DbMap) []Stock {
-	var stocks []Stock
+func getStocks(dbmap *gorp.DbMap) []model.Stock {
+	var stocks []model.Stock
 	_, err := dbmap.Select(&stocks, "select * from basics order by code")
 	checkErr(err, "Select failed")
 	log.Printf("number of stock: %d\n", len(stocks))
@@ -117,12 +59,15 @@ func initDb(full bool) *gorp.DbMap {
 	dbmap := &gorp.DbMap{Db: db, Dialect: gorp.MySQLDialect{"InnoDB", "utf8"}}
 
 	if full {
-		dbmap.AddTableWithName(Klinew{}, "kline_w").SetKeys(false, "Code", "Date", "Klid")
-		dbmap.AddTableWithName(Klinem{}, "kline_m").SetKeys(false, "Code", "Date", "Klid")
+		dbmap.AddTableWithName(model.KlineW{}, "kline_w").SetKeys(false, "Code", "Date", "Klid")
+		dbmap.AddTableWithName(model.KlineM{}, "kline_m").SetKeys(false, "Code", "Date", "Klid")
+		dbmap.AddTableWithName(model.Indicator{},"indicator_d").SetKeys(false,"Code","Date","Klid")
+		dbmap.AddTableWithName(model.IndicatorW{},"indicator_w").SetKeys(false,"Code","Date","Klid")
+		dbmap.AddTableWithName(model.IndicatorM{},"indicator_m").SetKeys(false,"Code","Date","Klid")
 		err = dbmap.CreateTablesIfNotExists()
 		checkErr(err, "Create tables failed,")
-		err = dbmap.TruncateTables()
-		checkErr(err, "Truncate tables failed,")
+		//err = dbmap.TruncateTables()
+		//checkErr(err, "Truncate tables failed,")
 	}
 
 	checkErr(db.Ping(), "Failed to ping db,")
@@ -144,29 +89,32 @@ func cal(dbmap *gorp.DbMap) {
 	wg.Add(len(stocks))
 
 	for _, s := range stocks {
-		go func(s Stock, dbmap *gorp.DbMap) {
+		go func(s model.Stock, dbmap *gorp.DbMap) {
 			defer wg.Done()
 
 			log.Println("Calculating week kline for " + s.Code)
-			var klines []Kline
+			var klines []*model.Kline
 			_, err := dbmap.Select(&klines, "select * from kline_d where code = ? order by code, date", s.Code)
 			checkErr(err, "Failed to query kline_d for "+s.Code)
 
-			log.Printf("%s, %d", s.Code, len(klines))
+			log.Printf("%s, kline(s) of day: %d", s.Code, len(klines))
 
-			var klinesw []*Klinew
-			var klinesm []*Klinem
+			q :=  make([]*model.Quote, len(klines))
+			var qw []*model.Quote
+			var qm []*model.Quote
+			var klinesw []*model.KlineW
+			var klinesm []*model.KlineM
 
 			klw := newKlinew()
 			klm := newKlinem()
 			var lastWeekDay, lastMonth int = 7, 0
 			var klid_w, klid_m int = 0, 0
-			for _, k := range klines {
-				//log.Printf("%v\n", k)
+			for i, k := range klines {
+				q[i] = &k.Quote
 				t, err := time.Parse("2006-01-02 15:04:05", k.Date)
 				checkErr(err, "failed to parse date from kline_d "+k.Date)
 				tw, err := time.Parse("2006-01-02", klw.Date)
-				checkErr(err, "failed to parse date in Klinew "+klw.Date)
+				checkErr(err, "failed to parse date in KlineW "+klw.Date)
 
 				if int(t.Weekday()) <= lastWeekDay || t.Add(-1*time.Duration(7)*time.Hour*24).After(tw) {
 					klw = newKlinew()
@@ -179,6 +127,8 @@ func cal(dbmap *gorp.DbMap) {
 					klw.Open = k.Open
 					klw.Low = k.Low
 					lastWeekDay = int(t.Weekday())
+
+					qw = append(qw, &klw.Quote)
 				}
 
 				if int(t.Month()) != lastMonth {
@@ -192,6 +142,8 @@ func cal(dbmap *gorp.DbMap) {
 					klm.Open = k.Open
 					klm.Low = k.Low
 					lastMonth = int(t.Month())
+
+					qm = append(qm, &klm.Quote)
 				}
 
 				klw.Date, klm.Date = k.Date[:10], k.Date[:10]
@@ -220,9 +172,13 @@ func cal(dbmap *gorp.DbMap) {
 
 				klw.Close, klm.Close = k.Close, k.Close
 			}
-			batchInsert(dbmap, klinesw, klinesm)
 
-			log.Printf("Complete: %s, week: %d, month: %d\n", s.Code, len(klinesw), len(klinesm))
+			kdj := indc.DeftKDJ(q)
+			kdjw := indc.DeftKDJ_W(qw)
+			kdjm := indc.DeftKDJ_M(qm)
+			batchInsert(dbmap, klinesw, klinesm, kdj, kdjw, kdjm)
+
+			log.Printf("Complete: %s, day: %d, week: %d, month: %d\n", s.Code, len(klines), len(klinesw), len(klinesm))
 		}(s, dbmap)
 	}
 
@@ -231,23 +187,24 @@ func cal(dbmap *gorp.DbMap) {
 	log.Println("Finished processing")
 }
 
-func newKlinew() *Klinew {
-	klw := &Klinew{}
+func newKlinew() *model.KlineW {
+	klw := &model.KlineW{}
 	klw.Klid = -1
 	klw.Date = "1900-01-01"
 	return klw
 }
 
-func newKlinem() *Klinem {
-	klm := &Klinem{}
+func newKlinem() *model.KlineM {
+	klm := &model.KlineM{}
 	klm.Klid = -1
 	klm.Date = "1900-01-01"
 	return klm
 }
 
-func batchInsert(dbmap *gorp.DbMap, klinesw []*Klinew, klinesm []*Klinem) {
+func batchInsert(dbmap *gorp.DbMap, klinesw []*model.KlineW, klinesm []*model.KlineM, indc []*model.Indicator, indcw []*model.IndicatorW, indcm []*model.IndicatorM) {
 	var code string
 	// Start a new transaction
+	/*
 	if len(klinesw) > 0 {
 		trans, err := dbmap.Begin()
 		checkErr(err, "failed to start a new transaction")
@@ -279,5 +236,56 @@ func batchInsert(dbmap *gorp.DbMap, klinesw []*Klinew, klinesm []*Klinem) {
 		}
 		checkErr(trans.Commit(), "failed to commit transaction")
 		log.Printf("%s: %d records saved to klines_m", code, len(klinesm))
+	}*/
+
+	if len(indc) > 0 {
+		trans, err := dbmap.Begin()
+		checkErr(err, "failed to start a new transaction")
+
+		for i, _ := range indc {
+			k := indc[i]
+			trans.Insert(k)
+			if i%200 == 0 {
+				checkErr(trans.Commit(), "failed to commit transaction")
+				trans, err = dbmap.Begin()
+				checkErr(err, "failed to start a new transaction")
+			}
+		}
+		checkErr(trans.Commit(), "failed to commit transaction")
+		log.Printf("%s: %d records saved to indicator_d", code, len(indc))
+	}
+
+	if len(indcw) > 0 {
+		trans, err := dbmap.Begin()
+		checkErr(err, "failed to start a new transaction")
+
+		for i, _ := range indcw {
+			k := indcw[i]
+			trans.Insert(k)
+			if i%200 == 0 {
+				checkErr(trans.Commit(), "failed to commit transaction")
+				trans, err = dbmap.Begin()
+				checkErr(err, "failed to start a new transaction")
+			}
+		}
+		checkErr(trans.Commit(), "failed to commit transaction")
+		log.Printf("%s: %d records saved to indicator_w", code, len(indcw))
+	}
+
+	if len(indcm) > 0 {
+		trans, err := dbmap.Begin()
+		checkErr(err, "failed to start a new transaction")
+
+		for i, _ := range indcm {
+			k := indcm[i]
+			trans.Insert(k)
+			if i%200 == 0 {
+				checkErr(trans.Commit(), "failed to commit transaction")
+				trans, err = dbmap.Begin()
+				checkErr(err, "failed to start a new transaction")
+			}
+		}
+		checkErr(trans.Commit(), "failed to commit transaction")
+		log.Printf("%s: %d records saved to indicator_m", code, len(indcm))
 	}
 }
