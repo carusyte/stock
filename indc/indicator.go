@@ -2,6 +2,8 @@ package indc
 
 import (
 	"github.com/carusyte/stock/model"
+	"log"
+	"math"
 	"reflect"
 )
 
@@ -14,6 +16,10 @@ func SMA(src []float64, n, m int) []float64 {
 			r[x] = fm * i / fn
 		} else {
 			r[x] = (fm*i + (fn-fm)*r[x-1]) / fn
+		}
+		if math.IsNaN(r[x]) {
+			log.Printf("NaN detected in SMA, x[%d], i[%f], m[%d], n[%d], %+v", x, i, m, n, src)
+			panic(src)
 		}
 	}
 	return r

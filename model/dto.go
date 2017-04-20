@@ -1,6 +1,10 @@
 package model
 
-import "database/sql"
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+)
 
 type Stock struct {
 	Code             string
@@ -31,12 +35,21 @@ type Stock struct {
 type Quote struct {
 	Code   string `db:",size:6"`
 	Date   string `db:",size:10"`
+	Klid   int
 	Open   float64
 	High   float64
 	Close  float64
 	Low    float64
 	Volume float64
 	Amount float64
+}
+
+func (q *Quote) String() string{
+	j, e := json.Marshal(q)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
 }
 
 type Kline struct {
@@ -46,14 +59,13 @@ type Kline struct {
 
 type KlineW struct {
 	Quote
-	Klid   int
 }
 
 type KlineM struct {
 	KlineW
 }
 
-type Indicator struct{
+type Indicator struct {
 	Code  string `db:",size:6"`
 	Date  string `db:",size:10"`
 	Klid  int
@@ -62,10 +74,18 @@ type Indicator struct{
 	KDJ_J float64
 }
 
-type IndicatorW struct{
+type IndicatorW struct {
 	Indicator
 }
 
-type IndicatorM struct{
+type IndicatorM struct {
 	Indicator
+}
+
+func (k *KlineW) String() string {
+	j, e := json.Marshal(k)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
 }

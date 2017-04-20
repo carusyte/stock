@@ -1,0 +1,88 @@
+-- name: HiDivi
+SELECT
+    A.code,
+    B.name,
+    A.date last_price_date,
+    A.close,
+    B.divi,
+    B.shares,
+    B.report_year,
+    TRUNCATE(B.divi / A.close * 10 * (1-0.18413), 3) dps,
+    C.pe,
+    C.esp,
+    C.bvps,
+    C.pb,
+    C.undp,
+    C.rev,
+    C.profit,
+    C.gpr,
+    C.npr
+FROM
+    (SELECT
+        *
+    FROM
+        kline_d
+    INNER JOIN (SELECT
+        code, MAX(date) date
+    FROM
+        kline_d
+    GROUP BY code) AS kmax USING (code , date)) AS A,
+    (SELECT
+        *
+    FROM
+        (SELECT
+        code,
+            name,
+            SUBSTR(report_date, 1, 4) AS report_year,
+            SUM(divi) divi,
+            SUM(shares) shares
+    FROM
+        `div`
+    GROUP BY code , name , report_year) AS T1
+    INNER JOIN (SELECT
+        code, MAX(SUBSTR(report_date, 1, 4)) AS report_year
+    FROM
+        `div`
+    GROUP BY code) AS T2 USING (code , report_year)) AS B,
+    (SELECT
+        code, pe, esp, bvps, pb, undp, rev, profit, gpr, npr
+    FROM
+        basics) AS C
+WHERE
+    A.code = B.code AND A.code = C.code
+ORDER BY dps DESC
+LIMIT ?
+
+-- name: lastNTD
+SELECT
+    calendarDate
+FROM
+    tradecal
+WHERE
+    isOpen = 1
+    AND calendarDate < DATE(NOW())
+ORDER BY `index` DESC
+LIMIT 1 OFFSET ?
+
+-- name: backwardTD
+SELECT
+    calendarDate
+FROM
+    tradecal
+WHERE
+    isOpen = 1
+    AND calendarDate < DATE(?)
+ORDER BY `index` DESC
+LIMIT 1 OFFSET ?
+
+-- name: supKlid
+SET @c := ?;
+SELECT @vklid := CASE
+         WHEN MAX(klid) IS NULL THEN -1
+         ELSE MAX(klid)
+     END
+FROM
+      (SELECT klid
+       FROM kline_d
+       WHERE code = @c) t;
+update kline_d set klid = (@vklid := @vklid + 1) where code = @c and klid is null order by date
