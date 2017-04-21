@@ -22,42 +22,49 @@ import (
 )
 
 const APP_VERSION = "0.1"
-const PARALLEL = 256
 
 // The flag package provides a default help printer via -h switch
 var versionFlag *bool = flag.Bool("v", false, "Print the version number.")
+var pall *bool = flag.Bool("pall", false, "Purge all stale calculated data before processing")
 var dot *dotsql.DotSql
+var dbmap *gorp.DbMap
 
 func init() {
 	logFile, err := os.OpenFile("calk.log", os.O_CREATE|os.O_RDWR, 0666)
 	util.CheckErr(err, "failed to open log file")
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
+	dbmap = db.Get(true, *pall)
 }
 
 //TODO refactor to run in single process?
 func main() {
 	start := time.Now()
 	defer func() {
-		log.Printf("Time Elapsed: %f sec", time.Since(start).Seconds())
+		ss := start.Format("2006-01-02 15:04:05")
+		end := time.Now().Format("2006-01-02 15:04:05")
+		dur := time.Since(start).Seconds()
+		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
+			" on duplicate key update start=?, end=?, dur=?", "CALK_TOTAL", ss, end, dur, ss, end, dur, )
+		log.Printf("Complete. Time Elapsed: %f sec", time.Since(start).Seconds())
 	}()
 
 	flag.Parse() // Scan the arguments list
 
 	if *versionFlag {
 		fmt.Println("Version:", APP_VERSION)
+		return
 	}
 
 	var err error
 	// initialize the DbMap
 	dot, err = dotsql.LoadFromFile("/Users/jx/ProgramData/go/src/github.com/carusyte/stock/ask/sql.txt")
 	util.CheckErr(err, "failed to init dotsql")
-	dbmap := db.Get(true, false)
 
-	cal(dbmap)
+	cal()
 }
 
-func getStocks(dbmap *gorp.DbMap) []model.Stock {
+func getStocks() []model.Stock {
 	var stocks []model.Stock
 	_, err := dbmap.Select(&stocks, "select * from basics order by code")
 	checkErr(err, "Select failed")
@@ -71,29 +78,20 @@ func checkErr(err error, msg string) {
 	}
 }
 
-func cal(dbmap *gorp.DbMap) {
-	purgeOld(dbmap)
-	stocks := getStocks(dbmap)
+func cal() {
+	purgeOld()
+	stocks := getStocks()
 
 	var wg sync.WaitGroup
-	log.Printf("stocks to process: %d", len(stocks))
 	wg.Add(len(stocks))
-	sem := make(chan bool, PARALLEL)
-
-	for i, s := range stocks {
-		log.Printf("ready to process [%d]%s", i, s.Code)
-		sem <- true
-		go caljob(wg, s, dbmap, sem)
+	for _, s := range stocks {
+		go caljob(&wg, s)
 		//time.Sleep(1 * time.Second)
 	}
-
 	wg.Wait()
-	close(sem)
-	log.Println("Finished processing")
 }
 
 func supplementKlid(code string) {
-	log.Printf("supplementing klid for kline_d...")
 	supKlid, err := dot.Raw("supKlid")
 	supKlid = strings.Replace(supKlid, "?", fmt.Sprintf("'%s'", code), 1)
 	checkErr(err, "failed to get supKlid query")
@@ -103,9 +101,8 @@ func supplementKlid(code string) {
 		util.CheckErrNop(e, code+" failed to release mysql connection")
 	}()
 	res, err := mysql.Start(supKlid)
-	checkErr(err, "failed to supplement klid")
+	checkErr(err, code+" failed to supplement klid")
 	readResults(res)
-	log.Printf("klid supplemented for %s", code)
 }
 func readResults(result mysql.Result) {
 	result, err := result.NextResult()
@@ -122,15 +119,18 @@ func readResults(result mysql.Result) {
 	}
 }
 
-func caljob(wg sync.WaitGroup, s model.Stock, dbmap *gorp.DbMap, sem chan bool) {
+func caljob(wg *sync.WaitGroup, s model.Stock) {
 	start := time.Now()
 	defer func() {
 		wg.Done()
-		<-sem
+		ss := start.Format("2006-01-02 15:04:05")
+		end := time.Now().Format("2006-01-02 15:04:05")
+		dur := time.Since(start).Seconds()
+		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
+			" on duplicate key update start=?, end=?, dur=?", s.Code, ss, end, dur, ss, end, dur, )
 	}()
-	log.Println("Calculating week kline for " + s.Code)
 	supplementKlid(s.Code)
-	klines, mxw, mxm := getKlines(s, dbmap)
+	klines, mxw, mxm := getKlines(s)
 	q := make([]*model.Quote, len(klines))
 	var qw []*model.Quote
 	var qm []*model.Quote
@@ -207,18 +207,18 @@ func caljob(wg sync.WaitGroup, s model.Stock, dbmap *gorp.DbMap, sem chan bool) 
 		klw.Close, klm.Close = k.Close, k.Close
 	}
 
-	mxid, mxiw, mxim := getMaxIdcDates(dbmap, s.Code)
+	mxid, mxiw, mxim := getMaxIdcDates(s.Code)
 
 	kdj := subidc(indc.DeftKDJ(q), mxid)
 	kdjw := subidcw(indc.DeftKDJ_W(qw), mxiw)
 	kdjm := subidcm(indc.DeftKDJ_M(qm), mxim)
-	batchInsert(dbmap, klinesw, klinesm, kdj, kdjw, kdjm)
+	batchInsert(s.Code, klinesw, klinesm, kdj, kdjw, kdjm)
 
-	log.Printf("Complete in %f s: %s, dy: %d, wk: %d, mo: %d\n", time.Since(start).Seconds(),
-		s.Code, len(klines), len(klinesw), len(klinesm))
+	log.Printf("%s complete in %f s: dy: %d, wk: %d, mo: %d\n", s.Code, time.Since(start).Seconds(),
+		len(klines), len(klinesw), len(klinesm))
 }
 
-func getMaxIdcDates(dbmap *gorp.DbMap, code string) (mxid, mxiw, mxim int) {
+func getMaxIdcDates(code string) (mxid, mxiw, mxim int) {
 	mxid, mxiw, mxim = -1, -1, -1
 	mxidn, err := dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
 	checkErr(err, "failed to query max klid in indicator_d for "+code)
@@ -272,24 +272,21 @@ func subidcm(q []*model.IndicatorM, klid int) (ret []*model.IndicatorM) {
 }
 
 // Fetch all klines, latest kline_w and kline_m. Nil will be return if there's no such record.
-func getKlines(s model.Stock, dbmap *gorp.DbMap) ([]*model.Kline, *model.KlineW, *model.KlineM) {
-	mxw, mxm := getMaxDates(s.Code, dbmap)
+func getKlines(s model.Stock) ([]*model.Kline, *model.KlineW, *model.KlineM) {
+	mxw, mxm := getMaxDates(s.Code)
 	var klines []*model.Kline
 	_, err := dbmap.Select(&klines, "select * from kline_d where code = ? order by date", s.Code)
 	checkErr(err, "Failed to query kline_d for "+s.Code)
-	log.Printf("%s, kline(s) of day: %d", s.Code, len(klines))
 	return klines, mxw, mxm
 }
 
-func getMaxDates(stock string, dbMap *gorp.DbMap) (daw *model.KlineW, dam *model.KlineM) {
-	e := dbMap.SelectOne(&daw, "select * from kline_w where code = ? order by date desc limit 1", stock)
-	util.CheckErrNop(e, "")
-	e = dbMap.SelectOne(&dam, "select * from kline_m where code = ? order by date desc limit 1", stock)
-	util.CheckErrNop(e, "")
+func getMaxDates(stock string) (daw *model.KlineW, dam *model.KlineM) {
+	dbmap.SelectOne(&daw, "select * from kline_w where code = ? order by date desc limit 1", stock)
+	dbmap.SelectOne(&dam, "select * from kline_m where code = ? order by date desc limit 1", stock)
 	return
 }
 
-func purgeOld(dbmap *gorp.DbMap) {
+func purgeOld() {
 	lastNTD, err := dot.Raw("lastNTD")
 	checkErr(err, "failed to fetch lastNTD from sql file")
 	lst7, err := dbmap.SelectStr(lastNTD, 7)
@@ -323,24 +320,18 @@ func newKlinem() *model.KlineM {
 	return klm
 }
 
-func dotSql() *dotsql.DotSql {
-	if dot == nil {
-		var err error
-		dot, err = dotsql.LoadFromFile("/Users/jx/ProgramData/go/src/github.com/carusyte/stock/ask/sql.txt")
-		util.CheckErr(err, "failed to init dotsql")
-	}
-	return dot
+func batchInsert(code string, klinesw []*model.KlineW, klinesm []*model.KlineM,
+	indc []*model.Indicator, indcw []*model.IndicatorW, indcm []*model.IndicatorM) {
+	cklw := binsKlw(klinesw)
+	cklm := binsKlm(klinesm)
+	cindc := binsIndc(indc)
+	cindw := binsIndcw(indcw)
+	cindm := binsIndcm(indcm)
+	log.Printf("%s saved to database, wk[%d], mo[%d], ind[%d], indw[%d], indm[%d]", code, cklw, cklm,
+		cindc, cindw, cindm)
 }
 
-func batchInsert(dbmap *gorp.DbMap, klinesw []*model.KlineW, klinesm []*model.KlineM, indc []*model.Indicator, indcw []*model.IndicatorW, indcm []*model.IndicatorM) {
-	binsKlw(dbmap, klinesw)
-	binsKlm(dbmap, klinesm)
-	binsIndc(dbmap, indc)
-	binsIndcw(dbmap, indcw)
-	binsIndcm(dbmap, indcm)
-}
-
-func binsIndcm(db *gorp.DbMap, indcm []*model.IndicatorM) {
+func binsIndcm(indcm []*model.IndicatorM) (c int) {
 	if len(indcm) > 0 {
 		valueStrings := make([]string, 0, len(indcm))
 		valueArgs := make([]interface{}, 0, len(indcm)*6)
@@ -357,13 +348,15 @@ func binsIndcm(db *gorp.DbMap, indcm []*model.IndicatorM) {
 		}
 		stmt := fmt.Sprintf("INSERT INTO indicator_m (code,date,klid,kdj_k,kdj_d,kdj_j) VALUES %s",
 			strings.Join(valueStrings, ","))
-		_, err := db.Exec(stmt, valueArgs...)
+		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert indicator_m") {
-			log.Printf("%s: %d records saved to indicator_m", code, len(indcm))
+			c = len(indcm)
 		}
 	}
+	return
 }
-func binsIndcw(db *gorp.DbMap, indcw []*model.IndicatorW) {
+
+func binsIndcw(indcw []*model.IndicatorW) (c int) {
 	if len(indcw) > 0 {
 		valueStrings := make([]string, 0, len(indcw))
 		valueArgs := make([]interface{}, 0, len(indcw)*6)
@@ -380,13 +373,15 @@ func binsIndcw(db *gorp.DbMap, indcw []*model.IndicatorW) {
 		}
 		stmt := fmt.Sprintf("INSERT INTO indicator_w (code,date,klid,kdj_k,kdj_d,kdj_j) VALUES %s",
 			strings.Join(valueStrings, ","))
-		_, err := db.Exec(stmt, valueArgs...)
+		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert indicator_w") {
-			log.Printf("%s: %d records saved to indicator_w", code, len(indcw))
+			c = len(indcw)
 		}
 	}
+	return
 }
-func binsIndc(db *gorp.DbMap, indc []*model.Indicator) {
+
+func binsIndc(indc []*model.Indicator) (c int) {
 	if len(indc) > 0 {
 		valueStrings := make([]string, 0, len(indc))
 		valueArgs := make([]interface{}, 0, len(indc)*6)
@@ -403,15 +398,17 @@ func binsIndc(db *gorp.DbMap, indc []*model.Indicator) {
 		}
 		stmt := fmt.Sprintf("INSERT INTO indicator_d (code,date,klid,kdj_k,kdj_d,kdj_j) VALUES %s",
 			strings.Join(valueStrings, ","))
-		ps, err := db.Prepare(stmt)
+		ps, err := dbmap.Prepare(stmt)
 		util.CheckErrNop(err, code+" failed to prepare statement")
 		_, err = ps.Exec(valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert indicator_d") {
-			log.Printf("%s: %d records saved to indicator_d", code, len(indc))
+			c = len(indc)
 		}
 	}
+	return
 }
-func binsKlm(db *gorp.DbMap, klinesm []*model.KlineM) {
+
+func binsKlm(klinesm []*model.KlineM) (c int) {
 	if len(klinesm) > 0 {
 		valueStrings := make([]string, 0, len(klinesm))
 		valueArgs := make([]interface{}, 0, len(klinesm)*9)
@@ -431,14 +428,15 @@ func binsKlm(db *gorp.DbMap, klinesm []*model.KlineM) {
 		}
 		stmt := fmt.Sprintf("INSERT INTO kline_m (code,date,klid,open,high,close,low,"+
 			"volume,amount) VALUES %s", strings.Join(valueStrings, ","))
-		_, err := db.Exec(stmt, valueArgs...)
+		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert kline_m") {
-			log.Printf("%s: %d records saved to kline_m", code, len(klinesm))
+			c = len(klinesm)
 		}
 	}
+	return
 }
 
-func binsKlw(db *gorp.DbMap, klws []*model.KlineW) {
+func binsKlw(klws []*model.KlineW) (c int) {
 	if len(klws) > 0 {
 		valueStrings := make([]string, 0, len(klws))
 		valueArgs := make([]interface{}, 0, len(klws)*9)
@@ -458,9 +456,10 @@ func binsKlw(db *gorp.DbMap, klws []*model.KlineW) {
 		}
 		stmt := fmt.Sprintf("INSERT INTO kline_w (code,date,klid,open,high,close,low,"+
 			"volume,amount) VALUES %s", strings.Join(valueStrings, ","))
-		_, err := db.Exec(stmt, valueArgs...)
+		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert kline_w") {
-			log.Printf("%s: %d records saved to kline_w", code, len(klws))
+			c = len(klws)
 		}
 	}
+	return
 }

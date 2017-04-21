@@ -2,7 +2,6 @@ package indc
 
 import (
 	"github.com/carusyte/stock/model"
-	"log"
 	"math"
 )
 
@@ -20,12 +19,7 @@ func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 		if llv != hhv {
 			rsv[i] = (s.Close - llv) / (hhv - llv) * 100
 		}else{
-			rsv[i] = 0
-		}
-		if math.IsNaN(llv) || math.IsNaN(hhv) || math.IsNaN(rsv[i]) {
-			log.Printf("%s NaN detected: llv[%f], hhv[%f], bg[%d], e[%d], rsv[%f], %+v", s.Code,
-				llv, hhv, bg, i+1, rsv[i], src[bg:i+1])
-			panic(r[i])
+			rsv[i] = 1
 		}
 	}
 	a := SMA(rsv, m1, 1)
@@ -34,9 +28,6 @@ func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 		r[i].KDJ_K = a[i]
 		r[i].KDJ_D = b[i]
 		r[i].KDJ_J = 3*a[i] - 2*b[i]
-		if math.IsNaN(r[i].KDJ_K) || math.IsNaN(r[i].KDJ_D) || math.IsNaN(r[i].KDJ_J) {
-
-		}
 	}
 	return r
 }
