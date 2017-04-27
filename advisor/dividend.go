@@ -3,6 +3,7 @@ package advisor
 import (
 	"github.com/carusyte/stock/util"
 	"reflect"
+	"gopkg.in/gorp.v2"
 )
 
 type cols struct {
@@ -11,8 +12,21 @@ type cols struct {
 	Date       string `db:"last_price_date"`
 	Close      float64
 	Divi       float64
+	Shares     float64
 	ReportYear string `db:"report_year"`
-	Dps        float64
+	DPS        float64
+	PE         float64
+	ESP        float64
+	BVPS       float64
+	PB         float64
+	Undp       float64
+	REV        float64
+	Profit     float64
+	GPR        float64
+	NPR        float64
+	K_D        float64
+	K_W        float64
+	K_M        float64
 }
 
 func (a *advisor) HiDivi(firstN int) *Table {

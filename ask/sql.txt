@@ -7,7 +7,8 @@ SELECT
     B.divi,
     B.shares,
     B.report_year,
-    TRUNCATE(B.divi / A.close * 10 * (1-0.18413), 3) dps,
+    TRUNCATE(B.divi / A.close * 10 * (1 - 0.18413),
+        3) dps,
     C.pe,
     C.esp,
     C.bvps,
@@ -16,7 +17,10 @@ SELECT
     C.rev,
     C.profit,
     C.gpr,
-    C.npr
+    C.npr,
+    D.kdj_k k_d,
+    E.kdj_k k_w,
+    F.kdj_k k_m
 FROM
     (SELECT
         *
@@ -47,9 +51,37 @@ FROM
     (SELECT
         code, pe, esp, bvps, pb, undp, rev, profit, gpr, npr
     FROM
-        basics) AS C
+        basics) AS C,
+    (SELECT
+        code, kdj_k
+    FROM
+        indicator_d
+    INNER JOIN (SELECT
+        code, MAX(date) date
+    FROM
+        indicator_d
+    GROUP BY code) AS imaxd USING (code , date)) AS D,
+    (SELECT
+        code, kdj_k
+    FROM
+        indicator_w
+    INNER JOIN (SELECT
+        code, MAX(date) date
+    FROM
+        indicator_w
+    GROUP BY code) AS imaxw USING (code , date)) AS E,
+    (SELECT
+        code, kdj_k
+    FROM
+        indicator_m
+    INNER JOIN (SELECT
+        code, MAX(date) date
+    FROM
+        indicator_m
+    GROUP BY code) AS imaxm USING (code , date)) AS F
 WHERE
     A.code = B.code AND A.code = C.code
+        AND A.code = D.code and A.code = E.code and A.code = F.code
 ORDER BY dps DESC
 LIMIT ?
 
