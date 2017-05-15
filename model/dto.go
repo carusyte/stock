@@ -11,8 +11,8 @@ type Stock struct {
 	Name             string
 	Industry         sql.NullString
 	Area             sql.NullString
-	Pe               float32
-	Outstanding      float32
+	Pe               sql.NullFloat64
+	Outstanding      sql.NullFloat64
 	Totals           float32
 	TotalAssets      float64
 	LiquidAssets     float64
@@ -30,21 +30,39 @@ type Stock struct {
 	Gpr              float32
 	Npr              float32
 	Holders          int64
+	Price            sql.NullFloat64
+	Varate           sql.NullFloat64
+	Var              sql.NullFloat64
+	Xrate            sql.NullFloat64
+	Volratio         sql.NullFloat64
+	Ampl             sql.NullFloat64
+	Turnover         sql.NullFloat64
+	Accer            sql.NullFloat64
+	CircMarVal       sql.NullFloat64
+}
+
+func (s *Stock) String() string {
+	j, e := json.Marshal(s)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
 }
 
 type Quote struct {
 	Code   string `db:",size:6"`
 	Date   string `db:",size:10"`
 	Klid   int
-	Open   float64
-	High   float64
-	Close  float64
-	Low    float64
-	Volume float64
-	Amount float64
+	Open   sql.NullFloat64
+	High   sql.NullFloat64
+	Close  sql.NullFloat64
+	Low    sql.NullFloat64
+	Volume sql.NullFloat64
+	Amount sql.NullFloat64
+	Xrate  sql.NullFloat64
 }
 
-func (q *Quote) String() string{
+func (q *Quote) String() string {
 	j, e := json.Marshal(q)
 	if e != nil {
 		fmt.Println(e)
@@ -88,4 +106,19 @@ func (k *KlineW) String() string {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+type Klast struct {
+	//Rt string `json:"rt"`
+	Num int `json:"num"`
+	//Total int `json:"total"`
+	Start string `json:"start"`
+	//Year map[string]int `json:"year"`
+	Name string `json:"name"`
+	Khist
+	//IssuePrice *float32 `json:"issuePrice,string"`
+}
+
+type Khist struct {
+	Data string `json:"data"`
 }

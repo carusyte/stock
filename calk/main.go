@@ -188,20 +188,20 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 
 		klw.Date, klm.Date = k.Date[:10], k.Date[:10]
 
-		klw.Amount += k.Amount
-		klm.Amount += k.Amount
-		klw.Volume += k.Volume
-		klm.Volume += k.Volume
-		if klw.High < k.High {
+		klw.Amount.Float64 += k.Amount.Float64
+		klm.Amount.Float64 += k.Amount.Float64
+		klw.Volume.Float64 += k.Volume.Float64
+		klm.Volume.Float64 += k.Volume.Float64
+		if klw.High.Float64 < k.High.Float64 {
 			klw.High = k.High
 		}
-		if klm.High < k.High {
+		if klm.High.Float64 < k.High.Float64 {
 			klm.High = k.High
 		}
-		if klw.Low > k.Low {
+		if klw.Low.Float64 > k.Low.Float64 {
 			klw.Low = k.Low
 		}
-		if klm.Low > k.Low {
+		if klm.Low.Float64 > k.Low.Float64 {
 			klm.Low = k.Low
 		}
 		klw.Close, klm.Close = k.Close, k.Close
