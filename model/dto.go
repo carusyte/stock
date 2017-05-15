@@ -53,12 +53,12 @@ type Quote struct {
 	Code   string `db:",size:6"`
 	Date   string `db:",size:10"`
 	Klid   int
-	Open   sql.NullFloat64
-	High   sql.NullFloat64
-	Close  sql.NullFloat64
-	Low    sql.NullFloat64
-	Volume sql.NullFloat64
-	Amount sql.NullFloat64
+	Open   float64
+	High   float64
+	Close  float64
+	Low    float64
+	Volume float64
+	Amount float64
 	Xrate  sql.NullFloat64
 }
 

@@ -76,11 +76,12 @@ func TestSelectNullInt(t *testing.T) {
 
 func TestGorpSelectOne(t *testing.T) {
 	var k *model.KlineW
-	e := dbMap.SelectOne(&k,"select * from kline_w where code = ? limit 1", "600104")
+	e := dbMap.SelectOne(&k,"select * from kline_w where code = ? limit 1", "610104")
+	// k will be nil if no rows in result set
 	log.Printf("%+v",k)
 	log.Printf("%v", k == nil)
 	log.Printf("%+v",e)
-	daw,dam := getMaxDates("600104",dbMap)
+	daw,dam := getMaxDates("600104")
 	log.Printf("%+v, %+v",daw,dam)
 }
 
@@ -111,7 +112,7 @@ func TestMySqlMultiStatement(t *testing.T) {
 func TestGetKlines(t *testing.T){
 	s := &model.Stock{}
 	dbMap.SelectOne(s,"select * from basics where code = '000090'")
-	getKlines(*s, dbMap)
+	getKlines(*s)
 }
 
 func TestStock(t *testing.T) {
@@ -121,5 +122,5 @@ func TestStock(t *testing.T) {
 	wg.Add(1)
 	sem := make(chan bool, 1)
 	sem <- true
-	caljob(wg, s, dbMap, sem)
+	caljob(&wg, s)
 }
