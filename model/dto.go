@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/carusyte/stock/util"
 )
 
 type Stock struct {
@@ -121,4 +122,31 @@ type Klast struct {
 
 type Khist struct {
 	Data string `json:"data"`
+}
+
+type Ktoday struct {
+	Quote
+}
+
+func (kt *Ktoday) UnmarshalJSON(b []byte) error {
+	var f interface{}
+	json.Unmarshal(b, &f)
+
+	m := f.(map[string]interface{})
+
+	for k := range m {
+		qm := m[k].(map[string]interface{})
+		kt.Code = k[3:]
+		kt.Date = qm["1"].(string)
+		kt.Date = kt.Date[:4] + "-" + kt.Date[4:6] + "-" + kt.Date[6:]
+		kt.Open = util.Str2f64(qm["7"].(string))
+		kt.High = util.Str2f64(qm["8"].(string))
+		kt.Low = util.Str2f64(qm["9"].(string))
+		kt.Close = util.Str2f64(qm["11"].(string))
+		kt.Volume = qm["13"].(float64)
+		kt.Amount = util.Str2f64(qm["19"].(string))
+		kt.Xrate = sql.NullFloat64{util.Str2f64(qm["1968584"].(string)), true}
+	}
+
+	return nil
 }
