@@ -14,7 +14,7 @@ import (
 	"sync"
 )
 
-func GetStockList() (allstk []*model.Stock) {
+func GetStockInfo() (allstk []*model.Stock) {
 	var (
 		wg    sync.WaitGroup
 		wgget sync.WaitGroup
@@ -74,7 +74,14 @@ func GetStockList() (allstk []*model.Stock) {
 		log.Printf("%d stocks info updated to basics", len(allstk))
 	}
 
+	getXDXR(allstk)
+
 	return
+}
+
+// get xdxr info
+func getXDXR(stocks []*model.Stock) {
+
 }
 
 func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.WaitGroup) (totalPage int) {
