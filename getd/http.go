@@ -12,7 +12,7 @@ import (
 const RETRY int = 3
 
 var client = http.Client{
-	Timeout: time.Second * 15, // Maximum of 15 secs
+	Timeout: time.Second * 45, // Maximum of 45 secs
 }
 
 func HttpGetResp(url string) (res *http.Response, e error) {

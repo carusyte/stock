@@ -37,7 +37,6 @@ func init() {
 	dbmap = db.Get(true, *pall)
 }
 
-//TODO refactor to run in single process?
 func main() {
 	start := time.Now()
 	defer func() {

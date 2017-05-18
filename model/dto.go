@@ -50,6 +50,24 @@ func (s *Stock) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
+type Xdxr struct {
+	Code        string
+	Name        string
+	Index       int
+	ReportYear  string `db:"report_year"`
+	BoardDate   string `db:"board_date"`
+	Divi        sql.NullFloat64
+	Shares      sql.NullFloat64
+	GmsDate     string `db:"gms_date"`
+	ImplDate    string `db:"impl_date"`
+	Plan        string
+	RecordDate  string `db:"record_date"`
+	XdxrDate    string `db:"xdxr_date"`
+	Progress    string
+	PayoutRatio sql.NullFloat64        `db:"payout_ratio"`
+	DivRate    sql.NullFloat64        `db:"div_rate"`
+}
+
 type Quote struct {
 	Code   string `db:",size:6"`
 	Date   string `db:",size:10"`

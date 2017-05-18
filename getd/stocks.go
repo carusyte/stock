@@ -9,6 +9,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,14 +75,186 @@ func GetStockInfo() (allstk []*model.Stock) {
 		log.Printf("%d stocks info updated to basics", len(allstk))
 	}
 
-	getXDXR(allstk)
+	getXDXRs(allstk)
 
 	return
 }
 
-// get xdxr info
-func getXDXR(stocks []*model.Stock) {
+//TODO get xdxr info
+func getXDXRs(stocks []*model.Stock) {
+	log.Println("getting XDXR info...")
+	var (
+		wg    sync.WaitGroup
+		wgget sync.WaitGroup
+		xdxrs []*model.Xdxr
+	)
+	chxdxr := make(chan []*model.Xdxr, 16)
+	wgget.Add(1)
+	go func() {
+		defer wgget.Done()
+		c := 1
+		for xdxr := range chxdxr {
+			xdxrs = append(xdxrs, xdxr...)
+			if len(xdxr) > 0 {
+				log.Printf("%d/%d : %s[%s] : %d", c, len(stocks), xdxr[0].Code, xdxr[0].Name, len(xdxr))
+			} else {
+				log.Printf("%d/%d : %d", c, len(stocks), len(xdxr))
+			}
+			c++
+		}
+	}()
+	for _, s := range stocks {
+		wg.Add(1)
+		go parseBonusPage(chxdxr, s, &wg)
+	}
+	wg.Wait()
+	close(chxdxr)
+	wgget.Wait()
 
+	log.Printf("total xdxr records: %d", len(xdxrs))
+
+	//update to database
+	if len(xdxrs) > 0 {
+		valueStrings := make([]string, 0, len(xdxrs))
+		valueArgs := make([]interface{}, 0, len(xdxrs)*15)
+		for _, e := range xdxrs {
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueArgs = append(valueArgs, e.Code)
+			valueArgs = append(valueArgs, e.Name)
+			valueArgs = append(valueArgs, e.Index)
+			valueArgs = append(valueArgs, e.ReportYear)
+			valueArgs = append(valueArgs, e.BoardDate)
+			valueArgs = append(valueArgs, e.GmsDate)
+			valueArgs = append(valueArgs, e.ImplDate)
+			valueArgs = append(valueArgs, e.Plan)
+			valueArgs = append(valueArgs, e.Divi)
+			valueArgs = append(valueArgs, e.Shares)
+			valueArgs = append(valueArgs, e.RecordDate)
+			valueArgs = append(valueArgs, e.XdxrDate)
+			valueArgs = append(valueArgs, e.Progress)
+			valueArgs = append(valueArgs, e.PayoutRatio)
+			valueArgs = append(valueArgs, e.DivRate)
+		}
+		stmt := fmt.Sprintf("INSERT INTO `div` (code,name,`index`,report_year,board_date,gms_date,impl_date,"+
+			"plan,divi,shares,record_date,xdxr_date,progress,payout_ratio,div_rate) VALUES %s on "+
+			"duplicate key update name=values(name),report_year=values(report_year),board_date=values"+
+			"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
+			"divi=values(divi),shares=values(shares),record_date=values(record_date),xdxr_date=values"+
+			"(xdxr_date),progress=values(progress),payout_ratio=values(payout_ratio),div_rate=values"+
+			"(div_rate)",
+			strings.Join(valueStrings, ","))
+		_, err := dbmap.Exec(stmt, valueArgs...)
+		util.CheckErr(err, "failed to bulk update div")
+		log.Printf("%d xdxr info updated to div", len(xdxrs))
+	}
+}
+
+func parseBonusPage(chxdxr chan []*model.Xdxr, stock *model.Stock, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var xdxrs []*model.Xdxr
+	urlt := `http://stockpage.10jqka.com.cn/%s/bonus/`
+
+	// Load the URL
+	res, e := HttpGetResp(fmt.Sprintf(urlt, stock.Code))
+	if e != nil {
+		panic(e)
+	}
+	defer res.Body.Close()
+
+	// parse body using goquery
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Printf("[%s,%s] body:\n%+v", stock.Code, stock.Name, res.Body)
+		log.Panic(err)
+	}
+
+	doc.Find("#bonus_table tbody tr").Each(func(i int, s *goquery.Selection) {
+		xdxr := newXdxr()
+		xdxrs = append(xdxrs, xdxr)
+		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
+			v := s2.Text()
+			switch j {
+			case 1:
+				xdxr.ReportYear = strings.TrimSpace(v)
+			case 2:
+				xdxr.BoardDate = strings.TrimSpace(v)
+			case 3:
+				xdxr.GmsDate = strings.TrimSpace(v)
+			case 4:
+				xdxr.ImplDate = strings.TrimSpace(v)
+			case 5:
+				xdxr.Plan = strings.TrimSpace(v)
+			case 6:
+				xdxr.RecordDate = strings.TrimSpace(v)
+			case 7:
+				xdxr.XdxrDate = strings.TrimSpace(v)
+			case 8:
+				xdxr.Progress = strings.TrimSpace(v)
+			case 9:
+				xdxr.PayoutRatio = util.Str2fnull(strings.TrimSpace(v[:len(v)-1]))
+			case 10:
+				xdxr.DivRate = util.Str2fnull(strings.TrimSpace(v[:len(v)-1]))
+			default:
+				// skip
+			}
+		})
+
+		//FIXME the column order is undetermined
+		if len(xdxr.BoardDate) > 10{
+			log.Printf("%s %s board date: %s", xdxr.Code, xdxr.Name, xdxr.BoardDate)
+		}
+		if len(xdxr.GmsDate) > 10{
+			log.Printf("%s %s gms date: %s", xdxr.Code, xdxr.Name, xdxr.GmsDate)
+		}
+		if len(xdxr.ImplDate) > 10{
+			log.Printf("%s %s impl date: %s", xdxr.Code, xdxr.Name, xdxr.ImplDate)
+		}
+		xdxr.Code = stock.Code
+		xdxr.Name = stock.Name
+		xdxr.Index = i
+		parseXdxrPlan(xdxr)
+	})
+
+	chxdxr <- xdxrs
+}
+func newXdxr() *model.Xdxr {
+	xdxr := &model.Xdxr{}
+	xdxr.Shares = sql.NullFloat64{0, false}
+	xdxr.DivRate = sql.NullFloat64{0, false}
+	xdxr.Divi = sql.NullFloat64{0, false}
+	xdxr.PayoutRatio = sql.NullFloat64{0, false}
+	return xdxr
+}
+
+func parseXdxrPlan(xdxr *model.Xdxr) {
+	allot := regexp.MustCompile(`送(\d*)股`).FindStringSubmatch(xdxr.Plan)
+	cvt := regexp.MustCompile(`转(\d*)股`).FindStringSubmatch(xdxr.Plan)
+	div := regexp.MustCompile(`派(\d*\.?\d*)元`).FindStringSubmatch(xdxr.Plan)
+
+	if allot != nil {
+		for i, a := range allot {
+			if i > 0 {
+				xdxr.Shares.Float64 += util.Str2f64(a)
+				xdxr.Shares.Valid = true
+			}
+		}
+	}
+	if cvt != nil {
+		for i, a := range cvt {
+			if i > 0 {
+				xdxr.Shares.Float64 += util.Str2f64(a)
+				xdxr.Shares.Valid = true
+			}
+		}
+	}
+	if div != nil {
+		for i, a := range div {
+			if i > 0 {
+				xdxr.Divi.Float64 += util.Str2f64(a)
+				xdxr.Divi.Valid = true
+			}
+		}
+	}
 }
 
 func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.WaitGroup) (totalPage int) {
@@ -91,7 +264,7 @@ func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *syn
 
 	// Load the URL
 	res, e := HttpGetResp(fmt.Sprintf(urlt, page))
-	if e != nil{
+	if e != nil {
 		panic(e)
 	}
 	defer res.Body.Close()

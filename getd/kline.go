@@ -24,14 +24,14 @@ func GetKlines(stks []*model.Stock) {
 	log.Printf("kline data updated.")
 }
 
-// Fetch all period klines with offset, Nil will be return if there's no such record.
-func getAllKlines(code string, offDy, offWk, offMn) ([]*model.Quote, *model.Quote, *model.Quote) {
-	mxw, mxm := getMaxDates(code)
-	var klines []*model.Kline
-	_, err := dbmap.Select(&klines, "select * from kline_d where code = ? order by date", code)
-	checkErr(err, "Failed to query kline_d for "+code)
-	return klines, mxw, mxm
-}
+// TODO Fetch all period klines with offset, Nil will be return if there's no such record.
+//func getAllKlines(code string, offDy, offWk, offMn) ([]*model.Quote, *model.Quote, *model.Quote) {
+//	mxw, mxm := getMaxDates(code)
+//	var klines []*model.Kline
+//	_, err := dbmap.Select(&klines, "select * from kline_d where code = ? order by date", code)
+//	checkErr(err, "Failed to query kline_d for "+code)
+//	return klines, mxw, mxm
+//}
 
 func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
 	defer func(){
