@@ -6,16 +6,22 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"regexp"
 	"time"
 )
 
 const RETRY int = 3
 
 var client = http.Client{
-	Timeout: time.Second * 45, // Maximum of 45 secs
+	Timeout: time.Second * 60, // Maximum of 60 secs
 }
 
 func HttpGetResp(url string) (res *http.Response, e error) {
+	var host string = ""
+	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(url)
+	if len(r) > 0 {
+		host = r[len(r)-1]
+	}
 	for i := 0; true; i++ {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -25,8 +31,10 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2")
 		req.Header.Set("Cache-Control", "no-cache")
-		req.Header.Set("Connection", "keep-alive")
-		req.Header.Set("Host", "d.10jqka.com.cn")
+		req.Header.Set("Connection", "close")
+		if host != "" {
+			req.Header.Set("Host", host)
+		}
 		req.Header.Set("Pragma", "no-cache")
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) "+
@@ -40,7 +48,10 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 				e = err
 				return
 			} else {
-				log.Printf("http communication error. url=%s, retrying...\n%+v", url, err)
+				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+				if res != nil {
+					res.Body.Close()
+				}
 				time.Sleep(time.Millisecond * 500)
 			}
 		} else {
@@ -64,7 +75,10 @@ func HttpGetBytes(url string) (body []byte, e error) {
 				log.Printf("http communication failed. url=%s\n%+v", url, e)
 				return nil, e
 			} else {
-				log.Printf("http communication error. url=%s, retrying...\n%+v", url, e)
+				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, e)
+				if res != nil {
+					res.Body.Close()
+				}
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
@@ -78,7 +92,10 @@ func HttpGetBytes(url string) (body []byte, e error) {
 				log.Printf("http communication failed. url=%s\n%+v", url, err)
 				return nil, e
 			} else {
-				log.Printf("http communication error. url=%s, retrying...\n%+v", url, err)
+				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+				if resBody != nil {
+					res.Body.Close()
+				}
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}

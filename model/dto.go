@@ -54,18 +54,27 @@ type Xdxr struct {
 	Code        string
 	Name        string
 	Index       int
-	ReportYear  string `db:"report_year"`
-	BoardDate   string `db:"board_date"`
+	ReportYear  sql.NullString `db:"report_year"`
+	BoardDate   sql.NullString `db:"board_date"`
 	Divi        sql.NullFloat64
 	Shares      sql.NullFloat64
-	GmsDate     string `db:"gms_date"`
-	ImplDate    string `db:"impl_date"`
-	Plan        string
-	RecordDate  string `db:"record_date"`
-	XdxrDate    string `db:"xdxr_date"`
-	Progress    string
+	GmsDate     sql.NullString `db:"gms_date"`
+	ImplDate    sql.NullString `db:"impl_date"`
+	Plan        sql.NullString
+	RecordDate  sql.NullString `db:"record_date"`
+	XdxrDate    sql.NullString `db:"xdxr_date"`
+	PayoutDate  sql.NullString `db:"payout_date"`
+	Progress    sql.NullString
 	PayoutRatio sql.NullFloat64        `db:"payout_ratio"`
-	DivRate    sql.NullFloat64        `db:"div_rate"`
+	DivRate     sql.NullFloat64        `db:"div_rate"`
+}
+
+func (x *Xdxr) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
 }
 
 type Quote struct {
@@ -157,13 +166,13 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) error {
 		kt.Code = k[3:]
 		kt.Date = qm["1"].(string)
 		kt.Date = kt.Date[:4] + "-" + kt.Date[4:6] + "-" + kt.Date[6:]
-		kt.Open = util.Str2f64(qm["7"].(string))
-		kt.High = util.Str2f64(qm["8"].(string))
-		kt.Low = util.Str2f64(qm["9"].(string))
-		kt.Close = util.Str2f64(qm["11"].(string))
+		kt.Open = util.Str2F64(qm["7"].(string))
+		kt.High = util.Str2F64(qm["8"].(string))
+		kt.Low = util.Str2F64(qm["9"].(string))
+		kt.Close = util.Str2F64(qm["11"].(string))
 		kt.Volume = qm["13"].(float64)
-		kt.Amount = util.Str2f64(qm["19"].(string))
-		kt.Xrate = sql.NullFloat64{util.Str2f64(qm["1968584"].(string)), true}
+		kt.Amount = util.Str2F64(qm["19"].(string))
+		kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
 	}
 
 	return nil

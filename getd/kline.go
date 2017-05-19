@@ -24,7 +24,7 @@ func GetKlines(stks []*model.Stock) {
 	log.Printf("kline data updated.")
 }
 
-// TODO Fetch all period klines with offset, Nil will be return if there's no such record.
+// TODO Fetch all period klines with offset from db, Nil will be return if there's no such record.
 //func getAllKlines(code string, offDy, offWk, offMn) ([]*model.Quote, *model.Quote, *model.Quote) {
 //	mxw, mxm := getMaxDates(code)
 //	var klines []*model.Kline
@@ -34,9 +34,9 @@ func GetKlines(stks []*model.Stock) {
 //}
 
 func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
-	defer func(){
+	defer func() {
 		wg.Done()
-		<- *wf
+		<-*wf
 	}()
 	// Get latest kline from db, for day, week, month, with offset
 	ldy, lwk, lmn := getLatestKl(stk.Code, 3, 2, 2)
@@ -51,81 +51,128 @@ func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
 
 func getDailyKlines(code string, ldy *model.Quote) (kldy []*model.Quote) {
 	//get today kline data
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/today.js", code)
-	body, e := HttpGetBytes(url_today)
-	if e!=nil{
-		return
-	}
-	ktoday := model.Ktoday{}
-	jsonErr := json.Unmarshal(strip(body), &ktoday)
-	if jsonErr != nil {
-		log.Printf("failed to parse kline json for %s: %+v\n%s", code, jsonErr, string(body))
-	}
-	kldy = append(kldy, &ktoday.Quote)
-
-	//get last kline data
-	url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/last.js", code)
-	body,e = HttpGetBytes(url_last)
-	if e!=nil{
-		return
-	}
-	klast := model.Klast{}
-	jsonErr = json.Unmarshal(strip(body), &klast)
-	if jsonErr != nil {
-		log.Printf("failed to parse kline json for %s: %+v", code, jsonErr)
-	}
-
-	ldate := ""
-	lklid := 0
-	if ldy != nil {
-		ldate = ldy.Date
-		lklid = ldy.Klid
-	}
-
-	if klast.Data == "" {
-		log.Printf("%s last data may not be ready yet", code)
-		return
-	}
-
-	kls, more := parseKlines(code, klast.Data, ldate)
-	if len(kls) > 0 {
-		if ktoday.Date == kls[0].Date {
-			kldy = append(kldy, kls[1:]...)
-		} else {
-			kldy = append(kldy, kls...)
-		}
-	}
-
-	//get hist kline data
-	for more {
-		yr, e := strconv.ParseInt(kls[0].Date[:4], 10, 32)
+	RETRIES := 5
+	var (
+		klast  model.Klast
+		ktoday model.Ktoday
+		ldate  string
+		lklid  int
+		body   []byte
+		e      error
+	)
+RETRY:
+	for rt := 0; rt < RETRIES; rt++ {
+		url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/today.js", code)
+		body, e = HttpGetBytes(url_today)
 		if e != nil {
-			log.Printf("failed to parse year for %+v, error: %+v", code, e)
-			break
+			log.Printf("stop retrying to get today kline for %s", code)
+			return
 		}
-		yr--
-		start, e := strconv.ParseInt(klast.Start[:4], 10, 32)
+		ktoday = model.Ktoday{}
+		e = json.Unmarshal(strip(body), &ktoday)
 		if e != nil {
-			log.Printf("failed to parse json start year for %+v, string:%s, error: %+v", code, klast.Start, e)
-			break
+			if rt < RETRIES {
+				log.Printf("retrying to parse kline json for %s [%d]: %+v\n%s", code, rt+1, e,
+					string(body))
+				continue
+			} else {
+				log.Printf("stop retrying to parse kline json for %s [%d]: %+v\n%s", code, rt+1,
+					e, string(body))
+				return
+			}
 		}
-		if yr < start {
-			break
+		kldy = append(kldy, &ktoday.Quote)
+
+		//get last kline data
+		url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/last.js", code)
+		body, e = HttpGetBytes(url_last)
+		if e != nil {
+			log.Printf("stop retrying to get last kline for %s", code)
+			return []*model.Quote{}
 		}
-		url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/%d.js", code, yr)
-		body,e = HttpGetBytes(url_hist)
-		if e!=nil{
-			log.Printf("can't get hist daily quotes for %s, please try again later.", code)
-			return kldy[len(kldy):]
+		klast = model.Klast{}
+		e = json.Unmarshal(strip(body), &klast)
+		if e != nil {
+			if rt < RETRIES {
+				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s", code, rt+1, e,
+					string(body))
+				continue
+			} else {
+				log.Printf("stop retrying to parse last kline json for %s [%d]: %+v\n%s", code, rt+1,
+					e, string(body))
+				return []*model.Quote{}
+			}
 		}
-		khist := model.Khist{}
-		jsonErr = json.Unmarshal(strip(body), &khist)
-		if jsonErr != nil {
-			log.Printf("failed to parse hist kline json for %s: %+v", code, jsonErr)
+
+		if klast.Data == "" {
+			log.Printf("%s last data may not be ready yet", code)
+			return
 		}
-		kls, more = parseKlines(code, khist.Data, ldate)
+
+		ldate = ""
+		lklid = 0
+		if ldy != nil {
+			ldate = ldy.Date
+			lklid = ldy.Klid
+		}
+
+		kls, more := parseKlines(code, klast.Data, ldate)
 		if len(kls) > 0 {
-			kldy = append(kldy, kls...)
+			if ktoday.Date == kls[0].Date {
+				kldy = append(kldy, kls[1:]...)
+			} else {
+				kldy = append(kldy, kls...)
+			}
+		}
+
+		//get hist kline data
+		for more {
+			yr, e := strconv.ParseInt(kls[0].Date[:4], 10, 32)
+			if e != nil {
+				log.Printf("failed to parse year for %+v, stop processing. error: %+v", code, e)
+				return []*model.Quote{}
+			}
+			yr--
+			start, e := strconv.ParseInt(klast.Start[:4], 10, 32)
+			if e != nil {
+				log.Printf("failed to parse json start year for %+v, stop processing. string:%s, error: %+v",
+					code, klast.Start, e)
+				return []*model.Quote{}
+			}
+			if yr < start {
+				break
+			}
+			url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/%d.js", code, yr)
+			body, e = HttpGetBytes(url_hist)
+			if e != nil {
+				if rt < RETRIES {
+					log.Printf("retrying to get hist daily quotes for %s, %d [%d]: %+v", code, yr,
+						rt+1, e)
+					continue RETRY
+				} else {
+					log.Printf("stop retrying to get hist daily quotes for %s, %d [%d]: %+v",
+						code, yr, rt+1, e)
+					return []*model.Quote{}
+				}
+			}
+			khist := model.Khist{}
+			e = json.Unmarshal(strip(body), &khist)
+			if e != nil {
+				if rt < RETRIES {
+					log.Printf("retrying to parse hist kline json for %s, %d [%d]: %+v", code,
+						yr,
+						rt+1, e)
+					continue RETRY
+				} else {
+					log.Printf("stop retrying to parse hist kline json for %s, %d [%d]: %+v",
+						code, yr, rt+1, e)
+					return []*model.Quote{}
+				}
+			}
+			kls, more = parseKlines(code, khist.Data, ldate)
+			if len(kls) > 0 {
+				kldy = append(kldy, kls...)
+			}
 		}
 	}
 
@@ -143,8 +190,8 @@ func getLongKlines(code string, latest *model.Quote, url string, table string) (
 	}
 	url = fmt.Sprintf(url, code)
 	body, e := HttpGetBytes(url)
-	if e!=nil{
-		log.Printf("can't get long klines for %s, %s. please try again later.", code,table)
+	if e != nil {
+		log.Printf("can't get long klines for %s, %s. please try again later.", code, table)
 		return
 	}
 	khist := model.Khist{}
@@ -205,9 +252,9 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 }
 
 func parseKlines(code string, data string, ldate string) (kls []*model.Quote, more bool) {
-	defer func(){
+	defer func() {
 		if r := recover(); r != nil {
-			if e,ok := r.(error);ok{
+			if e, ok := r.(error); ok {
 				log.Println(e)
 			}
 			log.Printf("data:\n%s", data)
@@ -234,19 +281,19 @@ DATES:
 					break DATES
 				}
 			case 1:
-				kl.Open = util.Str2f64(e)
+				kl.Open = util.Str2F64(e)
 			case 2:
-				kl.High = util.Str2f64(e)
+				kl.High = util.Str2F64(e)
 			case 3:
-				kl.Low = util.Str2f64(e)
+				kl.Low = util.Str2F64(e)
 			case 4:
-				kl.Close = util.Str2f64(e)
+				kl.Close = util.Str2F64(e)
 			case 5:
-				kl.Volume = util.Str2f64(e)
+				kl.Volume = util.Str2F64(e)
 			case 6:
-				kl.Amount = util.Str2f64(e)
+				kl.Amount = util.Str2F64(e)
 			case 7:
-				kl.Xrate = util.Str2fnull(e)
+				kl.Xrate = util.Str2Fnull(e)
 			default:
 				//skip
 			}

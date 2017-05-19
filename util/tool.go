@@ -3,6 +3,7 @@ package util
 import (
 	"strconv"
 	"database/sql"
+	"strings"
 )
 
 func Reverse(s []*interface{}){
@@ -11,7 +12,7 @@ func Reverse(s []*interface{}){
 	}
 }
 
-func Str2f64(s string) (f float64) {
+func Str2F64(s string) (f float64) {
 	f64, e := strconv.ParseFloat(s, 64)
 	if e == nil {
 		f = f64
@@ -19,7 +20,7 @@ func Str2f64(s string) (f float64) {
 	return
 }
 
-func Str2f32(s string) (f float32) {
+func Str2F32(s string) (f float32) {
 	f32, e := strconv.ParseFloat(s, 32)
 	if e == nil {
 		f = float32(f32)
@@ -27,13 +28,24 @@ func Str2f32(s string) (f float32) {
 	return
 }
 
-func Str2fnull(s string) (f sql.NullFloat64) {
+func Str2Fnull(s string) (f sql.NullFloat64) {
 	f64, e := strconv.ParseFloat(s, 64)
 	if e == nil {
 		f.Float64 = f64
 		f.Valid = true
 	} else {
 		f.Valid = false
+	}
+	return
+}
+
+func Str2Snull(s string)(snull sql.NullString){
+	v := strings.TrimSpace(s)
+	if  v == ""{
+		snull.Valid = false
+	}else{
+		snull.String = v
+		snull.Valid = true
 	}
 	return
 }

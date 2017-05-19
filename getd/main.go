@@ -10,12 +10,17 @@ import (
 	"time"
 )
 
+const LOGFILE = "getd.log"
+
 var (
 	dbmap *gorp.DbMap
 )
 
 func init() {
-	logFile, err := os.OpenFile("calk.log", os.O_CREATE|os.O_RDWR, 0666)
+	if _, err := os.Stat(LOGFILE); err == nil {
+		os.Remove(LOGFILE)
+	}
+	logFile, err := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
 	util.CheckErr(err, "failed to open log file")
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
