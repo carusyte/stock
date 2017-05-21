@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/carusyte/stock/util"
+	"log"
+	"strings"
 )
 
 type Stock struct {
@@ -75,6 +77,200 @@ func (x *Xdxr) String() string {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+type Finance struct {
+	Code string
+	Year string
+	//Earnings Per Share 每股收益
+	Eps sql.NullFloat64
+	//Net Profit (1/10 Billion) 净利润（亿）
+	Np sql.NullFloat64
+	//Net Profit Growth Rate Year-on-Year 净利润同比增长率
+	NpYoy sql.NullFloat64
+	//Net Profit Ring Growth 净利润环比增长率
+	NpRg sql.NullFloat64
+	//Net Profit After Deduction of Non-profits 扣除非经常性损益后的净利润
+	NpAdn sql.NullFloat64
+	//Net Profit After Deduction of Non-profits Growth Rate Year-on-Year 扣非净利润同比增长率
+	NpAdnYoy sql.NullFloat64
+	//Gross Revenue (1/10 Billion) 营业总收入（亿）
+	Gr sql.NullFloat64
+	//Gross Revenue Growth Rate Year-on-Year 营业总收入同比增长率
+	GrYoy sql.NullFloat64
+	//Net Asset Value Per Share  每股净资产
+	Navps sql.NullFloat64
+	//Return on Equity 净资产收益率
+	Roe sql.NullFloat64
+	//Return on Equity Diluted 净资产收益率-摊薄
+	RoeDlt sql.NullFloat64
+	//Asset-Liability Ratio 资产负载比
+	Alr sql.NullFloat64
+	//Capital Reserves Per Share 每股资本公积
+	Crps sql.NullFloat64
+	//Undistributed Profit Per Share 每股未分配利润
+	Udpps sql.NullFloat64
+	//Operational Cash Flow Per Share 每股经营现金流
+	Ocfps sql.NullFloat64
+	//Gross Profit Margin 毛利率
+	Gpm sql.NullFloat64
+	//Net Profit Margin 净利率
+	Npm sql.NullFloat64
+	//Inventory Turnover Ratio 存货周转率
+	Itr sql.NullFloat64
+}
+
+type FinReport struct {
+	Items []*Finance
+}
+
+func (fin *FinReport) SetCode(code string) {
+	for _, f := range fin.Items {
+		f.Code = code
+	}
+}
+
+func (fin *FinReport) UnmarshalJSON(b []byte) error {
+	var f interface{}
+	json.Unmarshal(b, &f)
+	m := f.(map[string]interface{})
+	titles := m["title"].([]interface{})
+	iEps, iNp, iNpYoy, iNpRg, iNpAdn, iNpAdnYoy, iGr, iGrYoy, iNavps, iRoe, iRoeDlt, iAlr, iCrps, iUdpps, iOcfps,
+	iGpm, iNpm, iItr := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+	mNp, mNpAdn, mGr := .1, .1, .1
+	for i, t := range titles {
+		v := fmt.Sprintf("%s", t)
+		v = strings.Trim(v, "[]")
+		v = strings.TrimSpace(v)
+		switch v {
+		case "基本每股收益 元":
+			iEps = i
+		case "净利润 万元":
+			mNp = 0.0001
+			fallthrough
+		case "净利润 元":
+			iNp = i
+		case "净利润同比增长率 %":
+			fallthrough
+		case "净利润同比增长率":
+			iNpYoy = i
+		case "净利润环比增长率 %":
+			fallthrough
+		case "净利润环比增长率":
+			iNpRg = i
+		case "扣非净利润 万元":
+			mNpAdn = 0.0001
+			fallthrough
+		case "扣非净利润 元":
+			iNpAdn = i
+		case "扣非净利润同比增长率 %":
+			fallthrough
+		case "扣非净利润同比增长率":
+			iNpAdnYoy = i
+		case "营业总收入 万元":
+			mGr = 0.0001
+			fallthrough
+		case "营业总收入 元":
+			iGr = i
+		case "营业总收入同比增长率 %":
+			fallthrough
+		case "营业总收入同比增长率":
+			iGrYoy = i
+		case "每股净资产 元":
+			iNavps = i
+		case "净资产收益率 %":
+			fallthrough
+		case "净资产收益率":
+			iRoe = i
+		case "净资产收益率-摊薄 %":
+			fallthrough
+		case "净资产收益率-摊薄":
+			iRoeDlt = i
+		case "资产负债比率 %":
+			fallthrough
+		case "资产负债比率":
+			iAlr = i
+		case "每股资本公积金 元":
+			iCrps = i
+		case "每股未分配利润 元":
+			iUdpps = i
+		case "每股经营现金流 元":
+			iOcfps = i
+		case "销售毛利率 %":
+			fallthrough
+		case "销售毛利率":
+			iGpm = i
+		case "存货周转率":
+			iItr = i
+		case "销售净利率 %":
+			fallthrough
+		case "销售净利率":
+			iNpm = i
+		case `科目\时间`:
+			//do nothing
+		default:
+			log.Printf("unidentified finance report item: %s", v)
+		}
+	}
+	rpt := m["report"].([]interface{})
+	for i, r := range rpt {
+		if i == 0 {
+			//parse year
+			for _, iy := range r.([]interface{}) {
+				fi := &Finance{}
+				fi.Year = iy.(string)
+				fin.Items = append(fin.Items, fi)
+			}
+		} else {
+			//parse data
+			for j, y := range r.([]interface{}) {
+				if s, ok := y.(string); ok {
+					fi := fin.Items[j]
+					switch i {
+					case iEps:
+						fi.Eps = util.Str2Fnull(s)
+					case iNp:
+						fi.Np = util.Str2FBilMod(s, mNp)
+					case iNpYoy:
+						fi.NpYoy = util.Pct2Fnull(s)
+					case iNpRg:
+						fi.NpRg = util.Pct2Fnull(s)
+					case iNpAdn:
+						fi.NpAdn = util.Str2FBilMod(s, mNpAdn)
+					case iNpAdnYoy:
+						fi.NpAdnYoy = util.Pct2Fnull(s)
+					case iGr:
+						fi.Gr = util.Str2FBilMod(s, mGr)
+					case iGrYoy:
+						fi.GrYoy = util.Pct2Fnull(s)
+					case iNavps:
+						fi.Navps = util.Str2Fnull(s)
+					case iRoe:
+						fi.Roe = util.Pct2Fnull(s)
+					case iRoeDlt:
+						fi.RoeDlt = util.Pct2Fnull(s)
+					case iAlr:
+						fi.Alr = util.Pct2Fnull(s)
+					case iCrps:
+						fi.Crps = util.Str2Fnull(s)
+					case iUdpps:
+						fi.Udpps = util.Str2Fnull(s)
+					case iOcfps:
+						fi.Ocfps = util.Str2Fnull(s)
+					case iGpm:
+						fi.Gpm = util.Pct2Fnull(s)
+					case iNpm:
+						fi.Npm = util.Pct2Fnull(s)
+					case iItr:
+						fi.Itr = util.Str2Fnull(s)
+					default:
+						log.Printf("unidentified row index %d, %+v", i, y)
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 type Quote struct {

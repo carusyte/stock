@@ -1,20 +1,21 @@
-package main
+package util
 
 import (
-	"bytes"
+	"fmt"
+	"golang.org/x/net/proxy"
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 )
 
 const RETRY int = 3
-
-var client = http.Client{
-	Timeout: time.Second * 60, // Maximum of 60 secs
-}
+var PART_PROXY float64
+var PROXY_ADDR string
 
 func HttpGetResp(url string) (res *http.Response, e error) {
 	var host string = ""
@@ -22,6 +23,27 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 	if len(r) > 0 {
 		host = r[len(r)-1]
 	}
+
+	var client *http.Client
+	//determine if we must use a proxy
+	if PART_PROXY > 0 && rand.Float64() < PART_PROXY{
+		// create a socks5 dialer
+		dialer, err := proxy.SOCKS5("tcp", PROXY_ADDR, nil, proxy.Direct)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "can't connect to the proxy:", err)
+			os.Exit(1)
+		}
+		// setup a http client
+		httpTransport := &http.Transport{}
+		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
+			Transport: httpTransport}
+		// set our socks5 as the dialer
+		httpTransport.Dial = dialer.Dial
+	}else{
+		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
+			}
+	}
+
 	for i := 0; true; i++ {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -104,14 +126,4 @@ func HttpGetBytes(url string) (body []byte, e error) {
 		}
 	}
 	return
-}
-
-func strip(data []byte) []byte {
-	s := bytes.IndexByte(data, 40)     // first occurrence of '('
-	e := bytes.LastIndexByte(data, 41) // last occurrence of ')'
-	if s >= 0 && e >= 0 {
-		return data[s+1:e]
-	} else {
-		return data
-	}
 }
