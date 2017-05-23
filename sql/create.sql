@@ -57,6 +57,30 @@ CREATE TABLE `div` (
   KEY `ix_div_index` (`index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `finance` (
+  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `year` varchar(10) NOT NULL COMMENT '报告年度',
+  `eps` double DEFAULT NULL COMMENT '基本每股收益(元)',
+  `np` double DEFAULT NULL COMMENT '净利润(亿)',
+  `np_yoy` double DEFAULT NULL COMMENT '净利润同比增长率',
+  `np_rg` double DEFAULT NULL COMMENT '净利润环比增长率',
+  `np_adn` double DEFAULT NULL COMMENT '扣非净利润(亿)',
+  `np_adn_yoy` double DEFAULT NULL COMMENT '扣非净利润同比增长率',
+  `gr` double DEFAULT NULL COMMENT '营业总收入(亿)',
+  `gr_yoy` double DEFAULT NULL COMMENT '营业总收入同比增长率',
+  `navps` double DEFAULT NULL COMMENT '每股净资产(元)',
+  `roe` double DEFAULT NULL COMMENT '净资产收益率',
+  `roe_dlt` double DEFAULT NULL COMMENT '净资产收益率-摊薄',
+  `alr` double DEFAULT NULL COMMENT '资产负债比率',
+  `crps` double DEFAULT NULL COMMENT '每股资本公积金(元)',
+  `udpps` double DEFAULT NULL COMMENT '每股未分配利润(元)',
+  `ocfps` double DEFAULT NULL COMMENT '每股经营现金流(元)',
+  `gpm` double DEFAULT NULL COMMENT '销售毛利率',
+  `npm` double DEFAULT NULL COMMENT '销售净利率',
+  `itr` double DEFAULT NULL COMMENT '存货周转率',
+  PRIMARY KEY (`code`,`year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='财务信息';
+
 CREATE TABLE `indicator_d` (
   `Code` varchar(6) NOT NULL,
   `Date` varchar(10) NOT NULL,

@@ -13,6 +13,7 @@ import (
 const MAX_CONCURRENCY = 128
 const JOB_CAPACITY = 256
 const LOGFILE = "getd.log"
+
 // will make some of the requests via proxy, 0.6 = 3/5
 const PART_PROXY = 0
 const PROXY_ADDR = "127.0.0.1:1080"
@@ -36,25 +37,25 @@ func init() {
 
 func main() {
 	start := time.Now()
-	defer stop("GETD_TOTAL",start)
+	defer stop("GETD_TOTAL", start)
 	stks := GetStockInfo()
-	stop("STOCK_LIST",start)
+	stop("STOCK_LIST", start)
 
 	stgx := time.Now()
 	GetXDXRs(stks)
-	stop("GET_XDXR",stgx)
+	stop("GET_XDXR", stgx)
 
 	stgfi := time.Now()
 	GetFinance(stks)
-	stop("GET_FINANCE",stgfi)
+	stop("GET_FINANCE", stgfi)
 
 	stgkl := time.Now()
 	GetKlines(stks)
-	stop("GET_KLINES",stgkl)
+	stop("GET_KLINES", stgkl)
 
-	//stci := time.Now()
-	//CalcIndics(stks)
-	//stop("CALC_INDICS",stci)
+	stci := time.Now()
+	CalcIndics(stks)
+	stop("CALC_INDICS", stci)
 }
 
 func stop(code string, start time.Time) {

@@ -13,7 +13,7 @@ func TestGetFinance(t *testing.T) {
 	GetFinance(ss)
 }
 
-//TODO test getXDXR individually
+//test getXDXR individually
 func TestGetXDXR(t *testing.T) {
 	s := &model.Stock{}
 	s.Code = "601088"

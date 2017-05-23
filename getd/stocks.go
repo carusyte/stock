@@ -109,19 +109,19 @@ func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *syn
 			case 2:
 				stk.Name = strings.TrimSpace(v)
 			case 3:
-				stk.Price = util.Str2FBil(v)
+				stk.Price = util.Str2Fnull(v)
 			case 4:
-				stk.Varate = util.Str2FBil(v)
+				stk.Varate = util.Str2Fnull(v)
 			case 5:
-				stk.Var = util.Str2FBil(v)
+				stk.Var = util.Str2Fnull(v)
 			case 6:
-				stk.Accer = util.Str2FBil(v)
+				stk.Accer = util.Str2Fnull(v)
 			case 7:
-				stk.Xrate = util.Str2FBil(v)
+				stk.Xrate = util.Str2Fnull(v)
 			case 8:
-				stk.Volratio = util.Str2FBil(v)
+				stk.Volratio = util.Str2Fnull(v)
 			case 9:
-				stk.Ampl = util.Str2FBil(v)
+				stk.Ampl = util.Str2Fnull(v)
 			case 10:
 				stk.Turnover = util.Str2FBil(v)
 			case 11:
@@ -129,7 +129,7 @@ func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *syn
 			case 12:
 				stk.CircMarVal = util.Str2FBil(v)
 			case 13:
-				stk.Pe = util.Str2FBil(v)
+				stk.Pe = util.Str2Fnull(v)
 			default:
 				// skip
 			}

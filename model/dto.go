@@ -333,14 +333,49 @@ func (k *KlineW) String() string {
 }
 
 type Klast struct {
-	//Rt string `json:"rt"`
+	//Rt         string `json:"rt"`
 	Num int `json:"num"`
-	//Total int `json:"total"`
+	//Total      int `json:"total"`
 	Start string `json:"start"`
-	//Year map[string]int `json:"year"`
-	Name string `json:"name"`
+	Year  map[string]int `json:"year"`
+	Name  string `json:"name"`
 	Khist
-	//IssuePrice *float32 `json:"issuePrice,string"`
+	//IssuePrice float32 `json:"issuePrice"`
+}
+
+func (kl *Klast) UnmarshalJSON(b []byte) error {
+	var f interface{}
+	json.Unmarshal(b, &f)
+
+	m := f.(map[string]interface{})
+
+	for k := range m {
+		switch k {
+		case "num":
+			kl.Num = int(m[k].(float64))
+		case "start":
+			kl.Start = m[k].(string)
+		case "year":
+			if y, ok := m[k].(map[string]int); ok {
+				kl.Year = y
+			} else {
+				kl.Year = make(map[string]int, 0)
+			}
+		case "name:":
+			kl.Name = m[k].(string)
+		case "data":
+			kl.Data = m[k].(string)
+			//case "issuePrice":
+			//	if v, ok := m[k].(string);ok{
+			//		kl.IssuePrice =
+			//	}
+			//case "total":
+			//case "rt":
+		default:
+			//do nothing
+		}
+	}
+	return nil
 }
 
 type Khist struct {
