@@ -1,4 +1,4 @@
-package main
+package getd
 
 import (
 	"github.com/carusyte/stock/model"

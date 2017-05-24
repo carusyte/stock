@@ -1,4 +1,4 @@
-package getd
+package main
 
 import (
 	"github.com/carusyte/stock/db"
@@ -11,15 +11,9 @@ import (
 
 const MAX_CONCURRENCY = 200
 const JOB_CAPACITY = 512
-const LOGFILE = "getd.log"
+const LOGFILE = "score.log"
 
-// will make some of the requests via proxy, 0.6 = 3/5
-const PART_PROXY = 0
-const PROXY_ADDR = "127.0.0.1:1080"
-
-var (
-	dbmap *gorp.DbMap
-)
+var dbmap *gorp.DbMap
 
 func init() {
 	if _, err := os.Stat(LOGFILE); err == nil {
@@ -30,10 +24,11 @@ func init() {
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
 	dbmap = db.Get(true, false)
-	util.PART_PROXY = PART_PROXY
-	util.PROXY_ADDR = PROXY_ADDR
 }
 
 func main() {
-	Get()
+	if len(os.Args) < 2 {
+		log.Println("scorer is required")
+		os.Exit(1)
+	}
 }

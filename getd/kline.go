@@ -1,4 +1,4 @@
-package main
+package getd
 
 import (
 	"bytes"
@@ -25,15 +25,6 @@ func GetKlines(stks []*model.Stock) {
 	log.Printf("all period kline data updated.")
 }
 
-// TODO Fetch all period klines with offset from db, Nil will be return if there's no such record.
-//func getAllKlines(code string, offDy, offWk, offMn) ([]*model.Quote, *model.Quote, *model.Quote) {
-//	mxw, mxm := getMaxDates(code)
-//	var klines []*model.Kline
-//	_, err := dbmap.Select(&klines, "select * from kline_d where code = ? order by date", code)
-//	checkErr(err, "Failed to query kline_d for "+code)
-//	return klines, mxw, mxm
-//}
-
 func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
 	defer func() {
 		wg.Done()
@@ -43,11 +34,10 @@ func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
 	ldy, lwk, lmn := getLatestKl(stk.Code, 3, 2, 2)
 	//get daily kline
 	getDailyKlines(stk.Code, ldy)
-	//FIXME today's data not included
 	//get weekly kline
-	getLongKlines(stk.Code, lwk, "http://d.10jqka.com.cn/v2/line/hs_%s/11/last.js", "kline_w")
+	getLongKlines(stk.Code, lwk, "11", "kline_w")
 	//get monthly kline
-	getLongKlines(stk.Code, lmn, "http://d.10jqka.com.cn/v2/line/hs_%s/21/last.js", "kline_m")
+	getLongKlines(stk.Code, lmn, "21", "kline_m")
 }
 
 func getDailyKlines(code string, ldy *model.Quote) (kldy []*model.Quote) {
@@ -124,7 +114,7 @@ RETRY:
 			} else {
 				kldy = append(kldy, kls...)
 			}
-		}else{
+		} else {
 			break
 		}
 		if more {
@@ -189,7 +179,23 @@ RETRY:
 	return
 }
 
-func getLongKlines(code string, latest *model.Quote, url string, table string) (quotes []*model.Quote) {
+func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
+	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/today.js", code, typ)
+	body, e := util.HttpGetBytes(url_today)
+	if e != nil {
+		return nil, false, false
+	}
+
+	ktoday := &model.Ktoday{}
+	e = json.Unmarshal(strip(body), ktoday)
+	if e != nil {
+		return nil, false, true
+	}
+	return &ktoday.Quote, true, false
+}
+
+func getLongKlines(code string, latest *model.Quote, typ string, table string) (quotes []*model.Quote) {
+	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
 	ldate := ""
 	lklid := -1
 	if latest != nil {
@@ -197,8 +203,18 @@ func getLongKlines(code string, latest *model.Quote, url string, table string) (
 		lklid = latest.Klid
 	}
 	RETRIES := 5
-	url = fmt.Sprintf(url, code)
+	url := fmt.Sprintf(urlt, code, typ)
 	for rt := 0; rt < RETRIES; rt++ {
+		ktoday, ok, retry := getToday(code, typ)
+		if !ok {
+			if retry {
+				log.Printf("retrying to parse %s json for %s [%d]", table, code, rt+1)
+				continue
+			} else {
+				log.Printf("stop retrying to parse %s json for %s [%d]", table, code, rt+1)
+				return
+			}
+		}
 		body, e := util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("can't get %s for %s. please try again later.", table, code)
@@ -220,8 +236,11 @@ func getLongKlines(code string, latest *model.Quote, url string, table string) (
 			return
 		}
 		kls, _ := parseKlines(code, khist.Data, ldate)
+		quotes = append(quotes, ktoday)
 		if len(kls) > 0 {
-			quotes = append(quotes, kls...)
+			//always remove the last/latest one from /last.js
+			//substitute by that from /today.js
+			quotes = append(quotes, kls[1:]...)
 		}
 		break
 	}
@@ -269,6 +288,7 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 	return
 }
 
+//parse semi-colon separated string to quotes, with latest in the head.
 func parseKlines(code string, data string, ldate string) (kls []*model.Quote, more bool) {
 	defer func() {
 		if r := recover(); r != nil {

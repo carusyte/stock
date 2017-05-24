@@ -1,23 +1,62 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/carusyte/stock/advisor"
+	"github.com/carusyte/stock/db"
+	"github.com/carusyte/stock/getd"
+	"github.com/carusyte/stock/util"
+	"gopkg.in/gorp.v2"
+	"io"
 	"log"
 	"os"
 	"strings"
 )
 
+const APP_VERSION = "0.1"
+const MAX_CONCURRENCY = 200
+const JOB_CAPACITY = 512
+const LOGFILE = "ask.log"
+
+var dbmap *gorp.DbMap
+
+var (
+	versionFlag *bool = flag.Bool("v", false, "Print the version number.")
+	advisorId *string =flag.String("a", "", "The Adviser Id.")
+	refresh *bool = flag.Bool("r", false, "Refresh local data before providing any advice.")
+)
+
+func init() {
+	if _, err := os.Stat(LOGFILE); err == nil {
+		os.Remove(LOGFILE)
+	}
+	logFile, err := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
+	util.CheckErr(err, "failed to open log file")
+	mw := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(mw)
+	dbmap = db.Get(true, false)
+}
+
 func main() {
-	if len(os.Args) < 2 {
-		log.Println("advisor is required")
-		os.Exit(1)
+
+	flag.Parse() // Scan the arguments list
+
+	if *versionFlag {
+		fmt.Println("Version:", APP_VERSION)
+		return
+	}
+	if advisorId == nil{
+		fmt.Println("Advisor Id is needed.")
+		return
+	}
+	if *refresh{
+		getd.Get()
 	}
 
 	var t *advisor.Table
 	avr := advisor.New()
 	arg := os.Args[1];
-
 	switch {
 	case strings.EqualFold("HiDivi", arg):
 		t = avr.HiDivi(25)

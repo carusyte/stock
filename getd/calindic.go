@@ -1,4 +1,4 @@
-package main
+package getd
 
 import (
 	"fmt"
@@ -31,29 +31,29 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for stock := range chstk {
 		code := stock.Code
-		calcDay(code)
-		calcWeek(code)
-		calcMonth(code)
+		calcDay(code, 3)
+		calcWeek(code, 2)
+		calcMonth(code, 2)
 	}
 }
 
-func calcWeek(code string) {
+func calcWeek(code string, offset int64) {
 	mxw, err := dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
 	util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
 	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_w where code=?", code)
 	util.CheckErr(err, "failed to query max klid in kline_w for "+code)
-	if !mxk.Valid || (mxw.Valid && mxk.Int64 <= mxw.Int64) {
+	if !mxk.Valid || (mxw.Valid && mxk.Int64 < mxw.Int64) {
 		//no new kline_w data yet
 		return
 	}
 
 	var qw []*model.Quote
-	if !mxw.Valid || mxw.Int64 <= HIST_DATA_SIZE {
+	if !mxw.Valid || mxw.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qw, "select * from kline_w where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_w for "+code)
 	} else {
 		_, err := dbmap.Select(&qw, "select * from kline_w where code = ? and klid >= ? "+
-			"order by klid", code, mxw.Int64-HIST_DATA_SIZE)
+			"order by klid", code, mxw.Int64-HIST_DATA_SIZE-offset)
 		util.CheckErr(err, "Failed to query kline_w for "+code)
 	}
 
@@ -65,23 +65,23 @@ func calcWeek(code string) {
 	binsIndc(kdjw, "indicator_w")
 }
 
-func calcMonth(code string) {
+func calcMonth(code string, offset int64) {
 	mxm, err := dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
 	util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
 	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_m where code=?", code)
 	util.CheckErr(err, "failed to query max klid in kline_m for "+code)
-	if !mxk.Valid || (mxm.Valid && mxk.Int64 <= mxm.Int64) {
+	if !mxk.Valid || (mxm.Valid && mxk.Int64 < mxm.Int64) {
 		//no new kline_d data yet
 		return
 	}
 
 	var qm []*model.Quote
-	if !mxm.Valid || mxm.Int64 <= HIST_DATA_SIZE {
+	if !mxm.Valid || mxm.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qm, "select * from kline_m where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_m for "+code)
 	} else {
 		_, err := dbmap.Select(&qm, "select * from kline_m where code = ? and klid >= ? "+
-			"order by klid", code, mxm.Int64-HIST_DATA_SIZE)
+			"order by klid", code, mxm.Int64-HIST_DATA_SIZE-offset)
 		util.CheckErr(err, "Failed to query kline_m for "+code)
 	}
 
@@ -93,24 +93,24 @@ func calcMonth(code string) {
 	binsIndc(kdjm, "indicator_m")
 }
 
-func calcDay(code string) {
+func calcDay(code string, offset int64) {
 	mxd, err := dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
 	util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
 	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_d where code=?", code)
 	util.CheckErr(err, "failed to query max klid in kline_d for "+code)
-	if !mxk.Valid || (mxd.Valid && mxk.Int64 <= mxd.Int64) {
+	if !mxk.Valid || (mxd.Valid && mxk.Int64 < mxd.Int64) {
 		//no new kline_d data yet
 		return
 	}
 
 	var qd []*model.Quote
-	if !mxd.Valid || mxd.Int64 <= HIST_DATA_SIZE {
+	if !mxd.Valid || mxd.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qd, "select code,date,klid,open,high,close,low,volume,amount,xrate from "+
 			"kline_d where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_d for "+code)
 	} else {
 		_, err := dbmap.Select(&qd, "select code,date,klid,open,high,close,low,volume,amount,xrate from "+
-			"kline_d where code = ? and klid >= ? order by klid", code, mxd.Int64-HIST_DATA_SIZE)
+			"kline_d where code = ? and klid >= ? order by klid", code, mxd.Int64-HIST_DATA_SIZE-offset)
 		util.CheckErr(err, "Failed to query kline_d for "+code)
 	}
 
@@ -120,13 +120,6 @@ func calcDay(code string) {
 	}
 
 	binsIndc(kdjd, "indicator_d")
-}
-
-func indcKlid(indcs []*model.Indicator, start int) {
-	for i := len(indcs) - 1; i >= 0; i-- {
-		start++
-		indcs[i].Klid = start
-	}
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {
