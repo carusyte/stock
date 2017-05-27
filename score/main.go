@@ -26,6 +26,7 @@ func init() {
 	dbmap = db.Get(true, false)
 }
 
+//TODO implement scoring
 func main() {
 	if len(os.Args) < 2 {
 		log.Println("scorer is required")

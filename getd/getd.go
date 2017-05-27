@@ -1,16 +1,15 @@
 package getd
 
-import "time"
+import (
+	"log"
+	"time"
+)
 
 func Get(){
 	start := time.Now()
 	defer stop("GETD_TOTAL", start)
 	stks := GetStockInfo()
 	stop("STOCK_LIST", start)
-
-	stgx := time.Now()
-	GetXDXRs(stks)
-	stop("GET_XDXR", stgx)
 
 	stgfi := time.Now()
 	GetFinance(stks)
@@ -19,6 +18,10 @@ func Get(){
 	stgkl := time.Now()
 	GetKlines(stks)
 	stop("GET_KLINES", stgkl)
+
+	stgx := time.Now()
+	GetXDXRs(stks)
+	stop("GET_XDXR", stgx)
 
 	stci := time.Now()
 	CalcIndics(stks)

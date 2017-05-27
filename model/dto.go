@@ -53,22 +53,53 @@ func (s *Stock) String() string {
 }
 
 type Xdxr struct {
-	Code        string
-	Name        string
-	Index       int
-	ReportYear  sql.NullString `db:"report_year"`
-	BoardDate   sql.NullString `db:"board_date"`
-	Divi        sql.NullFloat64
-	Shares      sql.NullFloat64
-	GmsDate     sql.NullString `db:"gms_date"`
-	ImplDate    sql.NullString `db:"impl_date"`
-	Plan        sql.NullString
-	RecordDate  sql.NullString `db:"record_date"`
-	XdxrDate    sql.NullString `db:"xdxr_date"`
-	PayoutDate  sql.NullString `db:"payout_date"`
-	Progress    sql.NullString
-	PayoutRatio sql.NullFloat64        `db:"payout_ratio"`
-	DivRate     sql.NullFloat64        `db:"div_rate"`
+	Code  string
+	Name  string
+	Index int
+	//公告日期
+	NoticeDate sql.NullString `db:"notice_date"`
+	//报告期
+	ReportYear sql.NullString `db:"report_year"`
+	//董事会日期
+	BoardDate sql.NullString `db:"board_date"`
+	//每10股分红金额
+	Divi sql.NullFloat64
+	//每10股分红金额（税后）
+	DiviAtx sql.NullFloat64
+	//分红截止日期
+	DiviEndDate sql.NullString
+	//分红率
+	Dyr sql.NullFloat64 `db:"dyr"`
+	//分红对象
+	DiviTarget sql.NullString
+	//每十股送红股
+	SharesAllot sql.NullFloat64
+	//红股上市日期
+	SharesAllotDate sql.NullString
+	//每十股转增股本
+	SharesCvt sql.NullFloat64
+	//转增股本上市日
+	SharesCvtDate sql.NullString
+	//派息股本基数
+	SharesBase sql.NullInt64
+	//股东大会日期
+	GmsDate sql.NullString `db:"gms_date"`
+	//实施日期
+	ImplDate sql.NullString `db:"impl_date"`
+	//分红方案说明
+	Plan sql.NullString
+	//股权登记日
+	RecordDate sql.NullString `db:"record_date"`
+	//除权除息日
+	XdxrDate sql.NullString `db:"xdxr_date"`
+	//股息到账日
+	PayoutDate sql.NullString `db:"payout_date"`
+	//最后交易日
+	EndTrdDate sql.NullString
+	//方案进度
+	Progress sql.NullString
+	//股利支付率 Dividend Payout Ratio
+	Dpr sql.NullFloat64 `db:"dpr"`
 }
 
 func (x *Xdxr) String() string {

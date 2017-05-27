@@ -56,10 +56,11 @@ func main() {
 
 	var t *advisor.Table
 	avr := advisor.New()
-	arg := os.Args[1];
+	arg := *advisorId;
 	switch {
 	case strings.EqualFold("HiDivi", arg):
 		t = avr.HiDivi(25)
+
 	default:
 		os.Exit(1)
 	}

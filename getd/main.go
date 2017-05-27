@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-const MAX_CONCURRENCY = 200
+const MAX_CONCURRENCY = 16
 const JOB_CAPACITY = 512
 const LOGFILE = "getd.log"
 

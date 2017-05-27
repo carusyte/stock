@@ -7,6 +7,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 	"log"
 	"net/http"
 	"regexp"
@@ -32,13 +34,13 @@ func GetXDXRs(stocks []*model.Stock) {
 
 func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
-	urlt := `http://stockpage.10jqka.com.cn/%s/bonus/`
 	// target web server can't withstand heavy traffic
 	RETRIES := 5
 	for stock := range chstk {
-		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
-			ok, r := doParseBonusPage(url, stock)
+			//FIXME use http://basic.10jqka.com.cn/600383/bonus.html to extract info instead
+			ok, r := parse10jqkBonus(stock)
+			//ok, r := ParseIfengBonus(stock)
 			if !ok && r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Second * 1)
@@ -51,7 +53,11 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 	}
 }
 
-func doParseBonusPage(url string, stock *model.Stock) (ok, retry bool) {
+func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
+	//urlt := `http://stockpage.10jqka.com.cn/%s/bonus/`
+	urlt := `http://basic.10jqka.com.cn/%s/bonus.html`
+	url := fmt.Sprintf(urlt, stock.Code)
+
 	var xdxrs []*model.Xdxr
 	// Load the URL
 	res, e := util.HttpGetResp(url)
@@ -61,8 +67,11 @@ func doParseBonusPage(url string, stock *model.Stock) (ok, retry bool) {
 	}
 	defer res.Body.Close()
 
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	uftBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+
 	// parse body using goquery
-	doc, e := goquery.NewDocumentFromReader(res.Body)
+	doc, e := goquery.NewDocumentFromReader(uftBody)
 	if e != nil {
 		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
@@ -72,7 +81,7 @@ func doParseBonusPage(url string, stock *model.Stock) (ok, retry bool) {
 	//parse column index
 	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRecordDate, iXdxrDate, iProgress, iPayoutRatio,
 	iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-	doc.Find("#bonus_table thead tr").Each(func(i int, s *goquery.Selection) {
+	doc.Find(`#bonus_table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
 			switch v {
@@ -134,10 +143,10 @@ func doParseBonusPage(url string, stock *model.Stock) (ok, retry bool) {
 				case iProgress:
 					xdxr.Progress = util.Str2Snull(v)
 				case iPayoutRatio:
-					xdxr.PayoutRatio = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
+					xdxr.Dpr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
 						"%")))
 				case iDivRate:
-					xdxr.DivRate = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
+					xdxr.Dyr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
 						"%")))
 				default:
 					log.Printf("unidentified column value in bonus page %s : %s", url, v)
@@ -159,51 +168,76 @@ func doParseBonusPage(url string, stock *model.Stock) (ok, retry bool) {
 		xdxrs[i].Index = j
 	}
 
-	//update to database
+	//TODO calculates dyr and dpr
+
+	saveXdxrs(xdxrs)
+
+	return true, false
+}
+
+//update to database
+func saveXdxrs(xdxrs []*model.Xdxr) {
 	if len(xdxrs) > 0 {
+		code := xdxrs[0].Code
 		valueStrings := make([]string, 0, len(xdxrs))
-		valueArgs := make([]interface{}, 0, len(xdxrs)*16)
+		valueArgs := make([]interface{}, 0, len(xdxrs)*25)
 		for _, e := range xdxrs {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+				"?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Name)
 			valueArgs = append(valueArgs, e.Index)
+			valueArgs = append(valueArgs, e.NoticeDate)
 			valueArgs = append(valueArgs, e.ReportYear)
 			valueArgs = append(valueArgs, e.BoardDate)
 			valueArgs = append(valueArgs, e.GmsDate)
 			valueArgs = append(valueArgs, e.ImplDate)
 			valueArgs = append(valueArgs, e.Plan)
 			valueArgs = append(valueArgs, e.Divi)
-			valueArgs = append(valueArgs, e.Shares)
+			valueArgs = append(valueArgs, e.DiviAtx)
+			valueArgs = append(valueArgs, e.DiviEndDate)
+			valueArgs = append(valueArgs, e.SharesAllot)
+			valueArgs = append(valueArgs, e.SharesAllotDate)
+			valueArgs = append(valueArgs, e.SharesCvt)
+			valueArgs = append(valueArgs, e.SharesCvtDate)
 			valueArgs = append(valueArgs, e.RecordDate)
 			valueArgs = append(valueArgs, e.XdxrDate)
 			valueArgs = append(valueArgs, e.PayoutDate)
 			valueArgs = append(valueArgs, e.Progress)
-			valueArgs = append(valueArgs, e.PayoutRatio)
-			valueArgs = append(valueArgs, e.DivRate)
+			valueArgs = append(valueArgs, e.Dpr)
+			valueArgs = append(valueArgs, e.Dyr)
+			valueArgs = append(valueArgs, e.DiviTarget)
+			valueArgs = append(valueArgs, e.SharesBase)
+			valueArgs = append(valueArgs, e.EndTrdDate)
 		}
-		stmt := fmt.Sprintf("INSERT INTO `div` (code,name,`index`,report_year,board_date,gms_date,impl_date,"+
-			"plan,divi,shares,record_date,xdxr_date,payout_date,progress,payout_ratio,div_rate) VALUES %s"+
-			" on duplicate key update name=values(name),report_year=values(report_year),board_date=values"+
+		stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,`index`,notice_date,report_year,board_date," +
+			"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt," +
+			"shares_cvt_date,record_date,xdxr_date,payout_date,progress,dpr,"+
+			"dyr,divi_target,shares_base,end_trddate) VALUES %s "+
+			"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values" +
+			"(report_year),board_date=values"+
 			"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
-			"divi=values(divi),shares=values(shares),record_date=values(record_date),xdxr_date=values"+
-			"(xdxr_date),payout_date=values(payout_date),progress=values(progress),payout_ratio=values"+
-			"(payout_ratio),div_rate=values"+
-			"(div_rate)",
+			"divi=values(divi),divi_atx=values(divi_atx),divi_end_date=values" +
+			"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values" +
+			"(shares_allot_date),shares_cvt=values"+
+			"(shares_cvt),shares_cvt_date=values(shares_cvt_date),record_date=values(record_date)," +
+			"xdxr_date=values"+
+			"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
+			"(dpr),dyr=values(dyr),divi_target=values(divi_target)," +
+			"shares_base=values(shares_base),end_trddate=values(end_trddate)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, stock.Code+": failed to bulk update div")
+		util.CheckErr(err, code+": failed to bulk update xdxr")
 	}
-
-	return true, false
 }
 
 func newXdxr() *model.Xdxr {
 	xdxr := &model.Xdxr{}
-	xdxr.Shares = sql.NullFloat64{0, false}
-	xdxr.DivRate = sql.NullFloat64{0, false}
+	xdxr.SharesAllot = sql.NullFloat64{0, false}
+	xdxr.SharesCvt = sql.NullFloat64{0, false}
+	xdxr.Dyr = sql.NullFloat64{0, false}
 	xdxr.Divi = sql.NullFloat64{0, false}
-	xdxr.PayoutRatio = sql.NullFloat64{0, false}
+	xdxr.Dpr = sql.NullFloat64{0, false}
 	return xdxr
 }
 
@@ -218,14 +252,14 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 
 	if allot != nil {
 		if len(allot) > 0 {
-			xdxr.Shares.Float64 += util.Str2F64(allot[len(allot)-1])
-			xdxr.Shares.Valid = true
+			xdxr.SharesAllot.Float64 += util.Str2F64(allot[len(allot)-1])
+			xdxr.SharesAllot.Valid = true
 		}
 	}
 	if cvt != nil {
 		if len(cvt) > 0 {
-			xdxr.Shares.Float64 += util.Str2F64(cvt[len(cvt)-1])
-			xdxr.Shares.Valid = true
+			xdxr.SharesCvt.Float64 += util.Str2F64(cvt[len(cvt)-1])
+			xdxr.SharesCvt.Valid = true
 		}
 	}
 	if div != nil {
@@ -340,7 +374,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			"udpps=values(udpps)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, code + ": failed to bulk update finance")
+		util.CheckErr(err, code+": failed to bulk update finance")
 	}
 	return true, false
 }

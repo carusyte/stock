@@ -44,6 +44,17 @@ func Str2Fnull(s string) (f sql.NullFloat64) {
 	return
 }
 
+func Str2Inull(s string)(i sql.NullInt64) {
+	i64, e := strconv.ParseInt(strings.TrimSpace(s), 10,64)
+	if e == nil {
+		i.Int64 = i64
+		i.Valid = true
+	} else {
+		i.Valid = false
+	}
+	return
+}
+
 func Str2Snull(s string) (snull sql.NullString) {
 	v := strings.TrimSpace(s)
 	if v == "" {
