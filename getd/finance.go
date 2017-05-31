@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,8 +22,8 @@ import (
 func GetXDXRs(stocks []*model.Stock) {
 	log.Println("getting XDXR info...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, JOB_CAPACITY)
-	for i := 0; i < MAX_CONCURRENCY; i++ {
+	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	for i := 0; i < global.MAX_CONCURRENCY; i++ {
 		wg.Add(1)
 		go parseBonusPage(chstk, &wg)
 	}
@@ -68,10 +70,10 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	defer res.Body.Close()
 
 	// Convert the designated charset HTML to utf-8 encoded HTML.
-	uftBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
 
 	// parse body using goquery
-	doc, e := goquery.NewDocumentFromReader(uftBody)
+	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
 		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
@@ -79,7 +81,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	}
 
 	//parse column index
-	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRecordDate, iXdxrDate, iProgress, iPayoutRatio,
+	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRegDate, iXdxrDate, iProgress, iPayoutRatio,
 	iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	doc.Find(`#bonus_table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
@@ -96,7 +98,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 			case "分红方案说明":
 				iPlan = j
 			case "A股股权登记日":
-				iRecordDate = j
+				iRegDate = j
 			case "A股除权除息日":
 				iXdxrDate = j
 			case "A股派息日":
@@ -134,8 +136,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 					xdxr.ImplDate = util.Str2Snull(v)
 				case iPlan:
 					xdxr.Plan = util.Str2Snull(v)
-				case iRecordDate:
-					xdxr.RecordDate = util.Str2Snull(v)
+				case iRegDate:
+					xdxr.RegDate = util.Str2Snull(v)
 				case iXdxrDate:
 					xdxr.XdxrDate = util.Str2Snull(v)
 				case iPayoutDate:
@@ -143,11 +145,13 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 				case iProgress:
 					xdxr.Progress = util.Str2Snull(v)
 				case iPayoutRatio:
-					xdxr.Dpr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
-						"%")))
+					// skip dyr and dpr from the web and calculate later
+					//xdxr.Dpr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
+					//	"%")))
 				case iDivRate:
-					xdxr.Dyr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
-						"%")))
+					// skip dyr and dpr from the web and calculate later
+					//xdxr.Dyr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
+					//	"%")))
 				default:
 					log.Printf("unidentified column value in bonus page %s : %s", url, v)
 				}
@@ -165,14 +169,76 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	}
 
 	for i, j := len(xdxrs)-1, 0; i >= 0; i, j = i-1, j+1 {
-		xdxrs[i].Index = j
+		xdxrs[i].Idx = j
 	}
 
-	//TODO calculates dyr and dpr
-
+	calcDyrDpr(xdxrs)
 	saveXdxrs(xdxrs)
 
 	return true, false
+}
+
+// calculates dyr and dpr dynamically
+func calcDyrDpr(xdxrs []*model.Xdxr) {
+	for _, x := range xdxrs {
+		if x.Divi.Valid && x.Divi.Float64 > 0 {
+			var price float64 = math.NaN()
+			var date string = time.Now().Format("2006-01-02")
+			// use normal price at reg_date or impl_date, if not found, use the day before that day
+			if x.RegDate.Valid {
+				date = x.RegDate.String
+			} else if x.ImplDate.Valid {
+				date = x.ImplDate.String
+			}
+			c, e := dbmap.SelectNullFloat("select close from kline_d_n where code = ? "+
+				"and date = ?", x.Code, date)
+			util.CheckErrNop(e, x.Code+" failed to query close from kline_d_n at "+date)
+
+			if e == nil {
+				if c.Valid {
+					price = c.Float64
+				} else {
+					c, e = dbmap.SelectNullFloat("select close from kline_d_n "+
+						"where code = ? and date < ? order by klid desc limit "+
+						"1", x.Code, date)
+					util.CheckErrNop(e, x.Code + " failed to query close from "+
+						"kline_d_n the day before "+ date)
+					if e == nil {
+						price = c.Float64
+					}
+				}
+			}
+
+			if math.IsNaN(price) {
+				// use latest price
+				c, e := dbmap.SelectNullFloat("select close from kline_d_n where code = ? "+
+					"order by date desc limit 1", x.Code)
+				util.CheckErrNop(e, x.Code+" failed to query lastest close from kline_d_n")
+				if e == nil && c.Valid {
+					price = c.Float64
+				}
+			}
+
+			if math.IsNaN(price) {
+				log.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear)
+			} else if price != 0 {
+				x.Dyr.Float64 = x.Divi.Float64 / price / 10.0
+				x.Dyr.Valid = true
+			}
+
+			// calculates dpr
+			eps, e := dbmap.SelectNullFloat("select eps from finance where code = ? "+
+				"and year < ? and year like '%-12-31' order by year desc limit 1", x.Code, date)
+			if e != nil{
+				log.Printf("failed to query eps for %s before %s", x.Code, date)
+			}else{
+				if eps.Valid && eps.Float64 != 0 {
+					x.Dpr.Float64 = x.Divi.Float64 / eps.Float64 / 10.0
+					x.Dpr.Valid = true
+				}
+			}
+		}
+	}
 }
 
 //update to database
@@ -182,11 +248,11 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 		valueStrings := make([]string, 0, len(xdxrs))
 		valueArgs := make([]interface{}, 0, len(xdxrs)*25)
 		for _, e := range xdxrs {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
 				"?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Name)
-			valueArgs = append(valueArgs, e.Index)
+			valueArgs = append(valueArgs, e.Idx)
 			valueArgs = append(valueArgs, e.NoticeDate)
 			valueArgs = append(valueArgs, e.ReportYear)
 			valueArgs = append(valueArgs, e.BoardDate)
@@ -200,7 +266,7 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 			valueArgs = append(valueArgs, e.SharesAllotDate)
 			valueArgs = append(valueArgs, e.SharesCvt)
 			valueArgs = append(valueArgs, e.SharesCvtDate)
-			valueArgs = append(valueArgs, e.RecordDate)
+			valueArgs = append(valueArgs, e.RegDate)
 			valueArgs = append(valueArgs, e.XdxrDate)
 			valueArgs = append(valueArgs, e.PayoutDate)
 			valueArgs = append(valueArgs, e.Progress)
@@ -210,23 +276,23 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 			valueArgs = append(valueArgs, e.SharesBase)
 			valueArgs = append(valueArgs, e.EndTrdDate)
 		}
-		stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,`index`,notice_date,report_year,board_date," +
-			"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt," +
-			"shares_cvt_date,record_date,xdxr_date,payout_date,progress,dpr,"+
+		stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,idx,notice_date,report_year,board_date,"+
+			"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt,"+
+			"shares_cvt_date,reg_date,xdxr_date,payout_date,progress,dpr,"+
 			"dyr,divi_target,shares_base,end_trddate) VALUES %s "+
-			"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values" +
+			"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values"+
 			"(report_year),board_date=values"+
 			"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
-			"divi=values(divi),divi_atx=values(divi_atx),divi_end_date=values" +
-			"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values" +
+			"divi=values(divi),divi_atx=values(divi_atx),divi_end_date=values"+
+			"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values"+
 			"(shares_allot_date),shares_cvt=values"+
-			"(shares_cvt),shares_cvt_date=values(shares_cvt_date),record_date=values(record_date)," +
+			"(shares_cvt),shares_cvt_date=values(shares_cvt_date),reg_date=values(reg_date),"+
 			"xdxr_date=values"+
 			"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
-			"(dpr),dyr=values(dyr),divi_target=values(divi_target)," +
+			"(dpr),dyr=values(dyr),divi_target=values(divi_target),"+
 			"shares_base=values(shares_base),end_trddate=values(end_trddate)",
 			strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
+		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update xdxr")
 	}
 }
@@ -251,20 +317,20 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 	div := regexp.MustCompile(`派(发现金红利)?(\d*\.?\d*)元?`).FindStringSubmatch(xdxr.Plan.String)
 
 	if allot != nil {
-		if len(allot) > 0 {
-			xdxr.SharesAllot.Float64 += util.Str2F64(allot[len(allot)-1])
+		for i := len(allot) - 1; i > 0; i-- {
+			xdxr.SharesAllot.Float64 += util.Str2F64(allot[i])
 			xdxr.SharesAllot.Valid = true
 		}
 	}
 	if cvt != nil {
-		if len(cvt) > 0 {
-			xdxr.SharesCvt.Float64 += util.Str2F64(cvt[len(cvt)-1])
+		for i := len(cvt) - 1; i > 0; i-- {
+			xdxr.SharesCvt.Float64 += util.Str2F64(cvt[i])
 			xdxr.SharesCvt.Valid = true
 		}
 	}
 	if div != nil {
-		if len(div) > 0 {
-			xdxr.Divi.Float64 += util.Str2F64(div[len(div)-1])
+		for i := len(div) - 1; i > 0; i-- {
+			xdxr.Divi.Float64 += util.Str2F64(div[i])
 			xdxr.Divi.Valid = true
 		}
 	}
@@ -278,8 +344,8 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 func GetFinance(stocks []*model.Stock) {
 	log.Println("getting Finance info...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, JOB_CAPACITY)
-	for i := 0; i < MAX_CONCURRENCY; i++ {
+	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	for i := 0; i < global.MAX_CONCURRENCY; i++ {
 		wg.Add(1)
 		go parseFinancePage(chstk, &wg)
 	}
@@ -292,7 +358,7 @@ func GetFinance(stocks []*model.Stock) {
 
 func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
-	urlt := `http://stockpage.10jqka.com.cn/%s/finance`
+	urlt := `http://basic.10jqka.com.cn/%s/finance.html`
 	RETRIES := 5
 	for stock := range chstk {
 		url := fmt.Sprintf(urlt, stock.Code)
@@ -323,8 +389,10 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		return false, false
 	}
 	defer res.Body.Close()
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
 	// parse body using goquery
-	doc, e = goquery.NewDocumentFromReader(res.Body)
+	doc, e = goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
@@ -373,7 +441,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			"np_yoy=values(np_yoy),ocfps=values(ocfps),roe=values(roe),roe_dlt=values(roe_dlt),"+
 			"udpps=values(udpps)",
 			strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
+		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update finance")
 	}
 	return true, false

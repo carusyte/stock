@@ -12,6 +12,7 @@ import (
 	"sync"
 )
 
+//FIXME 10jqk replies with 502 Bad Gateway when visiting to frequently
 func GetKlines(stks []*model.Stock) {
 	log.Println("begin to fetch kline data")
 	var wg sync.WaitGroup
@@ -31,16 +32,22 @@ func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
 		<-*wf
 	}()
 	// Get latest kline from db, for day, week, month, with offset
-	ldy, lwk, lmn := getLatestKl(stk.Code, 3, 2, 2)
+	ldyn, ldy, lwk, lmn := getLatestKl(stk.Code, 3, 3, 2, 2)
 	//get daily kline
-	getDailyKlines(stk.Code, ldy)
+	getDailyKlines(stk.Code, ldy, "01")
+	//get daily kline (no rights restoration)
+	getDailyKlines(stk.Code, ldyn, "00")
 	//get weekly kline
 	getLongKlines(stk.Code, lwk, "11", "kline_w")
 	//get monthly kline
 	getLongKlines(stk.Code, lmn, "21", "kline_m")
 }
 
-func getDailyKlines(code string, ldy *model.Quote) (kldy []*model.Quote) {
+//mode:
+// 00-no rights restoration
+// 01-forward rights restoration
+// 02-backward rights restoration
+func getDailyKlines(code string, ldy *model.Quote, mode string) (kldy []*model.Quote) {
 	//get today kline data
 	RETRIES := 5
 	var (
@@ -53,7 +60,7 @@ func getDailyKlines(code string, ldy *model.Quote) (kldy []*model.Quote) {
 	)
 RETRY:
 	for rt := 0; rt < RETRIES; rt++ {
-		url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/today.js", code)
+		url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/today.js", code, mode)
 		body, e = util.HttpGetBytes(url_today)
 		if e != nil {
 			log.Printf("stop retrying to get today kline for %s", code)
@@ -75,7 +82,7 @@ RETRY:
 		kldy = append(kldy, &ktoday.Quote)
 
 		//get last kline data
-		url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/last.js", code)
+		url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js", code, mode)
 		body, e = util.HttpGetBytes(url_last)
 		if e != nil {
 			log.Printf("stop retrying to get last kline for %s", code)
@@ -85,12 +92,12 @@ RETRY:
 		e = json.Unmarshal(strip(body), &klast)
 		if e != nil {
 			if rt < RETRIES {
-				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s", code, rt+1, e,
-					string(body))
+				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code, rt+1, e,
+					url_last, string(body))
 				continue
 			} else {
-				log.Printf("stop retrying to parse last kline json for %s [%d]: %+v\n%s", code, rt+1,
-					e, string(body))
+				log.Printf("stop retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code,
+					rt+1, e, url_last, string(body))
 				return []*model.Quote{}
 			}
 		}
@@ -107,7 +114,7 @@ RETRY:
 			lklid = ldy.Klid
 		}
 
-		kls, more := parseKlines(code, klast.Data, ldate)
+		kls, more := parseKlines(code, klast.Data, ldate, "")
 		if len(kls) > 0 {
 			if ktoday.Date == kls[0].Date {
 				kldy = append(kldy, kls[1:]...)
@@ -140,7 +147,8 @@ RETRY:
 				if _, in := klast.Year[strconv.FormatInt(yr, 10)]; !in {
 					continue
 				}
-				url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/%d.js", code, yr)
+				url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/%d.js", code, mode,
+					yr)
 				body, e = util.HttpGetBytes(url_hist)
 				if e != nil {
 					if rt < RETRIES {
@@ -166,7 +174,7 @@ RETRY:
 						return []*model.Quote{}
 					}
 				}
-				kls, more = parseKlines(code, khist.Data, ldate)
+				kls, more = parseKlines(code, khist.Data, ldate, kldy[len(kldy)-1].Date)
 				if len(kls) > 0 {
 					kldy = append(kldy, kls...)
 				}
@@ -175,7 +183,14 @@ RETRY:
 		break
 	}
 	assignKlid(kldy, lklid)
-	binsert(kldy, "kline_d")
+
+	switch mode {
+	case "00":
+		binsert(kldy, "kline_d_n")
+	case "01":
+		binsert(kldy, "kline_d")
+	}
+
 	return
 }
 
@@ -235,7 +250,7 @@ func getLongKlines(code string, latest *model.Quote, typ string, table string) (
 			log.Printf("%s %s data may not be ready yet", code, table)
 			return
 		}
-		kls, _ := parseKlines(code, khist.Data, ldate)
+		kls, _ := parseKlines(code, khist.Data, ldate, "")
 		quotes = append(quotes, ktoday)
 		if len(kls) > 0 {
 			//always remove the last/latest one from /last.js
@@ -288,8 +303,8 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 	return
 }
 
-//parse semi-colon separated string to quotes, with latest in the head.
-func parseKlines(code string, data string, ldate string) (kls []*model.Quote, more bool) {
+//parse semi-colon separated string to quotes, with latest in the head (reverse order of the string data).
+func parseKlines(code, data, ldate, skipto string) (kls []*model.Quote, more bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
@@ -317,6 +332,8 @@ DATES:
 				if ldate != "" && kl.Date <= ldate {
 					more = false
 					break DATES
+				} else if skipto != "" && kl.Date >= skipto {
+					continue DATES
 				}
 			case 1:
 				kl.Open = util.Str2F64(e)
@@ -342,7 +359,9 @@ DATES:
 	return
 }
 
-func getLatestKl(code string, offDy, offWk, offMn int) (ldy *model.Quote, lwk *model.Quote, lmn *model.Quote) {
+func getLatestKl(code string, offDyn, offDy, offWk, offMn int) (ldyn, ldy, lwk, lmn *model.Quote) {
+	dbmap.SelectOne(&ldyn, "select * from kline_d_n where code = ? order by date desc limit 1 offset ?",
+		code, offDyn)
 	dbmap.SelectOne(&ldy, "select * from kline_d where code = ? order by date desc limit 1 offset ?",
 		code, offDy)
 	dbmap.SelectOne(&lwk, "select * from kline_w where code = ? order by date desc limit 1 offset ?",

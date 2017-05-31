@@ -53,14 +53,14 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2")
 		req.Header.Set("Cache-Control", "no-cache")
-		req.Header.Set("Connection", "close")
+		req.Header.Set("Connection", "keep-alive")
 		if host != "" {
 			req.Header.Set("Host", host)
 		}
 		req.Header.Set("Pragma", "no-cache")
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) "+
-			"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) "+
+			"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
 
 		res, err = client.Do(req)
 		if err != nil {

@@ -1,30 +1,19 @@
-package main
+package score
 
 import (
-	"github.com/carusyte/stock/db"
-	"github.com/carusyte/stock/util"
-	"gopkg.in/gorp.v2"
-	"io"
+	"github.com/carusyte/stock/global"
+	"github.com/carusyte/stock/model"
 	"log"
 	"os"
 )
 
-const MAX_CONCURRENCY = 200
-const JOB_CAPACITY = 512
-const LOGFILE = "score.log"
+const JOB_CAPACITY = global.JOB_CAPACITY
+const MAX_CONCURRENCY = global.MAX_CONCURRENCY
 
-var dbmap *gorp.DbMap
-
-func init() {
-	if _, err := os.Stat(LOGFILE); err == nil {
-		os.Remove(LOGFILE)
-	}
-	logFile, err := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
-	util.CheckErr(err, "failed to open log file")
-	mw := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(mw)
-	dbmap = db.Get(true, false)
-}
+var (
+	dbmap = global.Dbmap
+	dot   = global.Dot
+)
 
 //TODO implement scoring
 func main() {
@@ -32,4 +21,26 @@ func main() {
 		log.Println("scorer is required")
 		os.Exit(1)
 	}
+}
+
+type Aspect struct {
+	Score       float64
+	Weight      float64
+	Description string
+	Comment     string
+}
+
+type Item struct {
+	Code    string
+	Field   interface{}
+	Score   float64
+	Aspects []*Aspect
+}
+
+type Result struct {
+	Items map[string]*Item
+}
+
+type Scorer interface {
+	Get(stock []*model.Stock) (r Result)
 }

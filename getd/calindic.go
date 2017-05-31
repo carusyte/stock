@@ -8,9 +8,16 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"github.com/carusyte/stock/global"
 )
 
 const HIST_DATA_SIZE = 200
+const JOB_CAPACITY = global.JOB_CAPACITY
+const MAX_CONCURRENCY = global.MAX_CONCURRENCY
+
+var(
+	dbmap = global.Dbmap
+)
 
 func CalcIndics(stocks []*model.Stock) {
 	log.Println("calculating indices...")
@@ -142,6 +149,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			"(kdj_j)",
 			table, strings.Join(valueStrings, ","))
 		ps, err := dbmap.Prepare(stmt)
+		defer ps.Close()
 		util.CheckErrNop(err, code+" failed to prepare statement")
 		_, err = ps.Exec(valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert "+table) {

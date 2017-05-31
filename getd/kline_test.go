@@ -10,7 +10,7 @@ import (
 )
 
 func TestGetDailyKlines(t *testing.T) {
-	getDailyKlines("600242", nil)
+	getDailyKlines("600242", nil, "01")
 }
 
 func TestParseLastJson(t *testing.T) {
@@ -36,4 +36,12 @@ func TestParseLastJson(t *testing.T) {
 		log.Printf("%s : %d",k,klast.Year[k])
 	}
 	log.Printf("%+v", klast.Year["hello"])
+}
+
+func TestGetKlines(t *testing.T) {
+	s := &model.Stock{}
+	s.Code = "601377"
+	s.Name = "兴业证券"
+	ss := []*model.Stock{s}
+	GetKlines(ss)
 }

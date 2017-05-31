@@ -53,9 +53,9 @@ func (s *Stock) String() string {
 }
 
 type Xdxr struct {
-	Code  string
-	Name  string
-	Index int
+	Code string
+	Name string
+	Idx  int
 	//公告日期
 	NoticeDate sql.NullString `db:"notice_date"`
 	//报告期
@@ -89,7 +89,7 @@ type Xdxr struct {
 	//分红方案说明
 	Plan sql.NullString
 	//股权登记日
-	RecordDate sql.NullString `db:"record_date"`
+	RegDate sql.NullString `db:"reg_date"`
 	//除权除息日
 	XdxrDate sql.NullString `db:"xdxr_date"`
 	//股息到账日
@@ -368,7 +368,7 @@ type Klast struct {
 	Num int `json:"num"`
 	//Total      int `json:"total"`
 	Start string `json:"start"`
-	Year  map[string]int `json:"year"`
+	Year  map[string]interface{} `json:"year"`
 	Name  string `json:"name"`
 	Khist
 	//IssuePrice float32 `json:"issuePrice"`
@@ -387,10 +387,10 @@ func (kl *Klast) UnmarshalJSON(b []byte) error {
 		case "start":
 			kl.Start = m[k].(string)
 		case "year":
-			if y, ok := m[k].(map[string]int); ok {
+			if y, ok := m[k].(map[string]interface{}); ok {
 				kl.Year = y
 			} else {
-				kl.Year = make(map[string]int, 0)
+				kl.Year = make(map[string]interface{}, 0)
 			}
 		case "name:":
 			kl.Name = m[k].(string)

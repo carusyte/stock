@@ -62,7 +62,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 					case `每10股转增股本`:
 						xdxr.SharesCvt = util.Str2Fnull(strings.TrimSuffix(td, "股"))
 					case `股权登记日`:
-						xdxr.RecordDate = util.Str2Snull(td)
+						xdxr.RegDate = util.Str2Snull(td)
 					case `除权除息日`:
 						xdxr.XdxrDate = util.Str2Snull(td)
 					case `最后交易日`:
@@ -90,7 +90,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 	}
 
 	for i, j := len(xdxrs)-1, 0; i >= 0; i, j = i-1, j+1 {
-		xdxrs[i].Index = j
+		xdxrs[i].Idx = j
 	}
 
 	//calcDprDyr(xdxrs)
