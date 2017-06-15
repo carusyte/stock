@@ -11,43 +11,103 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+	"encoding/json"
+	"bytes"
+	"archive/zip"
+	"encoding/xml"
+	"io/ioutil"
 )
 
 func GetStockInfo() (allstk []*model.Stock) {
-	var (
-		wg    sync.WaitGroup
-		wgget sync.WaitGroup
-	)
-	chstk := make(chan []*model.Stock, 100)
-	wg.Add(1)
-	tp := parseStockPage(chstk, 1, true, &wg)
-	log.Printf("total page: %d", tp)
-	wgget.Add(1)
-	go func() {
-		defer wgget.Done()
-		c := 1
-		for stks := range chstk {
-			allstk = append(allstk, stks...)
-			log.Printf("%d/%d, %d", c, tp, len(allstk))
-			c++
-		}
-	}()
-	for p := 2; p <= tp; p++ {
-		wg.Add(1)
-		go parseStockPage(chstk, p, false, &wg)
-	}
-	wg.Wait()
-	close(chstk)
-	wgget.Wait()
+	//allstk = getFrom10jqk()
+	//allstk = getFromQq()
 
+	allstk = getFromExchanges()
 	log.Printf("total stocks: %d", len(allstk))
 
-	//update to database
+	save(allstk)
+
+	return
+}
+
+//get stock list from official exchange web sites
+func getFromExchanges() (allstk []*model.Stock) {
+	allstk = getSSE()
+	allstk = append(allstk, getSZSE()...)
+	return
+}
+
+//get Shenzhen A-share list
+func getSZSE() (list []*model.Stock) {
+	log.Println("Fetching Shenzhen A-Share list...")
+	url_sz := `http://www.szse.cn/szseWeb/ShowReport.szse?SHOWTYPE=xlsx&CATALOGID=1110&tab1PAGENO=1&ENCODE=1&TABKEY=tab1`
+	d, e := util.HttpGetBytesUsingHeaders(url_sz, map[string]string{
+		"Referer": `http://www.szse.cn/main/marketdata/jypz/colist/`,
+	})
+	util.CheckErr(e, "failed to get Shenzhen A-share list")
+	x, e := zip.NewReader(bytes.NewReader(d), int64(len(d)))
+	util.CheckErr(e, "failed to parse Shenzhen A-share xlsx file")
+	var xd xlsxData
+	for _, f := range x.File {
+		if "xl/worksheets/sheet1.xml" == f.Name {
+			rc, e := f.Open()
+			util.CheckErr(e, "failed to open sheet1.xml")
+			d, e := ioutil.ReadAll(rc)
+			util.CheckErr(e, "failed to read sheet1.xml")
+			xml.Unmarshal(d, &xd)
+		}
+	}
+	for _, r := range xd.data[1:] {
+		s := &model.Stock{}
+		for i, c := range r {
+			switch i {
+			case 5:
+				s.Code = c
+			case 6:
+				s.Name = c
+			case 7:
+				s.TimeToMarket = c
+			case 8:
+				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1),64)
+				util.CheckErr(e,"failed to parse total share in Shenzhen security list")
+				s.Totals = v / 100000000.0
+			case 9:
+				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1),64)
+				util.CheckErr(e,"failed to parse outstanding share in Shenzhen security list")
+				s.Outstanding.Float64 = v / 100000000.0
+				s.Outstanding.Valid = true
+			}
+		}
+		list = append(list, s)
+	}
+	return
+}
+
+//get Shanghai A-share list
+func getSSE() []*model.Stock {
+	log.Println("Fetching Shanghai A-Share list...")
+
+	url_sh := `http://query.sse.com.cn/security/stock/getStockListData2.do` +
+		`?&isPagination=false&stockType=1&pageHelp.pageSize=9999`
+	d, e := util.HttpGetBytesUsingHeaders(url_sh, map[string]string{"Referer": "http://www.sse.com" +
+		".cn/assortment/stock/list/share/"})
+	util.CheckErr(e, "failed to get Shanghai A-share list")
+	list := model.StockList{}
+	e = json.Unmarshal(d, &list)
+	if e != nil {
+		log.Panicf("failed to parse json from %s\n%+v", url_sh, e)
+	}
+	return list.List
+}
+
+//update to database
+func save(allstk []*model.Stock) {
 	if len(allstk) > 0 {
 		valueStrings := make([]string, 0, len(allstk))
 		valueArgs := make([]interface{}, 0, len(allstk)*13)
 		for _, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
 			valueArgs = append(valueArgs, stk.Price)
@@ -61,22 +121,54 @@ func GetStockInfo() (allstk []*model.Stock) {
 			valueArgs = append(valueArgs, stk.Outstanding)
 			valueArgs = append(valueArgs, stk.CircMarVal)
 			valueArgs = append(valueArgs, stk.Pe)
+			valueArgs = append(valueArgs, stk.Date)
+			valueArgs = append(valueArgs, stk.Time)
 		}
 		stmt := fmt.Sprintf("INSERT INTO basics (code,name,price,varate,var,accer,xrate,volratio,ampl,"+
-			"turnover,outstanding,circmarval,pe) VALUES %s on duplicate key update name=values(name),"+
+			"turnover,outstanding,circmarval,pe,date,time) VALUES %s on duplicate key update "+
+			"name=values(name),"+
 			"price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
 			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
-			"outstanding=values(outstanding),circmarval=values(circmarval),pe=values(pe)",
+			"outstanding=values(outstanding),circmarval=values(circmarval),pe=values(pe),"+
+			"date=values(date),time=values(time)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, "failed to bulk update basics")
 		log.Printf("%d stocks info updated to basics", len(allstk))
 	}
+}
+
+func getFrom10jqk() (allstk []*model.Stock) {
+	var (
+		wg    sync.WaitGroup
+		wgget sync.WaitGroup
+	)
+	chstk := make(chan []*model.Stock, 100)
+	wg.Add(1)
+	tp := parse10jqk(chstk, 1, true, &wg)
+	log.Printf("total page: %d", tp)
+	wgget.Add(1)
+	go func() {
+		defer wgget.Done()
+		c := 1
+		for stks := range chstk {
+			allstk = append(allstk, stks...)
+			log.Printf("%d/%d, %d", c, tp, len(allstk))
+			c++
+		}
+	}()
+	for p := 2; p <= tp; p++ {
+		wg.Add(1)
+		go parse10jqk(chstk, p, false, &wg)
+	}
+	wg.Wait()
+	close(chstk)
+	wgget.Wait()
 
 	return
 }
 
-func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.WaitGroup) (totalPage int) {
+func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.WaitGroup) (totalPage int) {
 	var stocks []*model.Stock
 	defer wg.Done()
 	//FIXME this may not contain suspended stocks
@@ -135,6 +227,11 @@ func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *syn
 				// skip
 			}
 		})
+		now := time.Now()
+		stk.Date.Valid = true
+		stk.Time.Valid = true
+		stk.Date.String = now.Format("2006-01-02")
+		stk.Time.String = now.Format("15:04:05")
 	})
 
 	chstk <- stocks
@@ -156,4 +253,159 @@ func parseStockPage(chstk chan []*model.Stock, page int, parsePage bool, wg *syn
 	}
 
 	return
+}
+
+func getFromQq() (allstk []*model.Stock) {
+	allstk = append(allstk, getQqMarket("Shanghai A-Share market", `http://stock.finance.qq`+
+		`.com/hqing/hqst/paiminglist1.htm?page=%d`)...)
+	allstk = append(allstk, getQqMarket("Shenzhen A-Share market", `http://stock.finance.qq`+
+		`.com/hqing/hqst/paiminglistsa1.htm?page=%d`)...)
+	return
+}
+
+func getQqMarket(name, urlt string) (allstk []*model.Stock) {
+	var (
+		wg    sync.WaitGroup
+		wgget sync.WaitGroup
+	)
+	chstk := make(chan []*model.Stock, 100)
+	wg.Add(1)
+	tp := parseQq(chstk, 1, true, urlt, &wg)
+	log.Printf("%s total page: %d", name, tp)
+	wgget.Add(1)
+	go func() {
+		defer wgget.Done()
+		c := 1
+		for stks := range chstk {
+			allstk = append(allstk, stks...)
+			log.Printf("%d/%d, %d", c, tp, len(allstk))
+			c++
+		}
+	}()
+	for p := 2; p <= tp; p++ {
+		wg.Add(1)
+		go parseQq(chstk, p, false, urlt, &wg)
+	}
+	wg.Wait()
+	close(chstk)
+	wgget.Wait()
+
+	return
+}
+
+func parseQq(chstk chan []*model.Stock, page int, parsePage bool, urlt string, wg *sync.WaitGroup) (totalPage int) {
+	var stocks []*model.Stock
+	defer wg.Done()
+
+	// Load the URL
+	res, e := util.HttpGetResp(fmt.Sprintf(urlt, page))
+	if e != nil {
+		panic(e)
+	}
+	defer res.Body.Close()
+
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+
+	// parse utfBody using goquery
+	doc, err := goquery.NewDocumentFromReader(utfBody)
+	if err != nil {
+		log.Printf("%+v", utfBody)
+		log.Panic(err)
+	}
+
+	//> tr:nth - child(1)
+	doc.Find("body table:nth-child(12) tbody tr td table:nth-child(4) tbody tr").Each(
+		func(i int, s *goquery.Selection) {
+			if i == 0 {
+				//skip header
+				return
+			}
+			stk := &model.Stock{}
+			stocks = append(stocks, stk)
+			s.Find("td").Each(func(j int, s2 *goquery.Selection) {
+				v := s2.Text()
+				switch j {
+				case 0:
+					stk.Code = strings.TrimSpace(v)
+				case 1:
+					stk.Name = strings.TrimSpace(v)
+				case 2:
+					stk.Price = util.Str2Fnull(v)
+				case 3:
+					//pre close
+				case 4:
+					//open
+				case 5:
+					stk.Accer = util.Str2Fnull(v)
+				case 6:
+					stk.Xrate = util.Str2Fnull(v)
+				case 7:
+				case 8:
+					stk.Volratio = util.Str2Fnull(v)
+				case 9:
+					stk.Ampl = util.Str2Fnull(v)
+				case 10:
+					stk.Turnover = util.Str2FBil(v)
+				case 11:
+					stk.Outstanding = util.Str2FBil(v)
+				case 12:
+					stk.CircMarVal = util.Str2FBil(v)
+				default:
+					// skip
+				}
+			})
+			now := time.Now()
+			stk.Date.Valid = true
+			stk.Time.Valid = true
+			stk.Date.String = now.Format("2006-01-02")
+			stk.Time.String = now.Format("15:04:05")
+		})
+
+	chstk <- stocks
+
+	if parsePage {
+		//*[@id="m-page"]/span
+		doc.Find("#m-page span").Each(func(i int, s *goquery.Selection) {
+			t := s.Text()
+			ps := strings.Split(t, `/`)
+			if len(ps) == 2 {
+				cp, e := strconv.ParseInt(ps[1], 10, 32)
+				if e != nil {
+					log.Printf("can't parse total page: %+v, error: %+v", t, e)
+				} else {
+					totalPage = int(cp)
+				}
+			}
+		})
+	}
+
+	return
+}
+
+type xlsxData struct {
+	data [][]string
+}
+
+func (x *xlsxData) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	ws := struct {
+		SheetData struct {
+			Row []struct {
+				C []struct {
+					Is struct {
+						T string `xml:"t"`
+					} `xml:"is"`
+				} `xml:"c"`
+			} `xml:"row"`
+		} `xml:"sheetData"`
+	}{}
+	d.DecodeElement(&ws, &start)
+	for _, r := range ws.SheetData.Row {
+		nr := [][]string{{}}
+		for _, c := range r.C {
+			nr[0] = append(nr[0], c.Is.T)
+		}
+		x.data = append(x.data, nr...)
+	}
+	return nil
 }

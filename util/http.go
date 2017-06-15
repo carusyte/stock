@@ -14,10 +14,15 @@ import (
 )
 
 const RETRY int = 3
+
 var PART_PROXY float64
 var PROXY_ADDR string
 
 func HttpGetResp(url string) (res *http.Response, e error) {
+	return HttpGetRespUsingHeaders(url, nil)
+}
+
+func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.Response, e error) {
 	var host string = ""
 	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(url)
 	if len(r) > 0 {
@@ -26,7 +31,7 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 
 	var client *http.Client
 	//determine if we must use a proxy
-	if PART_PROXY > 0 && rand.Float64() < PART_PROXY{
+	if PART_PROXY > 0 && rand.Float64() < PART_PROXY {
 		// create a socks5 dialer
 		dialer, err := proxy.SOCKS5("tcp", PROXY_ADDR, nil, proxy.Direct)
 		if err != nil {
@@ -36,12 +41,12 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 		// setup a http client
 		httpTransport := &http.Transport{}
 		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
-			Transport: httpTransport}
+			Transport:                 httpTransport}
 		// set our socks5 as the dialer
 		httpTransport.Dial = dialer.Dial
-	}else{
+	} else {
 		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
-			}
+		}
 	}
 
 	for i := 0; true; i++ {
@@ -61,6 +66,11 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) "+
 			"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36")
+		if headers != nil && len(headers) > 0 {
+			for k := range headers {
+				req.Header.Set(k, headers[k])
+			}
+		}
 
 		res, err = client.Do(req)
 		if err != nil {
@@ -83,7 +93,7 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 	return
 }
 
-func HttpGetBytes(url string) (body []byte, e error) {
+func HttpGetBytesUsingHeaders(url string, headers map[string]string) (body []byte, e error) {
 	var resBody *io.ReadCloser
 	defer func() {
 		if resBody != nil {
@@ -91,7 +101,7 @@ func HttpGetBytes(url string) (body []byte, e error) {
 		}
 	}()
 	for i := 0; true; i++ {
-		res, e := HttpGetResp(url)
+		res, e := HttpGetRespUsingHeaders(url, headers)
 		if e != nil {
 			if i >= RETRY {
 				log.Printf("http communication failed. url=%s\n%+v", url, e)
@@ -126,4 +136,44 @@ func HttpGetBytes(url string) (body []byte, e error) {
 		}
 	}
 	return
+}
+
+func HttpGetBytes(url string) (body []byte, e error) {
+	return HttpGetBytesUsingHeaders(url, nil)
+}
+
+func Download(url, file string) (err error) {
+	return DownloadUsingHeaders(url, file, nil)
+}
+
+func DownloadUsingHeaders(url, file string, headers map[string]string) (e error) {
+	log.Printf("Downloading from %s", url)
+
+	if _, e := os.Stat(file); e == nil {
+		os.Remove(file)
+	}
+
+	output, err := os.Create(file)
+	if err != nil {
+		log.Printf("Error while creating %s\n%+v", file, err)
+		return
+	}
+	defer output.Close()
+
+	response, err := HttpGetRespUsingHeaders(url, headers)
+	if err != nil {
+		log.Printf("Error while downloading %s\n%+v", url, err)
+		return
+	}
+	defer response.Body.Close()
+
+	n, err := io.Copy(output, response.Body)
+	if err != nil {
+		log.Printf("Error while downloading %s\n%+v", url, err)
+		return
+	}
+
+	log.Printf("%d bytes downloaded. file saved to %s.", n, file)
+
+	return nil
 }

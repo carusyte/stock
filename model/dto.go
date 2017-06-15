@@ -7,6 +7,7 @@ import (
 	"github.com/carusyte/stock/util"
 	"log"
 	"strings"
+	"strconv"
 )
 
 type Stock struct {
@@ -16,7 +17,7 @@ type Stock struct {
 	Area             sql.NullString
 	Pe               sql.NullFloat64
 	Outstanding      sql.NullFloat64
-	Totals           float32
+	Totals           float64
 	TotalAssets      float64
 	LiquidAssets     float64
 	FixedAssets      float64
@@ -42,6 +43,8 @@ type Stock struct {
 	Turnover         sql.NullFloat64
 	Accer            sql.NullFloat64
 	CircMarVal       sql.NullFloat64
+	Date             sql.NullString
+	Time             sql.NullString
 }
 
 func (s *Stock) String() string {
@@ -50,6 +53,63 @@ func (s *Stock) String() string {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+type StockList struct {
+	Total int
+	List  []*Stock
+}
+
+func (l *StockList) String() string{
+	j, e := json.Marshal(l)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}
+
+func (l *StockList) UnmarshalJSON(b []byte) error {
+	var f interface{}
+	json.Unmarshal(b, &f)
+	m := f.(map[string]interface{})
+	page := m["pageHelp"].(map[string]interface{})
+	l.Total = int(page["total"].(float64))
+	data := page["data"].([]interface{})
+	if len(data) != l.Total {
+		return fmt.Errorf("unmatched total numbers: %d/%d", len(data), l.Total)
+	}
+	for _, da := range data {
+		s := &Stock{}
+		d := da.(map[string]interface{})
+		if v, e := strconv.ParseFloat(d["totalFlowShares"].(string), 64); e == nil {
+			s.Outstanding.Float64 = v / 10000.0
+			s.Outstanding.Valid = true
+		} else {
+			return fmt.Errorf("failed to parse totalFlowShares: %+v, %+v", d["totalFlowShares"], e)
+		}
+		if v, ok := d["LISTING_DATE"].(string); ok {
+			s.TimeToMarket = v
+		} else {
+			return fmt.Errorf("failed to parse LISTING_DATE: %+v", d["LISTING_DATE"])
+		}
+		if v, ok := d["SECURITY_CODE_A"].(string); ok {
+			s.Code = v
+		} else {
+			return fmt.Errorf("failed to parse SECURITY_CODE_A: %+v", d["SECURITY_CODE_A"])
+		}
+		if v, ok := d["SECURITY_ABBR_A"].(string); ok {
+			s.Name = v
+		} else {
+			return fmt.Errorf("failed to parse SECURITY_ABBR_A: %+v", d["SECURITY_ABBR_A"])
+		}
+		if v, e := strconv.ParseFloat(d["totalShares"].(string), 64); e == nil {
+			s.Totals = v / 10000.0
+		} else {
+			return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
+		}
+		l.List = append(l.List,s)
+	}
+	return nil
 }
 
 type Xdxr struct {
