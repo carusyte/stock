@@ -85,6 +85,50 @@ WHERE
 ORDER BY dps DESC
 LIMIT ?
 
+-- name: HID
+SELECT
+    code,
+    name,
+    SUBSTR(board_date, 1, 4) AS year,
+    SUM(divi) AS divi,
+    SUM(dyr) AS dyr,
+    SUM(dpr) AS dpr,
+    SUM(shares_allot) AS shares_allot,
+    SUM(shares_cvt) AS shares_cvt
+FROM
+    xdxr
+GROUP BY code , name , year
+HAVING year >= SUBSTR(CURDATE(), 1, 4) - 1
+ORDER BY year DESC, dyr DESC
+LIMIT ?
+
+-- name: HID_HIST
+SELECT
+    code,
+    name,
+    SUBSTR(board_date, 1, 4) AS year,
+    SUM(divi) AS divi,
+    SUM(dyr) AS dyr,
+    SUM(dpr) AS dpr,
+    SUM(shares_allot) AS shares_allot,
+    SUM(shares_cvt) AS shares_cvt
+FROM
+    xdxr
+where code = ?
+GROUP BY code , name , year
+ORDER BY year DESC
+LIMIT ?
+
+-- name: HID_XDXR_DATES
+SELECT
+    divi, reg_date, xdxr_date, progress
+FROM
+    xdxr
+WHERE
+    code = ?
+        AND board_date LIKE concat(?,'%')
+ORDER BY idx DESC
+
 -- name: lastNTD
 SELECT
     calendarDate

@@ -8,5 +8,5 @@ type BlueChip struct{
 }
 
 func (b *BlueChip) Get(s []*model.Stock) (r Result){
-
+	return
 }

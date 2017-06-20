@@ -7,5 +7,5 @@ import "github.com/carusyte/stock/model"
 type KdjV struct{}
 
 func (k *KdjV) Get(s []*model.Stock) (r Result){
-
+	return
 }

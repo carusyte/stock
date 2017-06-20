@@ -59,6 +59,10 @@ func getSZSE() (list []*model.Stock) {
 		}
 	}
 	for _, r := range xd.data[1:] {
+		// skip those with empty A-share code
+		if r[5] == ""{
+			continue
+		}
 		s := &model.Stock{}
 		for i, c := range r {
 			switch i {

@@ -92,6 +92,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 			case "董事会日期":
 				iBoardDate = j
 			case "股东大会日期":
+				fallthrough
+			case "股东大会预案公告日期":
 				iGmsDate = j
 			case "实施日期":
 				iImplDate = j

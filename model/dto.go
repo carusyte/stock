@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"strconv"
+	"github.com/pkg/errors"
 )
 
 type Stock struct {
@@ -60,7 +61,7 @@ type StockList struct {
 	List  []*Stock
 }
 
-func (l *StockList) String() string{
+func (l *StockList) String() string {
 	j, e := json.Marshal(l)
 	if e != nil {
 		fmt.Println(e)
@@ -107,7 +108,7 @@ func (l *StockList) UnmarshalJSON(b []byte) error {
 		} else {
 			return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
 		}
-		l.List = append(l.List,s)
+		l.List = append(l.List, s)
 	}
 	return nil
 }
@@ -123,7 +124,7 @@ type Xdxr struct {
 	//董事会日期
 	BoardDate sql.NullString `db:"board_date"`
 	//每10股分红金额
-	Divi sql.NullFloat64
+	Divi sql.NullFloat64 `db:"divi"`
 	//每10股分红金额（税后）
 	DiviAtx sql.NullFloat64
 	//分红截止日期
@@ -157,7 +158,7 @@ type Xdxr struct {
 	//最后交易日
 	EndTrdDate sql.NullString
 	//方案进度
-	Progress sql.NullString
+	Progress sql.NullString `db:"progress"`
 	//股利支付率 Dividend Payout Ratio
 	Dpr sql.NullFloat64 `db:"dpr"`
 }
@@ -477,7 +478,15 @@ type Ktoday struct {
 	Quote
 }
 
-func (kt *Ktoday) UnmarshalJSON(b []byte) error {
+func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if er, ok := r.(error); ok {
+				log.Println(er)
+				e = errors.Wrap(er, fmt.Sprintf("failed to unmarshal Ktoday json: %s", string(b)))
+			}
+		}
+	}()
 	var f interface{}
 	json.Unmarshal(b, &f)
 
@@ -485,16 +494,20 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) error {
 
 	for k := range m {
 		qm := m[k].(map[string]interface{})
-		kt.Code = k[3:]
-		kt.Date = qm["1"].(string)
-		kt.Date = kt.Date[:4] + "-" + kt.Date[4:6] + "-" + kt.Date[6:]
-		kt.Open = util.Str2F64(qm["7"].(string))
-		kt.High = util.Str2F64(qm["8"].(string))
-		kt.Low = util.Str2F64(qm["9"].(string))
-		kt.Close = util.Str2F64(qm["11"].(string))
-		kt.Volume = qm["13"].(float64)
-		kt.Amount = util.Str2F64(qm["19"].(string))
-		kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
+		if dt, ok := qm["1"].(string); ok {
+			kt.Code = k[3:]
+			kt.Date = dt[:4] + "-" + dt[4:6] + "-" + dt[6:]
+			kt.Open = util.Str2F64(qm["7"].(string))
+			kt.High = util.Str2F64(qm["8"].(string))
+			kt.Low = util.Str2F64(qm["9"].(string))
+			kt.Close = util.Str2F64(qm["11"].(string))
+			kt.Volume = qm["13"].(float64)
+			kt.Amount = util.Str2F64(qm["19"].(string))
+			kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
+		}else{
+			e = errors.Errorf("failed to parse Ktoday json: %s", string(b))
+			return
+		}
 	}
 
 	return nil

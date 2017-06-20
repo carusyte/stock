@@ -79,7 +79,11 @@ RETRY:
 				return
 			}
 		}
-		kldy = append(kldy, &ktoday.Quote)
+		if ktoday.Code != "" {
+			kldy = append(kldy, &ktoday.Quote)
+		}else{
+			log.Printf("kline today skipped: %s", url_today)
+		}
 
 		//get last kline data
 		url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js", code, mode)

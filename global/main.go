@@ -11,7 +11,7 @@ import (
 )
 
 const LOGFILE = "stock.log"
-const MAX_CONCURRENCY = 128
+const MAX_CONCURRENCY = 20
 const JOB_CAPACITY = 512
 // will make some of the requests via proxy, 0.6 = 3/5
 const PART_PROXY = 0
@@ -34,6 +34,6 @@ func init() {
 	Dbmap = db.Get(true, false)
 	util.PART_PROXY = PART_PROXY
 	util.PROXY_ADDR = PROXY_ADDR
-	Dot, e = dotsql.LoadFromFile("/Users/jx/ProgramData/go/src/github.com/carusyte/stock/ask/sql.txt")
+	Dot, e = dotsql.LoadFromFile("../sql/sql.txt")
 	util.CheckErr(e, "failed to init dotsql")
 }
