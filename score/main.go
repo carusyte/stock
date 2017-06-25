@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"bytes"
 	"github.com/olekukonko/tablewriter"
+	"sort"
 )
 
 const JOB_CAPACITY = global.JOB_CAPACITY
@@ -18,9 +19,7 @@ var (
 	dot   = global.Dot
 )
 
-//TODO implement scoring
-
-type Aspect struct {
+type Profile struct {
 	//Score for this aspect
 	Score float64
 	//Weight in total score
@@ -28,17 +27,25 @@ type Aspect struct {
 	//Maintain field names in order
 	FieldNames []string
 	//Reminds
-	Comment string
+	Comments []string
 	//Field holder handy to get formatted field value
 	FieldHolder FieldHolder
 }
 
-func (a *Aspect) String() string {
-	j, e := json.Marshal(a)
+func (p *Profile) String() string {
+	j, e := json.Marshal(p)
 	if e != nil {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+func (p * Profile) Cmt(c... string){
+	p.Comments = append(p.Comments, c...)
+}
+
+func (p *Profile) Cmtf(f string, i... interface{}){
+	p.Cmt(fmt.Sprintf(f,i...))
 }
 
 type Item struct {
@@ -49,7 +56,7 @@ type Item struct {
 	//Total score
 	Score float64
 	//Score evaluation aspect
-	Aspects map[string]*Aspect
+	Profiles map[string]*Profile
 }
 
 func (i *Item) String() string {
@@ -60,25 +67,33 @@ func (i *Item) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (a *Aspect) AddField(name string) {
-	a.FieldNames = append(a.FieldNames, name)
+func (p *Profile) AddField(name string) {
+	p.FieldNames = append(p.FieldNames, name)
 }
 
-func (a *Aspect) AddFieldAt(i int, name string, value interface{}) {
-	if i > len(a.FieldNames) {
-		log.Panicf("can't add field at index > %d", len(a.FieldNames))
-	} else if i == len(a.FieldNames) {
-		a.AddField(name)
+func (p *Profile) AddFieldAt(i int, name string) {
+	if i > len(p.FieldNames) {
+		log.Panicf("can't add field at index > %d", len(p.FieldNames))
+	} else if i == len(p.FieldNames) {
+		p.AddField(name)
 	} else {
-		a.FieldNames = append(a.FieldNames, "")
-		copy(a.FieldNames[i+1:], a.FieldNames[i:])
-		a.FieldNames[i] = name
+		p.FieldNames = append(p.FieldNames, "")
+		copy(p.FieldNames[i+1:], p.FieldNames[i:])
+		p.FieldNames[i] = name
 	}
 }
 
 type Result struct {
-	Items     []*Item
-	AspectIds []string
+	Items      []*Item
+	ProfileIds []string
+}
+
+func (r *Result) Sort() (rr *Result){
+	rr = r
+	sort.Slice(r.Items, func(i,j int) bool{
+		return r.Items[i].Score > r.Items[j].Score
+	})
+	return
 }
 
 func (r *Result) String() string {
@@ -91,29 +106,44 @@ func (r *Result) String() string {
 	table.SetRowLine(true)
 
 	var hd []string
+	hd = append(hd, "Rank")
 	hd = append(hd, "Code")
 	hd = append(hd, "Name")
 	hd = append(hd, "Score")
-	for _, a := range r.Items[0].Aspects {
+	for _, a := range r.Items[0].Profiles {
 		for _, fn := range a.FieldNames {
 			hd = append(hd, fn)
 		}
 	}
+	hd = append(hd, "Comments")
 
 	table.SetHeader(hd);
 	data := make([][]string, len(r.Items))
 	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
-		data[i][0] = itm.Code
-		data[i][1] = itm.Name
-		data[i][2] = fmt.Sprintf("%.2f", itm.Score)
-		idx := 3
-		for _, a := range itm.Aspects{
-			for _, fn := range a.FieldNames{
-				data[i][idx] = a.FieldHolder.GetFieldStr(fn)
+		data[i][0] = fmt.Sprintf("%d",i+1)
+		data[i][1] = itm.Code
+		data[i][2] = itm.Name
+		data[i][3] = fmt.Sprintf("%.2f", itm.Score)
+		idx := 4
+		cmt := ""
+		for _, p := range itm.Profiles {
+			for _, fn := range p.FieldNames{
+				data[i][idx] = p.FieldHolder.GetFieldStr(fn)
 				idx++
 			}
+			if len(p.Comments) == 1{
+				cmt = p.Comments[0]
+			}else if len(p.Comments) > 1{
+				for i,c := range p.Comments{
+					cmt += fmt.Sprintf("%d.%s",i+1,c)
+					if i < len(p.Comments)-1{
+						cmt += "\n"
+					}
+				}
+			}
 		}
+		data[i][idx] = cmt
 	}
 	table.AppendBulk(data)
 	table.Render()

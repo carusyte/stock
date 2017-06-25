@@ -40,7 +40,6 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 	RETRIES := 5
 	for stock := range chstk {
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
-			//FIXME use http://basic.10jqka.com.cn/600383/bonus.html to extract info instead
 			ok, r := parse10jqkBonus(stock)
 			//ok, r := ParseIfengBonus(stock)
 			if !ok && r {

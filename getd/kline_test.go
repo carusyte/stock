@@ -10,7 +10,7 @@ import (
 )
 
 func TestGetDailyKlines(t *testing.T) {
-	getDailyKlines("600242", nil, "01")
+	getDailyKlines("600242", DAY, true)
 }
 
 func TestParseLastJson(t *testing.T) {

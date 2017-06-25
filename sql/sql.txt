@@ -129,6 +129,37 @@ WHERE
         AND board_date LIKE concat(?,'%')
 ORDER BY idx DESC
 
+-- name: latestUFRXdxr
+SELECT
+    code,
+    name,
+    idx,
+    divi,
+    board_date,
+    reg_date,
+    xdxr_date,
+    progress,
+    xprice
+FROM
+    xdxr
+        INNER JOIN
+    (SELECT
+        code, MAX(idx) idx
+    FROM
+        xdxr
+    WHERE
+        progress = '实施方案'
+            AND code = ?
+            AND xdxr_date <= CURRENT_DATE()
+            AND (xprice <> 'Y' OR xprice IS NULL)
+            AND idx > (SELECT
+                COALESCE(MAX(idx), - 1) idx
+            FROM
+                xdxr
+            WHERE
+                code = ? AND xprice = 'Y')
+    GROUP BY code) t USING (code , idx)
+
 -- name: lastNTD
 SELECT
     calendarDate

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 	"github.com/carusyte/stock/model"
+	"github.com/montanaflynn/stats"
+	"fmt"
 )
 
 func TestCalcAllIndcs(t *testing.T) {
@@ -27,4 +29,10 @@ func TestParseIfengBonus(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	Get()
+}
+
+func TestMean(t *testing.T) {
+	var data = []float64{1, 2, 3, 4, 4, 5}
+	r, _ := stats.Median(data)
+	fmt.Println(r)
 }

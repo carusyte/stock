@@ -175,7 +175,6 @@ func getFrom10jqk() (allstk []*model.Stock) {
 func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.WaitGroup) (totalPage int) {
 	var stocks []*model.Stock
 	defer wg.Done()
-	//FIXME this may not contain suspended stocks
 	urlt := `http://q.10jqka.com.cn/index/index/board/all/field/zdf/order/desc/page/%d/ajax/1/`
 
 	// Load the URL

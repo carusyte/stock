@@ -11,17 +11,21 @@ func Get(){
 	stks := GetStockInfo()
 	stop("STOCK_LIST", start)
 
-	stgkl := time.Now()
-	GetKlines(stks)
-	stop("GET_KLINES", stgkl)
-
 	stgfi := time.Now()
 	GetFinance(stks)
 	stop("GET_FINANCE", stgfi)
 
+	stgkdn := time.Now()
+	GetKlines(stks, DAY_N)
+	stop("GET_KLINES_DN", stgkdn)
+
 	stgx := time.Now()
 	GetXDXRs(stks)
 	stop("GET_XDXR", stgx)
+
+	stgkl := time.Now()
+	GetKlines(stks, DAY, WEEK, MONTH)
+	stop("GET_KLINES", stgkl)
 
 	stci := time.Now()
 	CalcIndics(stks)

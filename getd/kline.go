@@ -10,45 +10,63 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"github.com/carusyte/stock/global"
 )
 
-//FIXME 10jqk replies with 502 Bad Gateway when visiting to frequently
-func GetKlines(stks []*model.Stock) {
+type KLType string
+
+const (
+	DAY   KLType = "kline_d"
+	DAY_N        = "kline_d_n"
+	WEEK         = "kline_w"
+	MONTH        = "kline_m"
+)
+
+func GetKlines(stks []*model.Stock, kltype ... KLType) {
 	log.Println("begin to fetch kline data")
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
 	for _, stk := range stks {
 		wg.Add(1)
 		wf <- 1
-		go getKline(stk, &wg, &wf)
+		go getKline(stk, kltype, &wg, &wf)
 	}
 	wg.Wait()
-	log.Printf("all period kline data updated.")
+	log.Printf("%s data updated.", strings.Join(kt2strs(kltype), ", "))
 }
 
-func getKline(stk *model.Stock, wg *sync.WaitGroup, wf *chan int) {
+//convert slice of KLType to slice of string
+func kt2strs(kltype []KLType) (s []string) {
+	s = make([]string, len(kltype))
+	for i, e := range kltype {
+		s[i] = string(e)
+	}
+	return
+}
+
+func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan int) {
 	defer func() {
 		wg.Done()
 		<-*wf
 	}()
-	// Get latest kline from db, for day, week, month, with offset
-	ldyn, ldy, lwk, lmn := getLatestKl(stk.Code, 3, 3, 2, 2)
-	//get daily kline
-	getDailyKlines(stk.Code, ldy, "01")
-	//get daily kline (no rights restoration)
-	getDailyKlines(stk.Code, ldyn, "00")
-	//get weekly kline
-	getLongKlines(stk.Code, lwk, "11", "kline_w")
-	//get monthly kline
-	getLongKlines(stk.Code, lmn, "21", "kline_m")
+	xdxr := latestUFRXdxr(stk.Code)
+	for _, t := range kltype {
+		switch t {
+		case DAY, DAY_N:
+			getDailyKlines(stk.Code, t, xdxr == nil)
+		case WEEK, MONTH:
+			getLongKlines(stk.Code, t, xdxr == nil)
+		default:
+			log.Panicf("unhandled kltype: %s", t)
+		}
+	}
+	if xdxr != nil {
+		//update xpriced flag in xdxr to mark that all price data has been reinstated
+		dbmap.Exec("update xdxr set xprice = 'Y' where code = ? and idx = ?", xdxr.Code, xdxr.Idx)
+	}
 }
 
-//mode:
-// 00-no rights restoration
-// 01-forward rights restoration
-// 02-backward rights restoration
-func getDailyKlines(code string, ldy *model.Quote, mode string) (kldy []*model.Quote) {
-	//get today kline data
+func getDailyKlines(code string, klt KLType, incr bool) (kldy []*model.Quote) {
 	RETRIES := 5
 	var (
 		klast  model.Klast
@@ -57,7 +75,20 @@ func getDailyKlines(code string, ldy *model.Quote, mode string) (kldy []*model.Q
 		lklid  int
 		body   []byte
 		e      error
+		mode   string
 	)
+	//mode:
+	// 00-no reinstatement
+	// 01-forward reinstatement
+	// 02-backward reinstatement
+	switch klt {
+	case DAY:
+		mode = "01"
+	case DAY_N:
+		mode = "00"
+	default:
+		log.Panicf("unhandled kltype: %s", klt)
+	}
 RETRY:
 	for rt := 0; rt < RETRIES; rt++ {
 		url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/today.js", code, mode)
@@ -81,7 +112,7 @@ RETRY:
 		}
 		if ktoday.Code != "" {
 			kldy = append(kldy, &ktoday.Quote)
-		}else{
+		} else {
 			log.Printf("kline today skipped: %s", url_today)
 		}
 
@@ -108,14 +139,17 @@ RETRY:
 
 		if klast.Data == "" {
 			log.Printf("%s last data may not be ready yet", code)
-			return
+			return []*model.Quote{}
 		}
 
 		ldate = ""
 		lklid = -1
-		if ldy != nil {
-			ldate = ldy.Date
-			lklid = ldy.Klid
+		if incr {
+			ldy := getLatestKl(code, klt, 3)
+			if ldy != nil {
+				ldate = ldy.Date
+				lklid = ldy.Klid
+			}
 		}
 
 		kls, more := parseKlines(code, klast.Data, ldate, "")
@@ -187,14 +221,7 @@ RETRY:
 		break
 	}
 	assignKlid(kldy, lklid)
-
-	switch mode {
-	case "00":
-		binsert(kldy, "kline_d_n")
-	case "01":
-		binsert(kldy, "kline_d")
-	}
-
+	binsert(kldy, string(klt))
 	return
 }
 
@@ -213,13 +240,25 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 	return &ktoday.Quote, true, false
 }
 
-func getLongKlines(code string, latest *model.Quote, typ string, table string) (quotes []*model.Quote) {
+func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
 	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
+	var typ string
+	switch klt {
+	case WEEK:
+		typ = "11"
+	case MONTH:
+		typ = "21"
+	default:
+		log.Panicf("unhandled kltype: %s", klt)
+	}
 	ldate := ""
 	lklid := -1
-	if latest != nil {
-		ldate = latest.Date
-		lklid = latest.Klid
+	if incr {
+		latest := getLatestKl(code, klt, 2)
+		if latest != nil {
+			ldate = latest.Date
+			lklid = latest.Klid
+		}
 	}
 	RETRIES := 5
 	url := fmt.Sprintf(urlt, code, typ)
@@ -227,31 +266,31 @@ func getLongKlines(code string, latest *model.Quote, typ string, table string) (
 		ktoday, ok, retry := getToday(code, typ)
 		if !ok {
 			if retry {
-				log.Printf("retrying to parse %s json for %s [%d]", table, code, rt+1)
+				log.Printf("retrying to parse %s json for %s [%d]", klt, code, rt+1)
 				continue
 			} else {
-				log.Printf("stop retrying to parse %s json for %s [%d]", table, code, rt+1)
+				log.Printf("stop retrying to parse %s json for %s [%d]", klt, code, rt+1)
 				return
 			}
 		}
 		body, e := util.HttpGetBytes(url)
 		if e != nil {
-			log.Printf("can't get %s for %s. please try again later.", table, code)
+			log.Printf("can't get %s for %s. please try again later.", klt, code)
 			return
 		}
 		khist := model.Khist{}
 		e = json.Unmarshal(strip(body), &khist)
 		if e != nil {
 			if rt < RETRIES {
-				log.Printf("retrying to parse %s json for %s, [%d]: %+v", table, code, rt+1, e)
+				log.Printf("retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
 				continue
 			} else {
-				log.Printf("stop retrying to parse %s json for %s, [%d]: %+v", table, code, rt+1, e)
+				log.Printf("stop retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
 				return
 			}
 		}
 		if khist.Data == "" {
-			log.Printf("%s %s data may not be ready yet", code, table)
+			log.Printf("%s %s data may not be ready yet", code, klt)
 			return
 		}
 		kls, _ := parseKlines(code, khist.Data, ldate, "")
@@ -264,7 +303,7 @@ func getLongKlines(code string, latest *model.Quote, typ string, table string) (
 		break
 	}
 	assignKlid(quotes, lklid)
-	binsert(quotes, table)
+	binsert(quotes, string(klt))
 	return
 }
 
@@ -363,16 +402,19 @@ DATES:
 	return
 }
 
-func getLatestKl(code string, offDyn, offDy, offWk, offMn int) (ldyn, ldy, lwk, lmn *model.Quote) {
-	dbmap.SelectOne(&ldyn, "select * from kline_d_n where code = ? order by date desc limit 1 offset ?",
-		code, offDyn)
-	dbmap.SelectOne(&ldy, "select * from kline_d where code = ? order by date desc limit 1 offset ?",
-		code, offDy)
-	dbmap.SelectOne(&lwk, "select * from kline_w where code = ? order by date desc limit 1 offset ?",
-		code, offWk)
-	dbmap.SelectOne(&lmn, "select * from kline_m where code = ? order by date desc limit 1 offset ?",
-		code, offMn)
+func getLatestKl(code string, klt KLType, offset int) (q *model.Quote) {
+	dbmap.SelectOne(&q, "select * from ? where code = ? order by date desc limit 1 offset ?",
+		klt, code, offset)
 	return
+}
+
+// checks whether the historical kline data is yet to be forward-reinstatement
+func latestUFRXdxr(code string) (x *model.Xdxr) {
+	sql, e := global.Dot.Raw("latestUFRXdxr")
+	util.CheckErr(e, "unable to get sql: latestUFRXdxr")
+	e = dbmap.SelectOne(&x, sql, code, code)
+	util.CheckErr(e, "failed to run sql: "+sql)
+	return x
 }
 
 func strip(data []byte) []byte {
