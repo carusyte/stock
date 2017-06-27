@@ -17,10 +17,10 @@ import (
 // 1. High average DYR of up to 5 years, without interruptions
 // 2. DYR with progressive increase of up to 5 years, without interruptions
 // 3. High average DYR to DPR ratio
-// 3. Latest high yearly dividend yield ratio
-// 4. Latest dividend event on appropriate registration date.
+// 4. High latest DYR
+// 5. Latest dividend event on appropriate registration date.
 // Get warnings/penalties if:
-// 1. Dividend Payout Ratio is greater than 90%
+// 1. Dividend Payout Ratio is high
 type HiD struct {
 	Code        string
 	Name        string
@@ -44,13 +44,12 @@ type HiD struct {
 }
 
 const (
-	NUM_CANDIDATES   int = 50
-	AVG_GR_HIST_SIZE     = 5
-	//FIXME adjust the weight
-	SCORE_DYR_AVG    float64 = 30
+	NUM_CANDIDATES   int     = 50
+	AVG_GR_HIST_SIZE         = 5
+	SCORE_DYR_AVG    float64 = 35
 	SCORE_DYR_GR             = 20
-	SCORE_DYR2DPR            = 20
 	SCORE_LATEST_DYR         = 20
+	SCORE_DYR2DPR            = 15
 	SCORE_REG_DATE           = 10
 	PENALTY_DPR              = 25
 )
@@ -298,12 +297,12 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 			if nodiv > 3 {
 				return 0
 			}
-			s := 4.0 / 5.0 * m
 			if avg <= -33 {
 				return 0
 			} else {
+				s := 4.0 / 5.0 * m
 				s *= math.Min(1, math.Pow((33+avg)/83, 1.68))
-				s = math.Max(0, s-math.Pow(nodiv/4, 1.45))
+				s = math.Max(0, s-math.Pow(-1*avg/33, 1.35))
 				return s
 			}
 		}
@@ -379,10 +378,13 @@ func (h *HiD) GetFieldStr(name string) string {
 }
 
 func (h *HiD) Description() string {
-	return fmt.Sprintf("HiD Value stocks for:\n" +
-		" 1. Latest high yearly dividend yield ratio" +
-		" 2. Dividend with progressive increase or constantly at high level" +
-		" 3. Nearer registration date." +
-		"Get warnings if:" +
-		" 1. Dividend Payout Ratio is greater than 90%")
+	return fmt.Sprint("Medium to Long term model.\n" +
+		"Value stocks for:\n" +
+		"1. High average DYR of up to 5 years, without interruptions\n" +
+		"2. DYR with progressive increase of up to 5 years, without interruptions\n" +
+		"3. High average DYR to DPR ratio\n" +
+		"4. High latest DYR\n" +
+		"5. Latest dividend event on appropriate registration date.\n" +
+		"Get warnings/penalties if:\n" +
+		"1. Dividend Payout Ratio is high\n")
 }
