@@ -7,8 +7,8 @@ import (
 
 func TestGetFinance(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "601088"
-	s.Name = "中国神华"
+	s.Code = "000017"
+	s.Name = "深中华A"
 	ss := []*model.Stock{s}
 	GetFinance(ss)
 }

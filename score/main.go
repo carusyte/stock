@@ -152,7 +152,7 @@ func (r *Result) String() string {
 }
 
 type Scorer interface {
-	Get(stock []*model.Stock) (r Result)
+	Get(stock []*model.Stock) (r *Result)
 	Id() string
 	Description() string
 }

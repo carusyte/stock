@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"strconv"
 )
 
 func GetXDXRs(stocks []*model.Stock) {
@@ -230,9 +231,9 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 			// calculates dpr
 			eps, e := dbmap.SelectNullFloat("select eps from finance where code = ? "+
 				"and year < ? and year like '%-12-31' order by year desc limit 1", x.Code, date)
-			if e != nil{
+			if e != nil {
 				log.Printf("failed to query eps for %s before %s", x.Code, date)
-			}else{
+			} else {
 				if eps.Valid && eps.Float64 != 0 {
 					x.Dpr.Float64 = x.Divi.Float64 / eps.Float64 / 10.0
 					x.Dpr.Valid = true
@@ -406,17 +407,19 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	}
 	fr.SetCode(code)
 	fins := fr.Items
+	supplement(fins)
 	//update to database
 	if len(fins) > 0 {
 		valueStrings := make([]string, 0, len(fins))
-		valueArgs := make([]interface{}, 0, len(fins)*20)
+		valueArgs := make([]interface{}, 0, len(fins)*24)
 		for _, e := range fins {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?)")
 			valueArgs = append(valueArgs, e.Code)
-			valueArgs = append(valueArgs, e.Alr)
+			valueArgs = append(valueArgs, e.Dar)
 			valueArgs = append(valueArgs, e.Crps)
 			valueArgs = append(valueArgs, e.Eps)
+			valueArgs = append(valueArgs, e.EpsYoy)
 			valueArgs = append(valueArgs, e.Gpm)
 			valueArgs = append(valueArgs, e.Gr)
 			valueArgs = append(valueArgs, e.GrYoy)
@@ -429,21 +432,83 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			valueArgs = append(valueArgs, e.NpRg)
 			valueArgs = append(valueArgs, e.NpYoy)
 			valueArgs = append(valueArgs, e.Ocfps)
+			valueArgs = append(valueArgs, e.OcfpsYoy)
 			valueArgs = append(valueArgs, e.Roe)
+			valueArgs = append(valueArgs, e.RoeYoy)
 			valueArgs = append(valueArgs, e.RoeDlt)
 			valueArgs = append(valueArgs, e.Udpps)
+			valueArgs = append(valueArgs, e.UdppsYoy)
 			valueArgs = append(valueArgs, e.Year)
 		}
-		stmt := fmt.Sprintf("INSERT INTO finance (code,alr,crps,eps,gpm,gr,gr_yoy,itr,navps,np,np_adn,"+
-			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,roe,roe_dlt,udpps,year) VALUES %s"+
-			" on duplicate key update alr=values(alr),crps=values(crps),eps=values(eps),gpm=values(gpm),"+
+		stmt := fmt.Sprintf("INSERT INTO finance (code,dar,crps,eps,eps_yoy,gpm,gr,gr_yoy,itr,navps,np,np_adn,"+
+			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year) VALUES %s"+
+			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
+			"(eps_yoy),gpm=values(gpm),"+
 			"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
 			"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
-			"np_yoy=values(np_yoy),ocfps=values(ocfps),roe=values(roe),roe_dlt=values(roe_dlt),"+
-			"udpps=values(udpps)",
+			"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
+			"roe_yoy=values(roe_yoy),roe_dlt=values(roe_dlt),"+
+			"udpps=values(udpps),udpps_yoy=values(udpps_yoy)",
 			strings.Join(valueStrings, ","))
 		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update finance")
 	}
 	return true, false
+}
+
+//Supplement data such as EpsYoy, OcfpsYoy, RoeYoy, UdppsYoy etc.
+func supplement(fins []*model.Finance) {
+	for i, f := range fins {
+		if i >= len(fins)-1 {
+			break
+		}
+		y := f.Year[:4]
+		py, e := strconv.ParseInt(y, 10, 32)
+		util.CheckErr(e, "unable to parse year\n"+fmt.Sprintf("%+v", f))
+		pd := fmt.Sprintf("%d%s", py-1, f.Year[4:])
+		pf := findByYear(fins[i+1:], pd)
+		if pf != nil {
+			if f.Eps.Valid && pf.Eps.Valid {
+				f.EpsYoy.Valid = true
+				if pf.Eps.Float64 == 0 {
+					f.EpsYoy.Float64 = 100
+				} else {
+					f.EpsYoy.Float64 = (f.Eps.Float64 - pf.Eps.Float64) / math.Abs(pf.Eps.Float64) * 100
+				}
+			}
+			if f.Ocfps.Valid && pf.Ocfps.Valid {
+				f.OcfpsYoy.Valid = true
+				if pf.Ocfps.Float64 == 0 {
+					f.OcfpsYoy.Float64 = 100
+				} else {
+					f.OcfpsYoy.Float64 = (f.Ocfps.Float64 - pf.Ocfps.Float64) / math.Abs(pf.Ocfps.Float64) * 100
+				}
+			}
+			if f.Roe.Valid && pf.Roe.Valid {
+				f.RoeYoy.Valid = true
+				if pf.Roe.Float64 == 0 {
+					f.RoeYoy.Float64 = 100
+				} else {
+					f.RoeYoy.Float64 = (f.Roe.Float64 - pf.Roe.Float64) / math.Abs(pf.Roe.Float64) * 100
+				}
+			}
+			if f.Udpps.Valid && pf.Udpps.Valid {
+				f.UdppsYoy.Valid = true
+				if pf.Udpps.Float64 == 0 {
+					f.UdppsYoy.Float64 = 100
+				} else {
+					f.UdppsYoy.Float64 = (f.Udpps.Float64 - pf.Udpps.Float64) / math.Abs(pf.Udpps.Float64) * 100
+				}
+			}
+		}
+	}
+}
+
+func findByYear(fins []*model.Finance, year string) *model.Finance {
+	for _, f := range fins {
+		if f.Year == year {
+			return f
+		}
+	}
+	return nil
 }

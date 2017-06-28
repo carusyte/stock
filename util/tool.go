@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Reverse(s []*interface{}) {
@@ -103,5 +104,12 @@ func Str2FBilMod(s string, mod float64) (f sql.NullFloat64) {
 	} else {
 		f.Valid = false
 	}
+	return
+}
+
+func TimeStr() (d, t string) {
+	now := time.Now()
+	d = now.Format("2006-01-02")
+	t = now.Format("15:04:05")
 	return
 }

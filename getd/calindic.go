@@ -17,6 +17,7 @@ const MAX_CONCURRENCY = global.MAX_CONCURRENCY
 
 var(
 	dbmap = global.Dbmap
+	dot = global.Dot
 )
 
 func CalcIndics(stocks []*model.Stock) {

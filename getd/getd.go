@@ -27,6 +27,10 @@ func Get(){
 	GetKlines(stks, DAY, WEEK, MONTH)
 	stop("GET_KLINES", stgkl)
 
+	updb := time.Now()
+	UpdBasics()
+	stop("UPD_BASICS", updb)
+
 	stci := time.Now()
 	CalcIndics(stks)
 	stop("CALC_INDICS", stci)

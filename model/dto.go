@@ -44,8 +44,8 @@ type Stock struct {
 	Turnover         sql.NullFloat64
 	Accer            sql.NullFloat64
 	CircMarVal       sql.NullFloat64
-	Date             sql.NullString
-	Time             sql.NullString
+	UDate            sql.NullString
+	UTime            sql.NullString
 }
 
 func (s *Stock) String() string {
@@ -108,6 +108,11 @@ func (l *StockList) UnmarshalJSON(b []byte) error {
 		} else {
 			return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
 		}
+		dt, tm := util.TimeStr()
+		s.UDate.Valid = true
+		s.UTime.Valid = true
+		s.UDate.String = dt
+		s.UTime.String = tm
 		l.List = append(l.List, s)
 	}
 	return nil
@@ -176,6 +181,8 @@ type Finance struct {
 	Year string
 	//Earnings Per Share 每股收益
 	Eps sql.NullFloat64
+	//EPS Growth Rate Year-on-Year 每股收益同比增长率
+	EpsYoy sql.NullFloat64
 	//Net Profit (1/10 Billion) 净利润（亿）
 	Np sql.NullFloat64
 	//Net Profit Growth Rate Year-on-Year 净利润同比增长率
@@ -194,16 +201,22 @@ type Finance struct {
 	Navps sql.NullFloat64
 	//Return on Equity 净资产收益率
 	Roe sql.NullFloat64
+	// ROE Growth Rate Year-on-Year 净资产收益率同比增长率
+	RoeYoy sql.NullFloat64
 	//Return on Equity Diluted 净资产收益率-摊薄
 	RoeDlt sql.NullFloat64
-	//Asset-Liability Ratio 资产负载比
-	Alr sql.NullFloat64
+	//Debt to Asset Ratio 资产负载比
+	Dar sql.NullFloat64
 	//Capital Reserves Per Share 每股资本公积
 	Crps sql.NullFloat64
 	//Undistributed Profit Per Share 每股未分配利润
 	Udpps sql.NullFloat64
+	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比增长率
+	UdppsYoy sql.NullFloat64
 	//Operational Cash Flow Per Share 每股经营现金流
 	Ocfps sql.NullFloat64
+	// OCFPS Growth Rate Year-on-Year 每股经营现金流同比增长率
+	OcfpsYoy sql.NullFloat64
 	//Gross Profit Margin 毛利率
 	Gpm sql.NullFloat64
 	//Net Profit Margin 净利率
@@ -342,7 +355,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 					case iRoeDlt:
 						fi.RoeDlt = util.Pct2Fnull(s)
 					case iAlr:
-						fi.Alr = util.Pct2Fnull(s)
+						fi.Dar = util.Pct2Fnull(s)
 					case iCrps:
 						fi.Crps = util.Str2Fnull(s)
 					case iUdpps:
@@ -504,7 +517,7 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 			kt.Volume = qm["13"].(float64)
 			kt.Amount = util.Str2F64(qm["19"].(string))
 			kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
-		}else{
+		} else {
 			e = errors.Errorf("failed to parse Ktoday json: %s", string(b))
 			return
 		}

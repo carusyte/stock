@@ -193,3 +193,44 @@ FROM
        FROM kline_d
        WHERE code = @c) t;
 update kline_d set klid = (@vklid := @vklid + 1) where code = @c and klid is null order by date
+
+-- name: UPD_BASICS
+UPDATE basics b
+        INNER JOIN
+    (SELECT
+        f1.code, f1.eps
+    FROM
+        finance f1
+    INNER JOIN (SELECT
+        code, MAX(year) year
+    FROM
+        finance
+    WHERE
+        year LIKE '%-12-31'
+    GROUP BY code) f2 USING (code , year)) f USING (code)
+        INNER JOIN
+    (SELECT
+        f1.code, f1.udpps, f1.ocfps
+    FROM
+        finance f1
+    INNER JOIN (SELECT
+        code, MAX(year) year
+    FROM
+        finance
+    GROUP BY code) f2 USING (code , year)) fl USING (code)
+        INNER JOIN
+    (SELECT
+        p1.code, p1.close
+    FROM
+        kline_d p1
+    INNER JOIN (SELECT
+        code, MAX(klid) klid
+    FROM
+        kline_d
+    GROUP BY code) p2 USING (code , klid)) p USING (code)
+SET
+    b.pe = ROUND(p.close / f.eps, 2),
+    b.po = ROUND(p.close / fl.ocfps, 2),
+    b.pu = ROUND(p.close / fl.udpps, 2)
+
+-- name: BLUE

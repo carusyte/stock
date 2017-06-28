@@ -60,7 +60,7 @@ func getSZSE() (list []*model.Stock) {
 	}
 	for _, r := range xd.data[1:] {
 		// skip those with empty A-share code
-		if r[5] == ""{
+		if r[5] == "" {
 			continue
 		}
 		s := &model.Stock{}
@@ -73,16 +73,21 @@ func getSZSE() (list []*model.Stock) {
 			case 7:
 				s.TimeToMarket = c
 			case 8:
-				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1),64)
-				util.CheckErr(e,"failed to parse total share in Shenzhen security list")
+				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1), 64)
+				util.CheckErr(e, "failed to parse total share in Shenzhen security list")
 				s.Totals = v / 100000000.0
 			case 9:
-				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1),64)
-				util.CheckErr(e,"failed to parse outstanding share in Shenzhen security list")
+				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1), 64)
+				util.CheckErr(e, "failed to parse outstanding share in Shenzhen security list")
 				s.Outstanding.Float64 = v / 100000000.0
 				s.Outstanding.Valid = true
 			}
 		}
+		d, t := util.TimeStr()
+		s.UDate.Valid = true
+		s.UTime.Valid = true
+		s.UDate.String = d
+		s.UTime.String = t
 		list = append(list, s)
 	}
 	return
@@ -109,9 +114,9 @@ func getSSE() []*model.Stock {
 func save(allstk []*model.Stock) {
 	if len(allstk) > 0 {
 		valueStrings := make([]string, 0, len(allstk))
-		valueArgs := make([]interface{}, 0, len(allstk)*13)
+		valueArgs := make([]interface{}, 0, len(allstk)*16)
 		for _, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
 			valueArgs = append(valueArgs, stk.Price)
@@ -123,18 +128,19 @@ func save(allstk []*model.Stock) {
 			valueArgs = append(valueArgs, stk.Ampl)
 			valueArgs = append(valueArgs, stk.Turnover)
 			valueArgs = append(valueArgs, stk.Outstanding)
+			valueArgs = append(valueArgs, stk.Totals)
 			valueArgs = append(valueArgs, stk.CircMarVal)
-			valueArgs = append(valueArgs, stk.Pe)
-			valueArgs = append(valueArgs, stk.Date)
-			valueArgs = append(valueArgs, stk.Time)
+			valueArgs = append(valueArgs, stk.TimeToMarket)
+			valueArgs = append(valueArgs, stk.UDate)
+			valueArgs = append(valueArgs, stk.UTime)
 		}
 		stmt := fmt.Sprintf("INSERT INTO basics (code,name,price,varate,var,accer,xrate,volratio,ampl,"+
-			"turnover,outstanding,circmarval,pe,date,time) VALUES %s on duplicate key update "+
+			"turnover,outstanding,totals,circmarval,timeToMarket,udate,utime) VALUES %s on duplicate key update "+
 			"name=values(name),"+
 			"price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
 			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
-			"outstanding=values(outstanding),circmarval=values(circmarval),pe=values(pe),"+
-			"date=values(date),time=values(time)",
+			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+
+			"(timeToMarket),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, "failed to bulk update basics")
@@ -230,11 +236,11 @@ func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.Wa
 				// skip
 			}
 		})
-		now := time.Now()
-		stk.Date.Valid = true
-		stk.Time.Valid = true
-		stk.Date.String = now.Format("2006-01-02")
-		stk.Time.String = now.Format("15:04:05")
+		d, t := util.TimeStr()
+		stk.UDate.Valid = true
+		stk.UTime.Valid = true
+		stk.UDate.String = d
+		stk.UTime.String = t
 	})
 
 	chstk <- stocks
@@ -358,11 +364,11 @@ func parseQq(chstk chan []*model.Stock, page int, parsePage bool, urlt string, w
 					// skip
 				}
 			})
-			now := time.Now()
-			stk.Date.Valid = true
-			stk.Time.Valid = true
-			stk.Date.String = now.Format("2006-01-02")
-			stk.Time.String = now.Format("15:04:05")
+			d,t:=util.TimeStr()
+			stk.UDate.Valid = true
+			stk.UTime.Valid = true
+			stk.UDate.String = d
+			stk.UTime.String = t
 		})
 
 	chstk <- stocks
@@ -411,4 +417,12 @@ func (x *xlsxData) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		x.data = append(x.data, nr...)
 	}
 	return nil
+}
+
+// Update basic info such as P/E, P/UDPPS, P/OCFPS
+func UpdBasics() {
+	sql, e := dot.Raw("UPD_BASICS")
+	util.CheckErr(e, "failed to get UPD_BASICS sql")
+	_, e = dbmap.Exec(sql)
+	util.CheckErr(e, "failed to update basics, sql:\n"+sql)
 }
