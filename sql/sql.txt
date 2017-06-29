@@ -121,7 +121,8 @@ SELECT
     SUM(shares_cvt) AS shares_cvt
 FROM
     xdxr
-where code = ?
+WHERE code = ?
+    AND board_date is not null
 GROUP BY code , name , year
 ORDER BY year DESC
 LIMIT ?

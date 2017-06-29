@@ -166,6 +166,12 @@ type Xdxr struct {
 	Progress sql.NullString `db:"progress"`
 	//股利支付率 Dividend Payout Ratio
 	Dpr sql.NullFloat64 `db:"dpr"`
+	//股价刷新标记
+	Xprice sql.NullString `db:"xprice"`
+	//最后更新日期
+	Udate sql.NullString
+	//最后更新时间
+	Utime sql.NullString
 }
 
 func (x *Xdxr) String() string {
@@ -182,29 +188,29 @@ type Finance struct {
 	//Earnings Per Share 每股收益
 	Eps sql.NullFloat64
 	//EPS Growth Rate Year-on-Year 每股收益同比增长率
-	EpsYoy sql.NullFloat64
+	EpsYoy sql.NullFloat64 `db:"eps_yoy"`
 	//Net Profit (1/10 Billion) 净利润（亿）
 	Np sql.NullFloat64
 	//Net Profit Growth Rate Year-on-Year 净利润同比增长率
-	NpYoy sql.NullFloat64
+	NpYoy sql.NullFloat64 `db:"np_yoy"`
 	//Net Profit Ring Growth 净利润环比增长率
-	NpRg sql.NullFloat64
+	NpRg sql.NullFloat64 `db:"np_rg"`
 	//Net Profit After Deduction of Non-profits 扣除非经常性损益后的净利润
-	NpAdn sql.NullFloat64
+	NpAdn sql.NullFloat64 `db:"np_adn"`
 	//Net Profit After Deduction of Non-profits Growth Rate Year-on-Year 扣非净利润同比增长率
-	NpAdnYoy sql.NullFloat64
+	NpAdnYoy sql.NullFloat64 `db:"np_adn_yoy"`
 	//Gross Revenue (1/10 Billion) 营业总收入（亿）
 	Gr sql.NullFloat64
 	//Gross Revenue Growth Rate Year-on-Year 营业总收入同比增长率
-	GrYoy sql.NullFloat64
+	GrYoy sql.NullFloat64 `db:"gr_yoy""`
 	//Net Asset Value Per Share  每股净资产
 	Navps sql.NullFloat64
 	//Return on Equity 净资产收益率
 	Roe sql.NullFloat64
 	// ROE Growth Rate Year-on-Year 净资产收益率同比增长率
-	RoeYoy sql.NullFloat64
+	RoeYoy sql.NullFloat64 `db:"roe_yoy"`
 	//Return on Equity Diluted 净资产收益率-摊薄
-	RoeDlt sql.NullFloat64
+	RoeDlt sql.NullFloat64 `db:"roe_dlt"`
 	//Debt to Asset Ratio 资产负载比
 	Dar sql.NullFloat64
 	//Capital Reserves Per Share 每股资本公积
@@ -212,17 +218,21 @@ type Finance struct {
 	//Undistributed Profit Per Share 每股未分配利润
 	Udpps sql.NullFloat64
 	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比增长率
-	UdppsYoy sql.NullFloat64
+	UdppsYoy sql.NullFloat64 `db:"udpps_yoy"`
 	//Operational Cash Flow Per Share 每股经营现金流
 	Ocfps sql.NullFloat64
 	// OCFPS Growth Rate Year-on-Year 每股经营现金流同比增长率
-	OcfpsYoy sql.NullFloat64
+	OcfpsYoy sql.NullFloat64 `db:"ocfps_yoy"`
 	//Gross Profit Margin 毛利率
 	Gpm sql.NullFloat64
 	//Net Profit Margin 净利率
 	Npm sql.NullFloat64
 	//Inventory Turnover Ratio 存货周转率
 	Itr sql.NullFloat64
+	//最后更新日期
+	Udate sql.NullString
+	//最后更新时间
+	Utime sql.NullString
 }
 
 type FinReport struct {
@@ -389,6 +399,8 @@ type Quote struct {
 	Volume float64
 	Amount float64
 	Xrate  sql.NullFloat64
+	Udate  sql.NullString
+	Utime  sql.NullString
 }
 
 func (q *Quote) String() string {
@@ -419,6 +431,10 @@ type Indicator struct {
 	KDJ_K float64
 	KDJ_D float64
 	KDJ_J float64
+	//最后更新日期
+	Udate sql.NullString
+	//最后更新时间
+	Utime sql.NullString
 }
 
 type IndicatorW struct {

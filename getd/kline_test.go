@@ -31,9 +31,9 @@ func TestParseLastJson(t *testing.T) {
 		log.Printf("%s last data may not be ready yet", code)
 		return
 	}
-	log.Printf("%+v",klast.Year)
-	for k := range klast.Year{
-		log.Printf("%s : %d",k,klast.Year[k])
+	log.Printf("%+v", klast.Year)
+	for k := range klast.Year {
+		log.Printf("%s : %d", k, klast.Year[k])
 	}
 	log.Printf("%+v", klast.Year["hello"])
 }
@@ -43,5 +43,5 @@ func TestGetKlines(t *testing.T) {
 	s.Code = "601377"
 	s.Name = "兴业证券"
 	ss := []*model.Stock{s}
-	GetKlines(ss)
+	GetKlines(ss, DAY_N, DAY)
 }

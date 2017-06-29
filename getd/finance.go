@@ -162,6 +162,13 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 		xdxr.Code = stock.Code
 		xdxr.Name = stock.Name
+
+		d,t:=util.TimeStr()
+		xdxr.Udate.Valid = true
+		xdxr.Utime.Valid = true
+		xdxr.Udate.String = d
+		xdxr.Utime.String = t
+
 		parseXdxrPlan(xdxr)
 	})
 
@@ -248,10 +255,10 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 	if len(xdxrs) > 0 {
 		code := xdxrs[0].Code
 		valueStrings := make([]string, 0, len(xdxrs))
-		valueArgs := make([]interface{}, 0, len(xdxrs)*25)
+		valueArgs := make([]interface{}, 0, len(xdxrs)*27)
 		for _, e := range xdxrs {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"?, ?, ?, ?, ?, ?, ?)")
+				"?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Name)
 			valueArgs = append(valueArgs, e.Idx)
@@ -277,11 +284,13 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 			valueArgs = append(valueArgs, e.DiviTarget)
 			valueArgs = append(valueArgs, e.SharesBase)
 			valueArgs = append(valueArgs, e.EndTrdDate)
+			valueArgs = append(valueArgs, e.Udate)
+			valueArgs = append(valueArgs, e.Utime)
 		}
 		stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,idx,notice_date,report_year,board_date,"+
 			"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt,"+
 			"shares_cvt_date,reg_date,xdxr_date,payout_date,progress,dpr,"+
-			"dyr,divi_target,shares_base,end_trddate) VALUES %s "+
+			"dyr,divi_target,shares_base,end_trddate,udate,utime) VALUES %s "+
 			"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values"+
 			"(report_year),board_date=values"+
 			"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
@@ -292,7 +301,7 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 			"xdxr_date=values"+
 			"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
 			"(dpr),dyr=values(dyr),divi_target=values(divi_target),"+
-			"shares_base=values(shares_base),end_trddate=values(end_trddate)",
+			"shares_base=values(shares_base),end_trddate=values(end_trddate),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update xdxr")
@@ -411,10 +420,10 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	//update to database
 	if len(fins) > 0 {
 		valueStrings := make([]string, 0, len(fins))
-		valueArgs := make([]interface{}, 0, len(fins)*24)
+		valueArgs := make([]interface{}, 0, len(fins)*26)
 		for _, e := range fins {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
-				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?)")
+				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Dar)
 			valueArgs = append(valueArgs, e.Crps)
@@ -439,16 +448,19 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			valueArgs = append(valueArgs, e.Udpps)
 			valueArgs = append(valueArgs, e.UdppsYoy)
 			valueArgs = append(valueArgs, e.Year)
+			valueArgs = append(valueArgs, e.Udate)
+			valueArgs = append(valueArgs, e.Utime)
 		}
 		stmt := fmt.Sprintf("INSERT INTO finance (code,dar,crps,eps,eps_yoy,gpm,gr,gr_yoy,itr,navps,np,np_adn,"+
-			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year) VALUES %s"+
+			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES" +
+			" %s"+
 			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
 			"(eps_yoy),gpm=values(gpm),"+
 			"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
 			"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
 			"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
 			"roe_yoy=values(roe_yoy),roe_dlt=values(roe_dlt),"+
-			"udpps=values(udpps),udpps_yoy=values(udpps_yoy)",
+			"udpps=values(udpps),udpps_yoy=values(udpps_yoy),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update finance")
@@ -462,6 +474,13 @@ func supplement(fins []*model.Finance) {
 		if i >= len(fins)-1 {
 			break
 		}
+
+		d,t:=util.TimeStr()
+		f.Udate.Valid = true
+		f.Utime.Valid = true
+		f.Udate.String = d
+		f.Utime.String = t
+
 		y := f.Year[:4]
 		py, e := strconv.ParseInt(y, 10, 32)
 		util.CheckErr(e, "unable to parse year\n"+fmt.Sprintf("%+v", f))

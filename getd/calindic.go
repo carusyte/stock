@@ -136,18 +136,25 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		valueArgs := make([]interface{}, 0, len(indc)*6)
 		var code string
 		for _, i := range indc {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
+			d,t := util.TimeStr()
+			i.Udate.Valid = true
+			i.Utime.Valid = true
+			i.Udate.String = d
+			i.Utime.String = t
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, i.Code)
 			valueArgs = append(valueArgs, i.Date)
 			valueArgs = append(valueArgs, i.Klid)
 			valueArgs = append(valueArgs, i.KDJ_K)
 			valueArgs = append(valueArgs, i.KDJ_D)
 			valueArgs = append(valueArgs, i.KDJ_J)
+			valueArgs = append(valueArgs, i.Udate)
+			valueArgs = append(valueArgs, i.Utime)
 			code = i.Code
 		}
-		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j) VALUES %s on "+
+		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,udate,utime) VALUES %s on "+
 			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
-			"(kdj_j)",
+			"(kdj_j),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		ps, err := dbmap.Prepare(stmt)
 		defer ps.Close()

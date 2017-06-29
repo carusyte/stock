@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"fmt"
+	"math"
 )
 
 func Reverse(s []*interface{}) {
@@ -45,8 +47,8 @@ func Str2Fnull(s string) (f sql.NullFloat64) {
 	return
 }
 
-func Str2Inull(s string)(i sql.NullInt64) {
-	i64, e := strconv.ParseInt(strings.TrimSpace(s), 10,64)
+func Str2Inull(s string) (i sql.NullInt64) {
+	i64, e := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	if e == nil {
 		i.Int64 = i64
 		i.Valid = true
@@ -112,4 +114,36 @@ func TimeStr() (d, t string) {
 	d = now.Format("2006-01-02")
 	t = now.Format("15:04:05")
 	return
+}
+
+func SprintFa(fa []float64, format, sep string, ls int) string {
+	if len(fa) == 0 {
+		return ""
+	}
+	if ls > 0 && ls < len(fa) {
+		lns := math.Ceil(float64(len(fa) / ls))
+		sas := make([][]string, int(lns))
+		for i, f := range fa {
+			x := i / ls
+			y := i % ls
+			if sas[x] == nil {
+				sas[x] = make([]string, ls)
+			}
+			sas[x][y] = fmt.Sprintf(format, f)
+		}
+		var ret string
+		for i, s := range sas {
+			ret += strings.Join(s, sep)
+			if i < len(sas)-1 {
+				ret += "\n"
+			}
+		}
+		return ret
+	} else {
+		sa := make([]string, len(fa))
+		for i, f := range fa {
+			sa[i] = fmt.Sprintf(format, f)
+		}
+		return strings.Join(sa, sep)
+	}
 }

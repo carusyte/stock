@@ -53,9 +53,13 @@ const (
 	PENALTY_DPR              = 25
 )
 
-func (h *HiD) Get(s []*model.Stock, limit int) (r *Result) {
+func (h *HiD) Geta() (r *Result) {
+	return h.Get(nil, -1, false)
+}
+
+func (h *HiD) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 	r = &Result{}
-	r.ProfileIds = append(r.ProfileIds, h.Id())
+	r.PfIds = append(r.PfIds, h.Id())
 	var hids []*HiD
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("HID")
@@ -68,13 +72,12 @@ func (h *HiD) Get(s []*model.Stock, limit int) (r *Result) {
 
 	for _, ih := range hids {
 		item := new(Item)
-		r.Items = append(r.Items, item)
+		r.AddItem(item)
 		item.Code = ih.Code
 		item.Name = ih.Name
 		item.Profiles = make(map[string]*Profile)
 		ip := new(Profile)
 		item.Profiles[h.Id()] = ip
-		ip.Weight = 1
 		ip.FieldHolder = ih
 		ip.AddField("Year")
 		ip.AddField("Divi")
@@ -111,7 +114,9 @@ func (h *HiD) Get(s []*model.Stock, limit int) (r *Result) {
 
 		item.Score += ip.Score
 	}
-	r.Sort()
+	if ranked {
+		r.Sort()
+	}
 	r.Shrink(limit)
 	return
 }

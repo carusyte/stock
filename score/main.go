@@ -22,8 +22,6 @@ var (
 type Profile struct {
 	//Score for this aspect
 	Score float64
-	//Weight in total score
-	Weight float64
 	//Maintain field names in order
 	FieldNames []string
 	//Reminds
@@ -84,26 +82,49 @@ func (p *Profile) AddFieldAt(i int, name string) {
 }
 
 type Result struct {
-	Items      []*Item
-	ProfileIds []string
+	items []*Item
+	//Code - Item map
+	itMap map[string]*Item
+	PfIds []string
+	//Profile weights in total score
+	PfWts []float64
+	//Weight in parent result
+	Weight float64
+}
+
+func (r *Result) AddItem(items ... *Item) {
+	if r.items == nil {
+		r.items = make([]*Item, len(items))
+		for i := range items {
+			r.items[i] = items[i]
+		}
+	} else {
+		r.items = append(r.items, items...)
+	}
+	if r.itMap == nil {
+		r.itMap = make(map[string]*Item)
+	}
+	for i := range items {
+		r.itMap[items[i].Code] = items[i]
+	}
 }
 
 func (r *Result) Sort() (rr *Result) {
 	rr = r
-	sort.Slice(r.Items, func(i, j int) bool {
-		return r.Items[i].Score > r.Items[j].Score
+	sort.Slice(r.items, func(i, j int) bool {
+		return r.items[i].Score > r.items[j].Score
 	})
 	return
 }
 
 func (r *Result) Shrink(num int) {
-	if 0 <= num && num < len(r.Items) {
-		r.Items = r.Items[:num]
+	if 0 <= num && num < len(r.items) {
+		r.items = r.items[:num]
 	}
 }
 
 func (r *Result) String() string {
-	if len(r.Items) == 0 {
+	if len(r.items) == 0 {
 		return ""
 	}
 
@@ -116,7 +137,7 @@ func (r *Result) String() string {
 	hd = append(hd, "Code")
 	hd = append(hd, "Name")
 	hd = append(hd, "Score")
-	for _, a := range r.Items[0].Profiles {
+	for _, a := range r.items[0].Profiles {
 		for _, fn := range a.FieldNames {
 			hd = append(hd, fn)
 		}
@@ -124,8 +145,8 @@ func (r *Result) String() string {
 	hd = append(hd, "Comments")
 
 	table.SetHeader(hd);
-	data := make([][]string, len(r.Items))
-	for i, itm := range r.Items {
+	data := make([][]string, len(r.items))
+	for i, itm := range r.items {
 		data[i] = make([]string, len(hd))
 		data[i][0] = fmt.Sprintf("%d", i+1)
 		data[i][1] = itm.Code
@@ -158,11 +179,44 @@ func (r *Result) String() string {
 }
 
 type Scorer interface {
-	Get(stock []*model.Stock, limit int) (r *Result)
+	Get(stock []*model.Stock, limit int, ranked bool) (r *Result)
+	Geta() (r *Result)
 	Id() string
 	Description() string
 }
 
 type FieldHolder interface {
 	GetFieldStr(name string) string
+}
+
+func Combine(rs ... *Result) (fr *Result) {
+	fr = &Result{}
+	for i, r := range rs {
+		fr.PfIds = append(fr.PfIds, r.PfIds...)
+		fr.PfWts = append(fr.PfWts, r.Weight)
+		fr.Weight += r.Weight
+		if i == 0 {
+			fr.AddItem(r.items...)
+			for _, it := range fr.items {
+				it.Score *= r.Weight
+			}
+		} else {
+			for _, it := range r.items {
+				if mi, ok := fr.itMap[it.Code]; ok {
+					mi.Score += it.Score * r.Weight
+					for k := range it.Profiles {
+						if _, exists := mi.Profiles[k]; exists {
+							log.Panicf("profile [%s] already exists: %+v", k, mi.Profiles[k])
+						} else {
+							mi.Profiles[k] = it.Profiles[k]
+						}
+					}
+				} else {
+					fr.AddItem(it)
+					it.Score *= r.Weight
+				}
+			}
+		}
+	}
+	return
 }

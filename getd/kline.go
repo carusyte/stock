@@ -23,7 +23,7 @@ const (
 )
 
 func GetKlines(stks []*model.Stock, kltype ... KLType) {
-	log.Println("begin to fetch kline data")
+	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
 	for _, stk := range stks {
@@ -52,8 +52,10 @@ func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan in
 	xdxr := latestUFRXdxr(stk.Code)
 	for _, t := range kltype {
 		switch t {
-		case DAY, DAY_N:
+		case DAY:
 			getDailyKlines(stk.Code, t, xdxr == nil)
+		case DAY_N:
+			getDailyKlines(stk.Code, t, true)
 		case WEEK, MONTH:
 			getLongKlines(stk.Code, t, xdxr == nil)
 		default:
@@ -149,7 +151,11 @@ RETRY:
 			if ldy != nil {
 				ldate = ldy.Date
 				lklid = ldy.Klid
+			}else{
+				log.Printf("%s latest kline data not found, will be fully refreshed", code)
 			}
+		} else {
+			log.Printf("%s kline data will be fully refreshed", code)
 		}
 
 		kls, more := parseKlines(code, klast.Data, ldate, "")
@@ -220,7 +226,7 @@ RETRY:
 		}
 		break
 	}
-	assignKlid(kldy, lklid)
+	supplementMisc(kldy, lklid)
 	binsert(kldy, string(klt))
 	return
 }
@@ -258,7 +264,11 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
+		}else{
+			log.Printf("%s latest kline data not found, will be fully refreshed", code)
 		}
+	} else {
+		log.Printf("%s kline data will be fully refreshed", code)
 	}
 	RETRIES := 5
 	url := fmt.Sprintf(urlt, code, typ)
@@ -302,25 +312,31 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
 		}
 		break
 	}
-	assignKlid(quotes, lklid)
+	supplementMisc(quotes, lklid)
 	binsert(quotes, string(klt))
 	return
 }
 
-func assignKlid(klines []*model.Quote, start int) {
+//Assign KLID, add update datetime
+func supplementMisc(klines []*model.Quote, start int) {
+	d, t := util.TimeStr()
 	for i := len(klines) - 1; i >= 0; i-- {
 		start++
 		klines[i].Klid = start
+		klines[i].Udate.Valid = true
+		klines[i].Utime.Valid = true
+		klines[i].Udate.String = d
+		klines[i].Utime.String = t
 	}
 }
 
 func binsert(quotes []*model.Quote, table string) (c int) {
 	if len(quotes) > 0 {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*10)
+		valueArgs := make([]interface{}, 0, len(quotes)*12)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -331,12 +347,15 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 			valueArgs = append(valueArgs, q.Volume)
 			valueArgs = append(valueArgs, q.Amount)
 			valueArgs = append(valueArgs, q.Xrate)
+			valueArgs = append(valueArgs, q.Udate)
+			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
 		}
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate) VALUES %s on duplicate key update date=values(date),"+
+			"volume,amount,xrate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),amount=values(amount),xrate=values(xrate)",
+			"volume=values(volume),amount=values(amount),xrate=values(xrate),udate=values(udate),"+
+			"utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
@@ -403,8 +422,19 @@ DATES:
 }
 
 func getLatestKl(code string, klt KLType, offset int) (q *model.Quote) {
-	dbmap.SelectOne(&q, "select * from ? where code = ? order by date desc limit 1 offset ?",
-		klt, code, offset)
+	e := dbmap.SelectOne(&q, fmt.Sprintf("select code, date, klid from %s where code = ? order by date desc limit 1 "+
+		"offset ?", klt),
+		code, offset)
+	if e != nil {
+		if "sql: no rows in result set" == e.Error() {
+			return nil
+		} else {
+			log.Panicln("failed to run sql", e)
+		}
+		return nil
+	} else {
+		return
+	}
 	return
 }
 
@@ -413,8 +443,16 @@ func latestUFRXdxr(code string) (x *model.Xdxr) {
 	sql, e := global.Dot.Raw("latestUFRXdxr")
 	util.CheckErr(e, "unable to get sql: latestUFRXdxr")
 	e = dbmap.SelectOne(&x, sql, code, code)
-	util.CheckErr(e, "failed to run sql: "+sql)
-	return x
+	if e != nil {
+		if "sql: no rows in result set" == e.Error() {
+			return nil
+		} else {
+			log.Panicln("failed to run sql", e)
+		}
+		return nil
+	} else {
+		return x
+	}
 }
 
 func strip(data []byte) []byte {

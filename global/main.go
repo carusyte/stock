@@ -11,7 +11,7 @@ import (
 )
 
 const LOGFILE = "stock.log"
-const MAX_CONCURRENCY = 20
+const MAX_CONCURRENCY = 8
 const JOB_CAPACITY = 512
 // will make some of the requests via proxy, 0.6 = 3/5
 const PART_PROXY = 0
