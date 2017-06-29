@@ -7,48 +7,38 @@ import (
 	"reflect"
 	"github.com/pkg/errors"
 	"math"
+	"database/sql"
 )
 
 // Search for stocks with excellent financial report.
 // Medium to long term model, mainly focusing on yearly financial reports.
-// · Low latest P/E, normally below 30
-// · High average yearly EPS of up to 5 years
-// · Growing EPS each year of up to 5 years
-// · Growing latest ROE
-// · High average ROE of up to 5 years
-// · Growing ROE each year of up to 5 years
+// · Low latest P/E, normally below 50
+// · Growing EPS each year and quarter, up to 3 years
 // · Low latest P/U
-// · Growing UDPPS each term, counting 5 terms
-// · Low latst P/O
-// · High average OCFPS each year of up to 5 years
+// · Growing UDPPS each year and quarter, up to 3 years
 // Get warnings/penalties if:
 // · High latest DAR
-// · High average DAR of up to 5 years
+// · High average DAR, up to 5 years
 type BlueChip struct {
 	model.Finance
 	Name string
-	Pe   float64 `db:"pe"`
-	Pu   float64 `db:"pu"`
-	Po   float64 `db:"po"`
+	Pe   sql.NullFloat64 `db:"pe"`
+	Pu   sql.NullFloat64 `db:"pu"`
+	Po   sql.NullFloat64 `db:"po"`
 }
 
 // The assessment metric diverts, some of them are somewhat negative correlated.
 const (
-	SCORE_PE     float64 = 15
-	SCORE_AEPS           = 7
-	SCORE_GEPS           = 10
-	SCORE_ROE            = 14
-	SCORE_AROE           = 5
-	SCORE_GROE           = 7
-	SCORE_PU             = 15
-	SCORE_GUDPPS         = 7
-	SCORE_PO             = 15
-	SCORE_AOCFPS         = 5
-	PENALTY_DAR          = 30
-	SURVIVOR     int     = 50
+	BLUE_HIST_SIZE int     = 15
+	SCORE_GEPS     float64 = 30
+	SCORE_GUDPPS           = 30
+	SCORE_PE               = 20
+	SCORE_PU               = 20
+	PENALTY_DAR            = 20
+	PE_THRESHOLD           = 50
 )
 
-func (b *BlueChip) Get(s []*model.Stock) (r *Result) {
+func (b *BlueChip) Get(s []*model.Stock, limit int) (r *Result) {
 	//TODO implement this scorer
 	r = &Result{}
 	r.ProfileIds = append(r.ProfileIds, b.Id())
@@ -56,7 +46,7 @@ func (b *BlueChip) Get(s []*model.Stock) (r *Result) {
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("BLUE")
 		util.CheckErr(e, "failed to get BLUE sql")
-		_, e = dbmap.Select(&blus, sql)
+		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	} else {
 		//TODO select by specified stock codes
@@ -74,21 +64,41 @@ func (b *BlueChip) Get(s []*model.Stock) (r *Result) {
 		ip.Weight = 1
 		ip.FieldHolder = ib
 		ip.AddField("Latest Report")
-		ip.Score += sEps(ib)
+
+		hist := getFinHist(ib.Code, BLUE_HIST_SIZE)
+
+		ip.Score += sEps(ib, hist)
 
 		item.Score += ip.Score
 	}
 	r.Sort()
+	r.Shrink(limit)
 	return
 }
 
-//Score by assessing EPS
-func sEps(b *BlueChip) (s float64) {
-	if b.Eps.Float64 < 0 {
+func getFinHist(code string, size int) (fins []*model.Finance) {
+	sql, e := dot.Raw("BLUE_HIST")
+	util.CheckErr(e, "failed to get BLUE_HIST sql")
+	_, e = dbmap.Select(&fins, sql, code, size)
+	util.CheckErr(e, "failed to query BLUE_HIST for "+code)
+	return
+}
+
+// Score by assessing EPS
+// P/E: Get max score if 0 < P/E <= 5, get 0 if P/E >= 40
+// EPS GR: Get max score if EPS_YOY is all positive and avg EPS_YOY >= 15, get 0 if avg negative growth rate is <= -15%
+func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
+	ZERO_PE := 40.0
+	MAX_PE := 5.0
+	// score latest P/E
+	if b.Eps.Float64 < 0 || b.Eps.Float64 >= ZERO_PE {
 		s = 0
 	} else {
-		s = SCORE_PE * math.Min(1, b.Eps.Float64)
+		s = SCORE_PE * math.Min(1, math.Pow((ZERO_PE-b.Eps.Float64)/(ZERO_PE-MAX_PE), 0.5))
 	}
+	//TODO make it
+	// score average P/E
+
 	return
 }
 

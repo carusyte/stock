@@ -19,6 +19,16 @@ import (
 	"io/ioutil"
 )
 
+func StocksDb() (allstk []*model.Stock) {
+	dbmap.Select(&allstk, "select * from basics")
+	return
+}
+
+func StocksDbTo(target interface{}){
+	dbmap.Select(target, "select * from basics")
+	return
+}
+
 func GetStockInfo() (allstk []*model.Stock) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
@@ -420,7 +430,7 @@ func (x *xlsxData) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 }
 
 // Update basic info such as P/E, P/UDPPS, P/OCFPS
-func UpdBasics() {
+func updBasics() {
 	sql, e := dot.Raw("UPD_BASICS")
 	util.CheckErr(e, "failed to get UPD_BASICS sql")
 	_, e = dbmap.Exec(sql)

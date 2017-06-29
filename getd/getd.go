@@ -28,7 +28,7 @@ func Get(){
 	stop("GET_KLINES", stgkl)
 
 	updb := time.Now()
-	UpdBasics()
+	updBasics()
 	stop("UPD_BASICS", updb)
 
 	stci := time.Now()

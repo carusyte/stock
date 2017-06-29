@@ -87,20 +87,27 @@ LIMIT ?
 
 -- name: HID
 SELECT
-    code,
-    name,
-    SUBSTR(board_date, 1, 4) AS year,
-    SUM(divi) AS divi,
-    SUM(dyr) AS dyr,
-    SUM(dpr) AS dpr,
-    SUM(shares_allot) AS shares_allot,
-    SUM(shares_cvt) AS shares_cvt
+    x1.*
 FROM
-    xdxr
-GROUP BY code , name , year
-HAVING year >= SUBSTR(CURDATE(), 1, 4) - 1
-ORDER BY year DESC, dyr DESC
-LIMIT ?
+    (SELECT
+        code,
+            name,
+            SUBSTR(board_date, 1, 4) AS year,
+            ROUND(SUM(divi), 2) AS divi,
+            SUM(dyr) AS dyr,
+            SUM(dpr) AS dpr,
+            SUM(shares_allot) AS shares_allot,
+            SUM(shares_cvt) AS shares_cvt
+    FROM
+        xdxr
+    GROUP BY code , name , year) x1
+        INNER JOIN
+    (SELECT
+        code, MAX(SUBSTR(board_date, 1, 4)) AS year
+    FROM
+        xdxr
+    GROUP BY code) x2 USING (code , year)
+ORDER BY x1.dyr DESC
 
 -- name: HID_HIST
 SELECT
@@ -234,3 +241,31 @@ SET
     b.pu = ROUND(p.close / fl.udpps, 2)
 
 -- name: BLUE
+SELECT
+    b.name, b.pe, b.pu, b.po, f.*
+FROM
+    basics b
+        INNER JOIN
+    (SELECT
+        *
+    FROM
+        finance
+    INNER JOIN (SELECT
+        code, MAX(year) year
+    FROM
+        finance
+    GROUP BY code) fi USING (code , year)) f USING (code)
+WHERE
+    b.pe IS NOT NULL AND b.pe > 0
+        AND b.pe <= ?
+ORDER BY pe ASC
+
+-- name: BLUE_HIST
+SELECT
+    *
+FROM
+    finance
+WHERE
+    code = ?
+ORDER BY year DESC
+LIMIT ?

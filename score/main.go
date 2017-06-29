@@ -40,12 +40,12 @@ func (p *Profile) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (p * Profile) Cmt(c... string){
+func (p *Profile) Cmt(c ... string) {
 	p.Comments = append(p.Comments, c...)
 }
 
-func (p *Profile) Cmtf(f string, i... interface{}){
-	p.Cmt(fmt.Sprintf(f,i...))
+func (p *Profile) Cmtf(f string, i ... interface{}) {
+	p.Cmt(fmt.Sprintf(f, i...))
 }
 
 type Item struct {
@@ -88,12 +88,18 @@ type Result struct {
 	ProfileIds []string
 }
 
-func (r *Result) Sort() (rr *Result){
+func (r *Result) Sort() (rr *Result) {
 	rr = r
-	sort.Slice(r.Items, func(i,j int) bool{
+	sort.Slice(r.Items, func(i, j int) bool {
 		return r.Items[i].Score > r.Items[j].Score
 	})
 	return
+}
+
+func (r *Result) Shrink(num int) {
+	if 0 <= num && num < len(r.Items) {
+		r.Items = r.Items[:num]
+	}
 }
 
 func (r *Result) String() string {
@@ -121,23 +127,23 @@ func (r *Result) String() string {
 	data := make([][]string, len(r.Items))
 	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
-		data[i][0] = fmt.Sprintf("%d",i+1)
+		data[i][0] = fmt.Sprintf("%d", i+1)
 		data[i][1] = itm.Code
 		data[i][2] = itm.Name
 		data[i][3] = fmt.Sprintf("%.2f", itm.Score)
 		idx := 4
 		cmt := ""
 		for _, p := range itm.Profiles {
-			for _, fn := range p.FieldNames{
+			for _, fn := range p.FieldNames {
 				data[i][idx] = p.FieldHolder.GetFieldStr(fn)
 				idx++
 			}
-			if len(p.Comments) == 1{
+			if len(p.Comments) == 1 {
 				cmt = p.Comments[0]
-			}else if len(p.Comments) > 1{
-				for i,c := range p.Comments{
-					cmt += fmt.Sprintf("%d.%s",i+1,c)
-					if i < len(p.Comments)-1{
+			} else if len(p.Comments) > 1 {
+				for i, c := range p.Comments {
+					cmt += fmt.Sprintf("%d.%s", i+1, c)
+					if i < len(p.Comments)-1 {
 						cmt += "\n"
 					}
 				}
@@ -152,7 +158,7 @@ func (r *Result) String() string {
 }
 
 type Scorer interface {
-	Get(stock []*model.Stock) (r *Result)
+	Get(stock []*model.Stock, limit int) (r *Result)
 	Id() string
 	Description() string
 }

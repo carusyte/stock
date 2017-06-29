@@ -44,7 +44,6 @@ type HiD struct {
 }
 
 const (
-	NUM_CANDIDATES   int     = 50
 	AVG_GR_HIST_SIZE         = 5
 	SCORE_DYR_AVG    float64 = 35
 	SCORE_DYR_GR             = 20
@@ -54,14 +53,14 @@ const (
 	PENALTY_DPR              = 25
 )
 
-func (h *HiD) Get(s []*model.Stock) (r *Result) {
+func (h *HiD) Get(s []*model.Stock, limit int) (r *Result) {
 	r = &Result{}
 	r.ProfileIds = append(r.ProfileIds, h.Id())
 	var hids []*HiD
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("HID")
 		util.CheckErr(e, "failed to get HID sql")
-		_, e = dbmap.Select(&hids, sql, NUM_CANDIDATES)
+		_, e = dbmap.Select(&hids, sql)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	} else {
 		//TODO select by specified stock codes
@@ -113,6 +112,7 @@ func (h *HiD) Get(s []*model.Stock) (r *Result) {
 		item.Score += ip.Score
 	}
 	r.Sort()
+	r.Shrink(limit)
 	return
 }
 
@@ -218,7 +218,7 @@ func fineDpr(ih *HiD, hist []*HiD, m float64) float64 {
 }
 
 //Score by Dyr average.
-//Get max socre if average DYR of up to 5 years >= 6%, without interruptions
+//Get max socre if average DYR of up to 5 years >= 6%
 func scoreDyrAvg(ih *HiD, hist []*HiD, m float64) float64 {
 	avg := .0
 	l := 0
@@ -258,7 +258,7 @@ func scoreDyrAvg(ih *HiD, hist []*HiD, m float64) float64 {
 //Score according to dyr growth rate.
 //Get 4/5 max score if growth rate is all positive and full max if avg >= 15%.
 //Otherwise, get 4/5 max if avg growth rate >= 50% and get 0 if avg negative growth rate is <= -33%
-//or sum of no dividend year is greater than 3.
+//or sum of non-dividend year is greater than 3.
 func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 	if len(hist) < 2 {
 		ih.DyrGrYoy = "---"
@@ -266,6 +266,7 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 	} else {
 		positive := true
 		grs := make([]float64, len(hist)-1)
+		ngrs := make([]float64, 0)
 		nodiv := .0
 		for j, ihist := range hist {
 			if j < len(hist)-1 {
@@ -284,6 +285,7 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 					ih.DyrGrYoy = ih.DyrGrYoy + "/"
 				}
 				if gr < 0 {
+					ngrs = append(ngrs, gr)
 					positive = false
 				}
 			}
@@ -302,7 +304,11 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 			} else {
 				s := 4.0 / 5.0 * m
 				s *= math.Min(1, math.Pow((33+avg)/83, 1.68))
-				s = math.Max(0, s-math.Pow(-1*avg/33, 1.35))
+				if len(ngrs) > 0 {
+					navg, e := stats.Mean(ngrs)
+					util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(ngrs))
+					s = math.Max(0, s-math.Pow(-1*navg/33, 1.35))
+				}
 				return s
 			}
 		}
