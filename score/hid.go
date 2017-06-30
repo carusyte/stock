@@ -57,7 +57,7 @@ func (h *HiD) Geta() (r *Result) {
 	return h.Get(nil, -1, false)
 }
 
-func (h *HiD) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
+func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
 	r.PfIds = append(r.PfIds, h.Id())
 	var hids []*HiD
@@ -79,12 +79,6 @@ func (h *HiD) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 		ip := new(Profile)
 		item.Profiles[h.Id()] = ip
 		ip.FieldHolder = ih
-		ip.AddField("Year")
-		ip.AddField("Divi")
-		ip.AddField("DYR")
-		ip.AddField("DPR")
-		ip.AddField("Shares Allot")
-		ip.AddField("Shares Cvt")
 		ip.Score += scoreDyr(ih, SCORE_LATEST_DYR)
 
 		//supplement latest price
@@ -94,26 +88,19 @@ func (h *HiD) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 		util.CheckErr(e, "failed to query kline_d for lastest price: "+ih.Code)
 		ih.Price = lp.Price
 		ih.PriceDate = lp.PriceDate
-		ip.AddField("Price")
-		ip.AddField("Price Date")
 
 		ip.Score += scoreDyrHist(ih)
-		ip.AddFieldAt(3, "DYR GR")
-		ip.AddFieldAt(4, "DYR AVG")
-		ip.AddFieldAt(6, "DPR AVG")
-		ip.AddFieldAt(7, "DYR:DPR")
 
 		ip.Score += scoreRegDate(ih, SCORE_REG_DATE)
-		ip.AddField("REG DT")
-		ip.AddField("XDXR DT")
 
 		//warn if dpr is greater than 90%
 		if ih.Dpr.Valid && ih.Dpr.Float64 > 0.9 {
-			ip.Cmtf("DPR is high at %.1f%%", ih.Dpr.Float64*100)
+			item.Cmtf("DPR is high at %.1f%%", ih.Dpr.Float64*100)
 		}
 
 		item.Score += ip.Score
 	}
+	r.SetFields(h.Id(), h.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -121,7 +108,7 @@ func (h *HiD) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 	return
 }
 
-//Score by dividend registration date of the year. There might be multiple dividend events in p year.
+//Score by dividend registration date of the year. There might be multiple dividend events in one year.
 //The price of stock might get volatile on and immediately after the registration date.
 //Score is weighted by each dividend amount.
 //Get max score if the registration date is more than 3 days ago or there are 10 days or more before that date.
@@ -340,6 +327,12 @@ func scoreDyr(ih *HiD, max float64) (s float64) {
 
 func (h *HiD) Id() string {
 	return "HiD"
+}
+
+func (h *HiD) Fields() []string {
+	return []string{"Year", "Divi", "DYR", "DYR GR", "DYR AVG", "DPR",
+					"DPR AVG", "DYR:DPR", "Shares Allot",
+					"Shares Cvt", "Price", "Price Date", "REG DT", "XDXR DT"}
 }
 
 func (h *HiD) GetFieldStr(name string) string {

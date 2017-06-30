@@ -261,6 +261,27 @@ WHERE
         AND b.pe <= ?
 ORDER BY pe ASC
 
+-- name: BLUE_SCOPED
+SELECT
+    b.name, b.pe, b.pu, b.po, f.*
+FROM
+    basics b
+        INNER JOIN
+    (SELECT
+        *
+    FROM
+        finance
+    INNER JOIN (SELECT
+        code, MAX(year) year
+    FROM
+        finance
+    WHERE code in (%s)
+    GROUP BY code) fi USING (code , year)) f USING (code)
+WHERE
+    b.pe IS NOT NULL AND b.pe > 0
+    AND b.pe <= ?
+ORDER BY pe ASC
+
 -- name: BLUE_HIST
 SELECT
     *

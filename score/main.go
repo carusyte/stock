@@ -2,7 +2,6 @@ package score
 
 import (
 	"github.com/carusyte/stock/global"
-	"github.com/carusyte/stock/model"
 	"log"
 	"encoding/json"
 	"fmt"
@@ -22,10 +21,6 @@ var (
 type Profile struct {
 	//Score for this aspect
 	Score float64
-	//Maintain field names in order
-	FieldNames []string
-	//Reminds
-	Comments []string
 	//Field holder handy to get formatted field value
 	FieldHolder FieldHolder
 }
@@ -38,12 +33,12 @@ func (p *Profile) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (p *Profile) Cmt(c ... string) {
-	p.Comments = append(p.Comments, c...)
+func (it *Item) Cmt(c ... string) {
+	it.Comments = append(it.Comments, c...)
 }
 
-func (p *Profile) Cmtf(f string, i ... interface{}) {
-	p.Cmt(fmt.Sprintf(f, i...))
+func (it *Item) Cmtf(f string, i ... interface{}) {
+	it.Cmt(fmt.Sprintf(f, i...))
 }
 
 type Item struct {
@@ -53,6 +48,8 @@ type Item struct {
 	Name string
 	//Total score
 	Score float64
+	//Reminds
+	Comments []string
 	//Score evaluation aspect
 	Profiles map[string]*Profile
 }
@@ -65,22 +62,6 @@ func (i *Item) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (p *Profile) AddField(name string) {
-	p.FieldNames = append(p.FieldNames, name)
-}
-
-func (p *Profile) AddFieldAt(i int, name string) {
-	if i > len(p.FieldNames) {
-		log.Panicf("can't add field at index > %d", len(p.FieldNames))
-	} else if i == len(p.FieldNames) {
-		p.AddField(name)
-	} else {
-		p.FieldNames = append(p.FieldNames, "")
-		copy(p.FieldNames[i+1:], p.FieldNames[i:])
-		p.FieldNames[i] = name
-	}
-}
-
 type Result struct {
 	items []*Item
 	//Code - Item map
@@ -90,6 +71,15 @@ type Result struct {
 	PfWts []float64
 	//Weight in parent result
 	Weight float64
+	Fields map[string][]string
+}
+
+func (r *Result) Stocks() []string {
+	s := make([]string, len(r.items))
+	for i := range s {
+		s[i] = r.items[i].Code
+	}
+	return s
 }
 
 func (r *Result) AddItem(items ... *Item) {
@@ -123,6 +113,13 @@ func (r *Result) Shrink(num int) {
 	}
 }
 
+func (r *Result) SetFields(id string, fields ...string) {
+	if r.Fields == nil {
+		r.Fields = make(map[string][]string)
+	}
+	r.Fields[id] = fields
+}
+
 func (r *Result) String() string {
 	if len(r.items) == 0 {
 		return ""
@@ -137,11 +134,17 @@ func (r *Result) String() string {
 	hd = append(hd, "Code")
 	hd = append(hd, "Name")
 	hd = append(hd, "Score")
-	for _, a := range r.items[0].Profiles {
-		for _, fn := range a.FieldNames {
-			hd = append(hd, fn)
+	fns := []string{}
+	fidx := map[string]int{}
+	idx := 4
+	for _, pfid := range r.PfIds {
+		for _, fn := range r.Fields[pfid] {
+			fns = append(fns, fn)
+			fidx[pfid+"."+fn] = idx
+			idx++
 		}
 	}
+	hd = append(hd, fns...)
 	hd = append(hd, "Comments")
 
 	table.SetHeader(hd);
@@ -152,25 +155,23 @@ func (r *Result) String() string {
 		data[i][1] = itm.Code
 		data[i][2] = itm.Name
 		data[i][3] = fmt.Sprintf("%.2f", itm.Score)
-		idx := 4
-		cmt := ""
-		for _, p := range itm.Profiles {
-			for _, fn := range p.FieldNames {
-				data[i][idx] = p.FieldHolder.GetFieldStr(fn)
-				idx++
+		for pfid, p := range itm.Profiles {
+			for _, fn := range r.Fields[pfid] {
+				data[i][fidx[pfid+"."+fn]] = p.FieldHolder.GetFieldStr(fn)
 			}
-			if len(p.Comments) == 1 {
-				cmt = p.Comments[0]
-			} else if len(p.Comments) > 1 {
-				for i, c := range p.Comments {
-					cmt += fmt.Sprintf("%d.%s", i+1, c)
-					if i < len(p.Comments)-1 {
-						cmt += "\n"
-					}
+		}
+		cmt := ""
+		if len(itm.Comments) == 1 {
+			cmt = itm.Comments[0]
+		} else if len(itm.Comments) > 1 {
+			for i, c := range itm.Comments {
+				cmt += fmt.Sprintf("%d.%s", i+1, c)
+				if i < len(itm.Comments)-1 {
+					cmt += " \n "
 				}
 			}
 		}
-		data[i][idx] = cmt
+		data[i][len(data[i])-1] = cmt
 	}
 	table.AppendBulk(data)
 	table.Render()
@@ -179,9 +180,10 @@ func (r *Result) String() string {
 }
 
 type Scorer interface {
-	Get(stock []*model.Stock, limit int, ranked bool) (r *Result)
+	Get(stock []string, limit int, ranked bool) (r *Result)
 	Geta() (r *Result)
 	Id() string
+	Fields() []string
 	Description() string
 }
 
@@ -195,6 +197,13 @@ func Combine(rs ... *Result) (fr *Result) {
 		fr.PfIds = append(fr.PfIds, r.PfIds...)
 		fr.PfWts = append(fr.PfWts, r.Weight)
 		fr.Weight += r.Weight
+		for pfid := range r.Fields {
+			if _, exists := fr.Fields[pfid]; exists {
+				log.Panicf("unable to combine identical profile: %s", pfid)
+			} else {
+				fr.SetFields(pfid, r.Fields[pfid]...)
+			}
+		}
 		if i == 0 {
 			fr.AddItem(r.items...)
 			for _, it := range fr.items {

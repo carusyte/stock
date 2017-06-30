@@ -9,6 +9,7 @@ import (
 	"math"
 	"database/sql"
 	"github.com/montanaflynn/stats"
+	"strings"
 )
 
 // Search for stocks with excellent financial report.
@@ -49,7 +50,7 @@ func (b *BlueChip) Geta() (r *Result) {
 	return b.Get(nil, -1, false)
 }
 
-func (b *BlueChip) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
+func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
 	r.PfIds = append(r.PfIds, b.Id())
 	var blus []*BlueChip
@@ -59,7 +60,11 @@ func (b *BlueChip) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	} else {
-		//TODO select by specified stock codes
+		sql, e := dot.Raw("BLUE_SCOPED")
+		util.CheckErr(e, "failed to get BLUE_SCOPED sql")
+		sql = fmt.Sprintf(sql, strings.Join(s,","))
+		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
+		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	}
 
 	for _, ib := range blus {
@@ -71,33 +76,23 @@ func (b *BlueChip) Get(s []*model.Stock, limit int, ranked bool) (r *Result) {
 		ip := new(Profile)
 		item.Profiles[b.Id()] = ip
 		ip.FieldHolder = ib
-		ip.AddField("Latest Report")
 
 		hist := getFinHist(ib.Code, BLUE_HIST_SPAN_YEAR*4)
 
 		ip.Score += sEps(ib, hist)
-		ip.AddField("PE")
-		ip.AddField("EPS GR%")
-		ip.AddField("EPS GR AVG%")
-
 		ip.Score += sUdpps(ib, hist)
-		ip.AddField("PU")
-		ip.AddField("UDPPS GR%")
-		ip.AddField("UDPPS GR AVG%")
-
 		ip.Score -= pDar(ib, hist)
-		ip.AddField("DARS%")
-		ip.AddField("DAR AVG%")
 
 		if ib.Dar.Valid && ib.Dar.Float64 >= 90 {
-			ip.Cmtf("DAR is high at %.0f", ib.Dar.Float64)
+			item.Cmtf("DAR is high at %.0f", ib.Dar.Float64)
 		}
 		if ib.DarAvg >= 90 {
-			ip.Cmtf("AVG DAR is high at %.0f", ib.DarAvg)
+			item.Cmtf("AVG DAR is high at %.0f", ib.DarAvg)
 		}
 
 		item.Score += ip.Score
 	}
+	r.SetFields(b.Id(), b.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -232,6 +227,12 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 
 func (*BlueChip) Id() string {
 	return "BLUE"
+}
+
+func (b *BlueChip) Fields() []string {
+	return []string{"Latest Report", "PE", "EPS GR%",
+					"EPS GR AVG%", "PU", "UDPPS GR%", "UDPPS GR AVG%",
+					"DARS%", "DAR AVG%"}
 }
 
 func (b *BlueChip) GetFieldStr(name string) string {
