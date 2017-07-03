@@ -20,22 +20,35 @@ import (
 	"strconv"
 )
 
-func GetXDXRs(stocks []*model.Stock) {
+func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting XDXR info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, chrstk)
 	for i := 0; i < global.MAX_CONCURRENCY; i++ {
 		wg.Add(1)
-		go parseBonusPage(chstk, &wg)
+		go parseBonusPage(chstk, &wg, chrstk)
 	}
-	for _, s := range stocks {
+	for _, s := range stocks.List {
 		chstk <- s
 	}
 	close(chstk)
 	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d xdxr info updated", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
 }
 
-func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup) {
+func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	// target web server can't withstand heavy traffic
 	RETRIES := 5
@@ -43,11 +56,13 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := parse10jqkBonus(stock)
 			//ok, r := ParseIfengBonus(stock)
-			if !ok && r {
+			if ok {
+				chrstk  <- stock
+			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Second * 1)
 				continue
-			} else if !ok && !r {
+			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
@@ -163,7 +178,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		xdxr.Code = stock.Code
 		xdxr.Name = stock.Name
 
-		d,t:=util.TimeStr()
+		d, t := util.TimeStr()
 		xdxr.Udate.Valid = true
 		xdxr.Utime.Valid = true
 		xdxr.Udate.String = d
@@ -352,22 +367,35 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 }
 
 //get finance info
-func GetFinance(stocks []*model.Stock) {
+func GetFinance(stocks *model.Stocks) (rstks *model.Stocks){
 	log.Println("getting Finance info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, chrstk)
 	for i := 0; i < global.MAX_CONCURRENCY; i++ {
 		wg.Add(1)
-		go parseFinancePage(chstk, &wg)
+		go parseFinancePage(chstk, &wg, chrstk)
 	}
-	for _, s := range stocks {
+	for _, s := range stocks.List {
 		chstk <- s
 	}
 	close(chstk)
 	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d finance info updated", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
 }
 
-func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup) {
+func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	urlt := `http://basic.10jqka.com.cn/%s/finance.html`
 	RETRIES := 5
@@ -375,14 +403,17 @@ func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup) {
 		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := doParseFinPage(url, stock.Code)
-			if !ok && r {
+			if ok {
+				chrstk <- stock
+				break
+			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Second * 1)
 				continue
-			} else if !ok && !r {
+			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				break
 			}
-			break
 		}
 	}
 }
@@ -422,7 +453,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		valueStrings := make([]string, 0, len(fins))
 		valueArgs := make([]interface{}, 0, len(fins)*26)
 		for _, e := range fins {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
 				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Dar)
@@ -452,7 +483,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			valueArgs = append(valueArgs, e.Utime)
 		}
 		stmt := fmt.Sprintf("INSERT INTO finance (code,dar,crps,eps,eps_yoy,gpm,gr,gr_yoy,itr,navps,np,np_adn,"+
-			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES" +
+			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES"+
 			" %s"+
 			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
 			"(eps_yoy),gpm=values(gpm),"+
@@ -475,7 +506,7 @@ func supplement(fins []*model.Finance) {
 			break
 		}
 
-		d,t:=util.TimeStr()
+		d, t := util.TimeStr()
 		f.Udate.Valid = true
 		f.Utime.Valid = true
 		f.Udate.String = d
@@ -530,4 +561,21 @@ func findByYear(fins []*model.Finance, year string) *model.Finance {
 		}
 	}
 	return nil
+}
+
+// checks whether the historical kline data is yet to be forward-reinstatement
+func latestUFRXdxr(code string) (x *model.Xdxr) {
+	sql, e := global.Dot.Raw("latestUFRXdxr")
+	util.CheckErr(e, "unable to get sql: latestUFRXdxr")
+	e = dbmap.SelectOne(&x, sql, code, code)
+	if e != nil {
+		if "sql: no rows in result set" == e.Error() {
+			return nil
+		} else {
+			log.Panicln("failed to run sql", e)
+		}
+		return nil
+	} else {
+		return x
+	}
 }

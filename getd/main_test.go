@@ -19,7 +19,6 @@ func TestCalcAllIndcs(t *testing.T) {
 	stop("CALC_INDICS", stci)
 }
 
-
 func TestParseIfengBonus(t *testing.T) {
 	s := &model.Stock{}
 	s.Code = "000727"
@@ -28,6 +27,8 @@ func TestParseIfengBonus(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	// For better performance, if you want to update local data only
+	// please use test/main_test.go instead
 	Get()
 }
 

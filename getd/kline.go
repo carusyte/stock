@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"github.com/carusyte/stock/global"
 )
 
 type KLType string
@@ -22,17 +21,31 @@ const (
 	MONTH        = "kline_m"
 )
 
-func GetKlines(stks []*model.Stock, kltype ... KLType) {
+//Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
+func GetKlines(stks *model.Stocks, kltype ... KLType) (rstks *model.Stocks) {
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
-	for _, stk := range stks {
+	outstks := make(chan *model.Stock, JOB_CAPACITY)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, outstks)
+	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
-		go getKline(stk, kltype, &wg, &wf)
+		go getKline(stk, kltype, &wg, &wf, outstks)
 	}
 	wg.Wait()
-	log.Printf("%s data updated.", strings.Join(kt2strs(kltype), ", "))
+	close(wf)
+	close(outstks)
+	wgr.Wait()
+	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
+	if stks.Size() != rstks.Size() {
+		same, skp := stks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
 }
 
 //convert slice of KLType to slice of string
@@ -44,31 +57,31 @@ func kt2strs(kltype []KLType) (s []string) {
 	return
 }
 
-func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan int) {
+func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan int, outstks chan *model.Stock) {
 	defer func() {
 		wg.Done()
 		<-*wf
 	}()
 	xdxr := latestUFRXdxr(stk.Code)
+	suc := false
 	for _, t := range kltype {
 		switch t {
 		case DAY:
-			getDailyKlines(stk.Code, t, xdxr == nil)
+			_, suc = getDailyKlines(stk.Code, t, xdxr == nil)
 		case DAY_N:
-			getDailyKlines(stk.Code, t, true)
+			_, suc = getDailyKlines(stk.Code, t, true)
 		case WEEK, MONTH:
-			getLongKlines(stk.Code, t, xdxr == nil)
+			_, suc = getLongKlines(stk.Code, t, xdxr == nil)
 		default:
 			log.Panicf("unhandled kltype: %s", t)
 		}
 	}
-	if xdxr != nil {
-		//update xpriced flag in xdxr to mark that all price data has been reinstated
-		dbmap.Exec("update xdxr set xprice = 'Y' where code = ? and idx = ?", xdxr.Code, xdxr.Idx)
+	if suc {
+		outstks <- stk
 	}
 }
 
-func getDailyKlines(code string, klt KLType, incr bool) (kldy []*model.Quote) {
+func getDailyKlines(code string, klt KLType, incr bool) (kldy []*model.Quote, suc bool) {
 	RETRIES := 5
 	var (
 		klast  model.Klast
@@ -123,7 +136,7 @@ RETRY:
 		body, e = util.HttpGetBytes(url_last)
 		if e != nil {
 			log.Printf("stop retrying to get last kline for %s", code)
-			return []*model.Quote{}
+			return []*model.Quote{}, false
 		}
 		klast = model.Klast{}
 		e = json.Unmarshal(strip(body), &klast)
@@ -135,13 +148,13 @@ RETRY:
 			} else {
 				log.Printf("stop retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code,
 					rt+1, e, url_last, string(body))
-				return []*model.Quote{}
+				return []*model.Quote{}, false
 			}
 		}
 
 		if klast.Data == "" {
 			log.Printf("%s last data may not be ready yet", code)
-			return []*model.Quote{}
+			return []*model.Quote{}, false
 		}
 
 		ldate = ""
@@ -151,7 +164,7 @@ RETRY:
 			if ldy != nil {
 				ldate = ldy.Date
 				lklid = ldy.Klid
-			}else{
+			} else {
 				log.Printf("%s latest kline data not found, will be fully refreshed", code)
 			}
 		} else {
@@ -174,13 +187,13 @@ RETRY:
 			if e != nil {
 				log.Printf("failed to parse year for %+v, stop processing. error: %+v",
 					code, e)
-				return []*model.Quote{}
+				return []*model.Quote{}, false
 			}
 			start, e := strconv.ParseInt(klast.Start[:4], 10, 32)
 			if e != nil {
 				log.Printf("failed to parse json start year for %+v, stop processing. "+
 					"string:%s, error: %+v", code, klast.Start, e)
-				return []*model.Quote{}
+				return []*model.Quote{}, false
 			}
 			for more {
 				yr--
@@ -202,7 +215,7 @@ RETRY:
 					} else {
 						log.Printf("stop retrying to get hist daily quotes for %s, %d [%d]: %+v",
 							code, yr, rt+1, e)
-						return []*model.Quote{}
+						return []*model.Quote{}, false
 					}
 				}
 				khist := model.Khist{}
@@ -215,7 +228,7 @@ RETRY:
 					} else {
 						log.Printf("stop retrying to parse hist kline json for %s, %d [%d]: %+v",
 							code, yr, rt+1, e)
-						return []*model.Quote{}
+						return []*model.Quote{}, false
 					}
 				}
 				kls, more = parseKlines(code, khist.Data, ldate, kldy[len(kldy)-1].Date)
@@ -228,7 +241,7 @@ RETRY:
 	}
 	supplementMisc(kldy, lklid)
 	binsert(kldy, string(klt))
-	return
+	return kldy, true
 }
 
 func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
@@ -246,7 +259,7 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 	return &ktoday.Quote, true, false
 }
 
-func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
+func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote, suc bool) {
 	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
 	var typ string
 	switch klt {
@@ -264,7 +277,7 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
-		}else{
+		} else {
 			log.Printf("%s latest kline data not found, will be fully refreshed", code)
 		}
 	} else {
@@ -314,7 +327,7 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote) {
 	}
 	supplementMisc(quotes, lklid)
 	binsert(quotes, string(klt))
-	return
+	return quotes, true
 }
 
 //Assign KLID, add update datetime
@@ -436,23 +449,6 @@ func getLatestKl(code string, klt KLType, offset int) (q *model.Quote) {
 		return
 	}
 	return
-}
-
-// checks whether the historical kline data is yet to be forward-reinstatement
-func latestUFRXdxr(code string) (x *model.Xdxr) {
-	sql, e := global.Dot.Raw("latestUFRXdxr")
-	util.CheckErr(e, "unable to get sql: latestUFRXdxr")
-	e = dbmap.SelectOne(&x, sql, code, code)
-	if e != nil {
-		if "sql: no rows in result set" == e.Error() {
-			return nil
-		} else {
-			log.Panicln("failed to run sql", e)
-		}
-		return nil
-	} else {
-		return x
-	}
 }
 
 func strip(data []byte) []byte {

@@ -11,5 +11,5 @@ func TestGetStockInfo(t *testing.T){
 
 func TestGetFromExchanges(t *testing.T) {
 	allstk := getFromExchanges()
-	log.Printf("found stocks: %d",len(allstk))
+	log.Printf("found stocks: %d",allstk.Size())
 }

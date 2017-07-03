@@ -23,27 +23,29 @@ func StocksDb() (allstk []*model.Stock) {
 	return
 }
 
-func StocksDbTo(target interface{}){
+func StocksDbTo(target interface{}) {
 	dbmap.Select(target, "select * from basics")
 	return
 }
 
-func GetStockInfo() (allstk []*model.Stock) {
+func GetStockInfo() (allstk *model.Stocks) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
 
 	allstk = getFromExchanges()
-	log.Printf("total stocks: %d", len(allstk))
+	log.Printf("total stocks: %d", allstk.Size())
 
-	save(allstk)
+	save(allstk.List)
 
 	return
 }
 
 //get stock list from official exchange web sites
-func getFromExchanges() (allstk []*model.Stock) {
+func getFromExchanges() (allstk *model.Stocks) {
 	allstk = getSSE()
-	allstk = append(allstk, getSZSE()...)
+	for _, s := range getSZSE() {
+		allstk.Add(s)
+	}
 	return
 }
 
@@ -103,7 +105,7 @@ func getSZSE() (list []*model.Stock) {
 }
 
 //get Shanghai A-share list
-func getSSE() []*model.Stock {
+func getSSE() *model.Stocks {
 	log.Println("Fetching Shanghai A-Share list...")
 
 	url_sh := `http://query.sse.com.cn/security/stock/getStockListData2.do` +
@@ -111,12 +113,12 @@ func getSSE() []*model.Stock {
 	d, e := util.HttpGetBytesUsingHeaders(url_sh, map[string]string{"Referer": "http://www.sse.com" +
 		".cn/assortment/stock/list/share/"})
 	util.CheckErr(e, "failed to get Shanghai A-share list")
-	list := model.StockList{}
-	e = json.Unmarshal(d, &list)
+	list := &model.Stocks{}
+	e = json.Unmarshal(d, list)
 	if e != nil {
 		log.Panicf("failed to parse json from %s\n%+v", url_sh, e)
 	}
-	return list.List
+	return list
 }
 
 //update to database
@@ -373,7 +375,7 @@ func parseQq(chstk chan []*model.Stock, page int, parsePage bool, urlt string, w
 					// skip
 				}
 			})
-			d,t:=util.TimeStr()
+			d, t := util.TimeStr()
 			stk.UDate.Valid = true
 			stk.UTime.Valid = true
 			stk.UDate.String = d
@@ -429,9 +431,24 @@ func (x *xlsxData) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 }
 
 // Update basic info such as P/E, P/UDPPS, P/OCFPS
-func updBasics() {
+func updBasics(stocks *model.Stocks) *model.Stocks {
 	sql, e := dot.Raw("UPD_BASICS")
 	util.CheckErr(e, "failed to get UPD_BASICS sql")
+	sql = fmt.Sprintf(sql, util.Join(stocks.Codes, ",", true))
 	_, e = dbmap.Exec(sql)
 	util.CheckErr(e, "failed to update basics, sql:\n"+sql)
+	log.Printf("%d basics info updated", stocks.Size())
+	return stocks
+}
+
+func collect(stocks *model.Stocks, rstks chan *model.Stock) (wgr *sync.WaitGroup) {
+	wgr = new(sync.WaitGroup)
+	wgr.Add(1)
+	go func() {
+		defer wgr.Done()
+		for stk := range rstks {
+			stocks.Add(stk)
+		}
+	}()
+	return wgr
 }

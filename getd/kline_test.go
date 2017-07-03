@@ -42,6 +42,7 @@ func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}
 	s.Code = "601377"
 	s.Name = "兴业证券"
-	ss := []*model.Stock{s}
+	ss := new(model.Stocks)
+	ss.Add(s)
 	GetKlines(ss, DAY_N, DAY)
 }

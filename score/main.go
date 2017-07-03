@@ -167,7 +167,8 @@ func (r *Result) String() string {
 			for i, c := range itm.Comments {
 				cmt += fmt.Sprintf("%d.%s", i+1, c)
 				if i < len(itm.Comments)-1 {
-					cmt += " \n "
+					//FIXME the last column does not handle \n properly
+					cmt += "\n"
 				}
 			}
 		}

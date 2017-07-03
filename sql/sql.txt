@@ -214,7 +214,7 @@ UPDATE basics b
     FROM
         finance
     WHERE
-        year LIKE '%-12-31'
+        year LIKE '%%-12-31'
     GROUP BY code) f2 USING (code , year)) f USING (code)
         INNER JOIN
     (SELECT
@@ -239,7 +239,10 @@ UPDATE basics b
 SET
     b.pe = ROUND(p.close / f.eps, 2),
     b.po = ROUND(p.close / fl.ocfps, 2),
-    b.pu = ROUND(p.close / fl.udpps, 2)
+    b.pu = ROUND(p.close / fl.udpps, 2),
+    b.udate = curdate(),
+    b.utime = curtime()
+WHERE b.code IN (%s)
 
 -- name: BLUE
 SELECT
@@ -291,3 +294,29 @@ WHERE
     code = ?
 ORDER BY year DESC
 LIMIT ?
+
+-- name: UPD_XPRICE
+UPDATE xdxr x
+        INNER JOIN
+    (SELECT
+        code, MAX(xmx.idx) idx
+    FROM
+        xdxr xmx
+    WHERE
+        progress = '实施方案'
+            AND xmx.xdxr_date <= CURRENT_DATE()
+            AND (xmx.xprice <> 'Y' OR xmx.xprice IS NULL)
+    GROUP BY xmx.code) t USING (code , idx)
+        LEFT JOIN
+    (SELECT
+        code, MAX(idx) idxmn
+    FROM
+        xdxr
+    WHERE
+        xprice = 'Y'
+    GROUP BY code) tmn USING (code)
+SET
+    x.xprice = 'Y'
+WHERE
+    x.code IN (%s)
+        AND x.idx > COALESCE(tmn.idxmn, - 1)

@@ -147,3 +147,18 @@ func SprintFa(fa []float64, format, sep string, ls int) string {
 		return strings.Join(sa, sep)
 	}
 }
+
+func Join(ss []string, sep string, quote bool) string {
+	if quote {
+		rs := ""
+		for i, s := range ss {
+			rs = strconv.Quote(s)
+			if i < len(ss)-1 {
+				rs += sep
+			}
+		}
+		return rs
+	} else {
+		return strings.Join(ss, sep)
+	}
+}

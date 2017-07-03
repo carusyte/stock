@@ -9,6 +9,7 @@ import (
 	"strings"
 	"strconv"
 	"github.com/pkg/errors"
+	"math"
 )
 
 type Stock struct {
@@ -56,12 +57,56 @@ func (s *Stock) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-type StockList struct {
-	Total int
+type Stocks struct {
+	Map   map[string]*Stock
 	List  []*Stock
+	Codes []string
 }
 
-func (l *StockList) String() string {
+func (l *Stocks) Diff(a *Stocks) (same bool, diff []string) {
+	if a == nil {
+		return false, nil
+	}
+	if l.Size() == 0 && a.Size() == 0 {
+		return true, []string{}
+	}
+	diff = make([]string, 0, int(math.Max(16, math.Abs(float64(l.Size()-a.Size())))))
+	for _, c := range l.Codes {
+		if _, exists := a.Map[c]; !exists {
+			diff = append(diff, c)
+		}
+	}
+	for _, c := range a.Codes {
+		if _, exists := l.Map[c]; !exists {
+			diff = append(diff, c)
+		}
+	}
+	return len(diff) == 0, diff
+}
+
+func (l *Stocks) Size() int {
+	return len(l.Codes)
+}
+
+func (l *Stocks) Add(s *Stock) {
+	if s == nil {
+		return
+	}
+	if l.Codes == nil {
+		l.Codes = make([]string, 0, 16)
+	}
+	if l.List == nil {
+		l.List = make([]*Stock, 0, 16)
+	}
+	if l.Map == nil {
+		l.Map = make(map[string]*Stock)
+	}
+	l.Map[s.Code] = s
+	l.List = append(l.List, s)
+	l.Codes = append(l.Codes, s.Code)
+}
+
+func (l *Stocks) String() string {
 	j, e := json.Marshal(l)
 	if e != nil {
 		fmt.Println(e)
@@ -69,17 +114,20 @@ func (l *StockList) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (l *StockList) UnmarshalJSON(b []byte) error {
+func (l *Stocks) UnmarshalJSON(b []byte) error {
 	var f interface{}
 	json.Unmarshal(b, &f)
 	m := f.(map[string]interface{})
 	page := m["pageHelp"].(map[string]interface{})
-	l.Total = int(page["total"].(float64))
+	tot := int(page["total"].(float64))
 	data := page["data"].([]interface{})
-	if len(data) != l.Total {
-		return fmt.Errorf("unmatched total numbers: %d/%d", len(data), l.Total)
+	if len(data) != tot {
+		return fmt.Errorf("unmatched total numbers: %d/%d", len(data), tot)
 	}
-	for _, da := range data {
+	l.List = make([]*Stock, len(data))
+	l.Codes = make([]string, len(data))
+	l.Map = make(map[string]*Stock, len(data))
+	for i, da := range data {
 		s := &Stock{}
 		d := da.(map[string]interface{})
 		if v, e := strconv.ParseFloat(d["totalFlowShares"].(string), 64); e == nil {
@@ -113,7 +161,9 @@ func (l *StockList) UnmarshalJSON(b []byte) error {
 		s.UTime.Valid = true
 		s.UDate.String = dt
 		s.UTime.String = tm
-		l.List = append(l.List, s)
+		l.List[i] = s
+		l.Codes[i] = s.Code
+		l.Map[s.Code] = s
 	}
 	return nil
 }

@@ -9,54 +9,80 @@ import (
 	"strings"
 	"sync"
 	"github.com/carusyte/stock/global"
+	"database/sql"
 )
 
 const HIST_DATA_SIZE = 200
 const JOB_CAPACITY = global.JOB_CAPACITY
 const MAX_CONCURRENCY = global.MAX_CONCURRENCY
 
-var(
+var (
 	dbmap = global.Dbmap
-	dot = global.Dot
+	dot   = global.Dot
 )
 
-func CalcIndics(stocks []*model.Stock) {
+func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("calculating indices...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, JOB_CAPACITY)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, chrstk)
 	for i := 0; i < MAX_CONCURRENCY; i++ {
 		wg.Add(1)
-		go doCalcIndices(chstk, &wg)
+		go doCalcIndices(chstk, &wg, chrstk)
 	}
-	for _, s := range stocks {
+	for _, s := range stocks.List {
 		chstk <- s
 	}
 	close(chstk)
 	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d indicators updated", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
 }
 
-func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup) {
+func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	for stock := range chstk {
 		code := stock.Code
-		calcDay(code, 3)
-		calcWeek(code, 2)
-		calcMonth(code, 2)
+		var offd, offw, offm int64 = 3, 2, 2
+		lx := latestUFRXdxr(code)
+		if lx != nil {
+			offd, offw, offm = -1, -1, -1
+		}
+		calcDay(code, offd)
+		calcWeek(code, offw)
+		calcMonth(code, offm)
+		chrstk <- stock
 	}
 }
 
 func calcWeek(code string, offset int64) {
-	mxw, err := dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
-	util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
-	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_w where code=?", code)
-	util.CheckErr(err, "failed to query max klid in kline_w for "+code)
-	if !mxk.Valid || (mxw.Valid && mxk.Int64 < mxw.Int64) {
-		//no new kline_w data yet
-		return
+	var (
+		mxw sql.NullInt64
+		err error
+	)
+	if offset >= 0 {
+		mxw, err = dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
+		util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
+		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_w where code=?", code)
+		util.CheckErr(err, "failed to query max klid in kline_w for "+code)
+		if !mxk.Valid || (mxw.Valid && mxk.Int64 < mxw.Int64) {
+			//no new kline_w data yet
+			return
+		}
 	}
 
 	var qw []*model.Quote
-	if !mxw.Valid || mxw.Int64-offset-HIST_DATA_SIZE <= 0 {
+	if offset < 0 || !mxw.Valid || mxw.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qw, "select * from kline_w where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_w for "+code)
 	} else {
@@ -74,17 +100,23 @@ func calcWeek(code string, offset int64) {
 }
 
 func calcMonth(code string, offset int64) {
-	mxm, err := dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
-	util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
-	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_m where code=?", code)
-	util.CheckErr(err, "failed to query max klid in kline_m for "+code)
-	if !mxk.Valid || (mxm.Valid && mxk.Int64 < mxm.Int64) {
-		//no new kline_d data yet
-		return
+	var (
+		mxm sql.NullInt64
+		err error
+	)
+	if offset >= 0 {
+		mxm, err = dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
+		util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
+		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_m where code=?", code)
+		util.CheckErr(err, "failed to query max klid in kline_m for "+code)
+		if !mxk.Valid || (mxm.Valid && mxk.Int64 < mxm.Int64) {
+			//no new kline_d data yet
+			return
+		}
 	}
 
 	var qm []*model.Quote
-	if !mxm.Valid || mxm.Int64-offset-HIST_DATA_SIZE <= 0 {
+	if offset < 0 || !mxm.Valid || mxm.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qm, "select * from kline_m where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_m for "+code)
 	} else {
@@ -102,17 +134,23 @@ func calcMonth(code string, offset int64) {
 }
 
 func calcDay(code string, offset int64) {
-	mxd, err := dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
-	util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
-	mxk, err := dbmap.SelectNullInt("select max(klid) from kline_d where code=?", code)
-	util.CheckErr(err, "failed to query max klid in kline_d for "+code)
-	if !mxk.Valid || (mxd.Valid && mxk.Int64 < mxd.Int64) {
-		//no new kline_d data yet
-		return
+	var (
+		mxd sql.NullInt64
+		err error
+	)
+	if offset >= 0 {
+		mxd, err = dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
+		util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
+		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_d where code=?", code)
+		util.CheckErr(err, "failed to query max klid in kline_d for "+code)
+		if !mxk.Valid || (mxd.Valid && mxk.Int64 < mxd.Int64) {
+			//no new kline_d data yet
+			return
+		}
 	}
 
 	var qd []*model.Quote
-	if !mxd.Valid || mxd.Int64-offset-HIST_DATA_SIZE <= 0 {
+	if offset < 0 || !mxd.Valid || mxd.Int64-offset-HIST_DATA_SIZE <= 0 {
 		_, err := dbmap.Select(&qd, "select code,date,klid,open,high,close,low,volume,amount,xrate from "+
 			"kline_d where code = ? order by klid", code)
 		util.CheckErr(err, "Failed to query kline_d for "+code)
@@ -136,7 +174,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		valueArgs := make([]interface{}, 0, len(indc)*6)
 		var code string
 		for _, i := range indc {
-			d,t := util.TimeStr()
+			d, t := util.TimeStr()
 			i.Udate.Valid = true
 			i.Utime.Valid = true
 			i.Udate.String = d

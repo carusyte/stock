@@ -11,15 +11,16 @@ import (
 )
 
 const LOGFILE = "stock.log"
-const MAX_CONCURRENCY = 8
+const MAX_CONCURRENCY = 16
 const JOB_CAPACITY = 512
+
 // will make some of the requests via proxy, 0.6 = 3/5
 const PART_PROXY = 0
 const PROXY_ADDR = "127.0.0.1:1080"
 
 var (
 	Dbmap *gorp.DbMap
-	Dot *dotsql.DotSql
+	Dot   *dotsql.DotSql
 )
 
 func init() {
@@ -34,6 +35,7 @@ func init() {
 	Dbmap = db.Get(true, false)
 	util.PART_PROXY = PART_PROXY
 	util.PROXY_ADDR = PROXY_ADDR
-	Dot, e = dotsql.LoadFromFile("../sql/sql.txt")
+	pwd, _ := os.Getwd()
+	Dot, e = dotsql.LoadFromFile(pwd + "/sql/sql.txt")
 	util.CheckErr(e, "failed to init dotsql")
 }

@@ -62,7 +62,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 	} else {
 		sql, e := dot.Raw("BLUE_SCOPED")
 		util.CheckErr(e, "failed to get BLUE_SCOPED sql")
-		sql = fmt.Sprintf(sql, strings.Join(s,","))
+		sql = fmt.Sprintf(sql, strings.Join(s, ","))
 		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	}
@@ -274,6 +274,13 @@ func (b *BlueChip) GetFieldStr(name string) string {
 }
 
 func (b *BlueChip) Description() string {
-	//TODO write some description
-	return ""
+	return "Search for stocks with excellent financial report." +
+		"Medium to long term model, mainly focusing on yearly financial reports." +
+		"· Low latest P/E, normally below 50" +
+		"· Growing EPS each year and quarter, up to 3 years" +
+		"· Low latest P/U" +
+		"· Growing UDPPS each year and quarter, up to 3 years" +
+		"Get warnings/penalties if:" +
+		"· High latest DAR" +
+		"· High average DAR, up to 3 years"
 }
