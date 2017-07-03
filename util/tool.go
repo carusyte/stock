@@ -152,7 +152,7 @@ func Join(ss []string, sep string, quote bool) string {
 	if quote {
 		rs := ""
 		for i, s := range ss {
-			rs = strconv.Quote(s)
+			rs += fmt.Sprintf("'%s'", s)
 			if i < len(ss)-1 {
 				rs += sep
 			}

@@ -35,7 +35,11 @@ func init() {
 	Dbmap = db.Get(true, false)
 	util.PART_PROXY = PART_PROXY
 	util.PROXY_ADDR = PROXY_ADDR
-	pwd, _ := os.Getwd()
-	Dot, e = dotsql.LoadFromFile(pwd + "/sql/sql.txt")
+	sqlp := "../sql/sql.txt"
+	if _, e = os.Stat(sqlp); e != nil {
+		pwd, _ := os.Getwd()
+		sqlp = pwd + "/sql/sql.txt"
+	}
+	Dot, e = dotsql.LoadFromFile(sqlp)
 	util.CheckErr(e, "failed to init dotsql")
 }

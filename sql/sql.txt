@@ -297,15 +297,15 @@ LIMIT ?
 
 -- name: UPD_XPRICE
 UPDATE xdxr x
-        INNER JOIN
+       INNER JOIN
     (SELECT
         code, MAX(xmx.idx) idx
     FROM
         xdxr xmx
     WHERE
         progress = '实施方案'
-            AND xmx.xdxr_date <= CURRENT_DATE()
-            AND (xmx.xprice <> 'Y' OR xmx.xprice IS NULL)
+        AND xmx.xdxr_date <= CURRENT_DATE()
+        AND (xmx.xprice <> 'Y' OR xmx.xprice IS NULL)
     GROUP BY xmx.code) t USING (code , idx)
         LEFT JOIN
     (SELECT
