@@ -129,15 +129,18 @@ func (r *Result) String() string {
 	table := tablewriter.NewWriter(&bytes)
 	table.SetRowLine(true)
 
-	var hd []string
+	hd := make([]string, 0, 16)
 	hd = append(hd, "Rank")
 	hd = append(hd, "Code")
 	hd = append(hd, "Name")
 	hd = append(hd, "Score")
 	fns := []string{}
 	fidx := map[string]int{}
-	idx := 4
+	pfidx := map[string]int{}
+	idx := 4 + len(r.PfIds)
 	for _, pfid := range r.PfIds {
+		pfidx[pfid] = len(hd)
+		hd = append(hd, pfid)
 		for _, fn := range r.Fields[pfid] {
 			fns = append(fns, fn)
 			fidx[pfid+"."+fn] = idx
@@ -156,6 +159,7 @@ func (r *Result) String() string {
 		data[i][2] = itm.Name
 		data[i][3] = fmt.Sprintf("%.2f", itm.Score)
 		for pfid, p := range itm.Profiles {
+			data[i][pfidx[pfid]] = fmt.Sprintf("%.2f", p.Score)
 			for _, fn := range r.Fields[pfid] {
 				data[i][fidx[pfid+"."+fn]] = p.FieldHolder.GetFieldStr(fn)
 			}
@@ -167,7 +171,6 @@ func (r *Result) String() string {
 			for i, c := range itm.Comments {
 				cmt += fmt.Sprintf("%d.%s", i+1, c)
 				if i < len(itm.Comments)-1 {
-					//FIXME the last column does not handle \n properly
 					cmt += "\n"
 				}
 			}

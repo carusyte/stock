@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"github.com/pkg/errors"
 	"github.com/montanaflynn/stats"
+	"github.com/carusyte/stock/indc"
 )
 
 // Medium to Long term model.
@@ -70,8 +71,6 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		//TODO select by specified stock codes
 	}
 
-	//FIXME fix consecutive year detection
-	//FIXME prefer SMA
 	for _, ih := range hids {
 		item := new(Item)
 		r.AddItem(item)
@@ -93,13 +92,14 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 
 		ip.Score += scoreDyrHist(ih)
 
-		ip.Score += scoreRegDate(ih, SCORE_REG_DATE)
+		ip.Score += scoreRegDate(ih, item, SCORE_REG_DATE)
 
 		//warn if dpr is greater than 90%
 		if ih.Dpr.Valid && ih.Dpr.Float64 > 0.9 {
 			item.Cmtf("DPR is high at %.1f%%", ih.Dpr.Float64*100)
 		}
 
+		ip.Score = math.Max(0, ip.Score)
 		item.Score += ip.Score
 	}
 	r.SetFields(h.Id(), h.Fields()...)
@@ -111,11 +111,11 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 }
 
 //Score by dividend registration date of the year. There might be multiple dividend events in one year.
-//The price of stock might get volatile on and immediately after the registration date.
+//The price of stock might get volatile around the registration date.
 //Score is weighted by each dividend amount.
 //Get max score if the registration date is more than 3 days ago or there are 10 days or more before that date.
 //Otherwise, the closer to the registration date, the less we score, on that date, we get 0.
-func scoreRegDate(ih *HiD, m float64) (s float64) {
+func scoreRegDate(ih *HiD, item *Item, m float64) (s float64) {
 	//supplement XdxrDate, RegDate, might get multiple dates in one year
 	sql, e := dot.Raw("HID_XDXR_DATES")
 	util.CheckErr(e, "failed to get HID_XDXR_DATES sql")
@@ -136,6 +136,9 @@ func scoreRegDate(ih *HiD, m float64) (s float64) {
 				base = math.Abs(float64(days)) / 10 * m
 			} else {
 				base = m
+			}
+			if days >= 0 {
+				item.Cmtf("XDXR Reg date: %s", x.RegDate.String)
 			}
 		} else {
 			ih.RegDate = ih.RegDate + "-----"
@@ -158,6 +161,7 @@ func scoreRegDate(ih *HiD, m float64) (s float64) {
 			ih.XdxrDate = ih.XdxrDate + "/"
 		}
 	}
+	s = math.Min(m, s)
 	return
 }
 
@@ -165,7 +169,7 @@ func scoreDyrHist(ih *HiD) (s float64) {
 	sql, e := dot.Raw("HID_HIST")
 	util.CheckErr(e, "failed to get HID_HIST sql")
 	var hist []*HiD
-	_, e = dbmap.Select(&hist, sql, ih.Code, AVG_GR_HIST_SIZE+1)
+	_, e = dbmap.Select(&hist, sql, ih.Code)
 	util.CheckErr(e, "failed to query hid hist for "+ih.Code)
 	s += scoreDyrAvg(ih, hist, SCORE_DYR_AVG)
 	s += scoreDyrGr(ih, hist, SCORE_DYR_GR)
@@ -179,12 +183,12 @@ func scoreDyrHist(ih *HiD) (s float64) {
 // Get 0 if ratio <= 3
 func scoreDyr2Dpr(ih *HiD, m float64) float64 {
 	if ih.DprAvg != 0 {
-		r := ih.DyrAvg / ih.DprAvg * 100
+		r := ih.DyrAvg / ih.DprAvg * 100.0
 		ih.Dyr2Dpr = r
 		if r <= 3 {
 			return 0
 		} else {
-			return m * math.Min(1, math.Pow((r-3)/7, 3.75))
+			return m * math.Min(1, math.Pow((r-3)/7, 0.35))
 		}
 	} else {
 		return m
@@ -211,20 +215,28 @@ func fineDpr(ih *HiD, hist []*HiD, m float64) float64 {
 	return (p1 + p2) * m
 }
 
-//Score by Dyr average.
-//Get max socre if average DYR of up to 5 years >= 6%
+//Score by SMA DYR.
+//Get max socre if SMA DYR >= 6% and more than 5 years dividend recorded.
 func scoreDyrAvg(ih *HiD, hist []*HiD, m float64) float64 {
-	avg := .0
-	l := 0
-	if len(hist) < 2 {
-		ih.DyrAvg = avg
-		ih.DyrAvgYrs = l
+	if len(hist) < 1 {
+		ih.DyrAvg = 0
+		ih.DyrAvgYrs = 0
+		ih.DprAvg = 0
+		ih.DprAvgYrs = 0
 		return 0
 	} else {
-		dyrs := make([]float64, len(hist)-1)
-		dprs := make([]float64, len(hist)-1)
-		l = len(dyrs)
-		for i, ihist := range hist[:len(hist)-1] {
+		dyrs := make([]float64, len(hist))
+		dprs := make([]float64, len(hist))
+		yrs := .0
+		countyrs := true
+		for i, ihist := range hist {
+			if ihist.Divi.Valid {
+				if countyrs {
+					yrs++
+				}
+			} else {
+				countyrs = false
+			}
 			if ihist.Dyr.Valid {
 				dyrs[i] = ihist.Dyr.Float64
 			} else {
@@ -236,32 +248,40 @@ func scoreDyrAvg(ih *HiD, hist []*HiD, m float64) float64 {
 				dprs[i] = 0
 			}
 		}
+		s := 0.3 * m * math.Min(1, math.Pow(yrs/AVG_GR_HIST_SIZE, 1.82))
 		var e error
-		avg, e = stats.Mean(dyrs)
-		util.CheckErr(e, "failed to calculate average dyr: "+fmt.Sprint(dyrs))
-		ih.DyrAvg = avg
-		ih.DyrAvgYrs = l
-		avg, e = stats.Mean(dprs)
-		util.CheckErr(e, "failed to calculate average dpr: "+fmt.Sprint(dprs))
-		ih.DprAvg = avg
+		avgDyr := .0
+		avgDpr := .0
+		if len(hist) < 3 {
+			avgDyr, e = stats.Mean(dyrs)
+			util.CheckErr(e, "failed to calculate average dyr: "+fmt.Sprint(dyrs))
+			avgDpr, e = stats.Mean(dprs)
+			util.CheckErr(e, "failed to calculate average dpr: "+fmt.Sprint(dprs))
+		} else {
+			util.ReverseF64s(dyrs, false)
+			util.ReverseF64s(dprs, false)
+			avgDyr = indc.SMA(dyrs, 3, 1)[len(dyrs)-1]
+			avgDpr = indc.SMA(dprs, 3, 1)[len(dprs)-1]
+		}
+		ih.DyrAvg = avgDyr
+		ih.DyrAvgYrs = len(dyrs)
+		ih.DprAvg = avgDpr
 		ih.DprAvgYrs = len(dprs)
-		return m * math.Min(1, math.Pow(ih.DyrAvg/0.06, 2.85))
+		s += 0.7 * m * math.Min(1, math.Pow(avgDyr/0.06, 2.85))
+		return s
 	}
 }
 
 //Score according to dyr growth rate.
-//Get 4/5 max score if growth rate is all positive and full max if avg >= 15%.
-//Otherwise, get 4/5 max if avg growth rate >= 50% and get 0 if avg negative growth rate is <= -33%
-//or sum of non-dividend year is greater than 3.
+//Get max score if SMA DYR GR >= 15%，
+//Get 0 if SMA DYR GR <= -20% or, more than 2/5 negative growth counts and avg negative growth rate is <= -50%
 func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
-	if len(hist) < 2 {
+	if len(hist) < 1 {
 		ih.DyrGrYoy = "---"
 		return 0
 	} else {
-		positive := true
-		grs := make([]float64, len(hist)-1)
+		grs := make([]float64, len(hist))
 		ngrs := make([]float64, 0)
-		nodiv := .0
 		for j, ihist := range hist {
 			if j < len(hist)-1 {
 				var gr float64
@@ -271,40 +291,45 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 					gr = 100.0
 				} else {
 					gr = -100.0
-					nodiv++
 				}
 				grs[j] = gr
-				ih.DyrGrYoy = ih.DyrGrYoy + fmt.Sprintf("%.1f", gr)
-				if j < len(hist)-2 {
-					ih.DyrGrYoy = ih.DyrGrYoy + "/"
+				if j < AVG_GR_HIST_SIZE {
+					ih.DyrGrYoy = ih.DyrGrYoy + fmt.Sprintf("%.1f", gr)
+					if j < int(math.Min(AVG_GR_HIST_SIZE-1, float64(len(hist)-2))) {
+						ih.DyrGrYoy = ih.DyrGrYoy + "/"
+					}
 				}
 				if gr < 0 {
 					ngrs = append(ngrs, gr)
-					positive = false
 				}
 			}
 		}
-
-		avg, e := stats.Mean(grs)
-		util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
-		if len(grs) >= AVG_GR_HIST_SIZE && positive {
-			return (4.0 + math.Min(1, math.Pow(avg/15.0, 0.21))) / 5.0 * m
+		var (
+			avg  = .0
+			navg = .0
+			p    = .0
+			e    error
+		)
+		if len(ngrs) > 0 {
+			navg, e = stats.Mean(ngrs)
+			util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
+			if float64(len(ngrs))/float64(len(grs)) > 2./5. && navg <= -50 {
+				return 0
+			}
+			p = m * math.Min(1, math.Pow(-1*navg/50, 3.12))
+		}
+		if len(grs) < 3 {
+			avg, e = stats.Mean(grs)
+			util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
 		} else {
-			if nodiv > 3 {
-				return 0
-			}
-			if avg <= -33 {
-				return 0
-			} else {
-				s := 4.0 / 5.0 * m
-				s *= math.Min(1, math.Pow((33+avg)/83, 1.68))
-				if len(ngrs) > 0 {
-					navg, e := stats.Mean(ngrs)
-					util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(ngrs))
-					s = math.Max(0, s-math.Pow(-1*navg/33, 1.35))
-				}
-				return s
-			}
+			util.ReverseF64s(grs, false)
+			avg = indc.SMA(grs, 3, 1)[len(grs)-1]
+		}
+		if avg <= -20 {
+			return 0
+		} else {
+			s := m*math.Min(1, math.Pow((20+avg)/35, 1.68)) - p
+			return math.Max(0, s)
 		}
 	}
 }

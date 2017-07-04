@@ -81,7 +81,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		hist := getFinHist(ib.Code)
 		ip.Score += sEps(ib, hist)
 		ip.Score += sUdpps(ib, hist)
-		ip.Score -= pDar(ib, hist)
+		ip.Score = math.Max(0, ip.Score-pDar(ib, hist))
 
 		if ib.Dar.Valid && ib.Dar.Float64 >= 90 {
 			item.Cmtf("DAR is high at %.0f", ib.Dar.Float64)
@@ -155,7 +155,9 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 	ZERO_PU := 10.
 	MAX_PU := 1.
 	// score latest P/U
-	if b.Pu.Float64 < 0 || b.Pu.Float64 >= ZERO_PU {
+	if !b.Pu.Valid {
+		s = 0
+	} else if b.Pu.Float64 < 0 || b.Pu.Float64 >= ZERO_PU {
 		s = 0
 	} else {
 		s = SCORE_PU * math.Min(1, math.Pow((ZERO_PU-b.Pu.Float64)/(ZERO_PU-MAX_PU), 0.5))
@@ -239,8 +241,8 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 			grs = append(grs, f.EpsYoy.Float64)
 			if grs[i] < 0 {
 				ngrs = append(ngrs, grs[i])
-			}
-			if countyr {
+				countyr = false
+			} else if countyr {
 				yrs++
 			}
 		} else {
@@ -266,7 +268,7 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 	b.EpsGrAvg = avg
 	s += 2. / 5. * SCORE_GEPS * math.Min(1, math.Pow(yrs/3/4., 1.74))
 	if avg >= -15. {
-		s += 3. / 5. * SCORE_GEPS * math.Min(1, math.Pow((15.+avg)/30., 0.55))
+		s += 3. / 5. * SCORE_GEPS * math.Min(1, math.Pow((15.+avg)/30., 1.75))
 	}
 	if len(ngrs) > 0 {
 		navg, e := stats.Mean(ngrs)

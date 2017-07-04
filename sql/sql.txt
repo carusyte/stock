@@ -125,7 +125,6 @@ WHERE code = ?
     AND board_date is not null
 GROUP BY code , name , year
 ORDER BY year DESC
-LIMIT ?
 
 -- name: HID_XDXR_DATES
 SELECT
