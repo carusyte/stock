@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func BenchmarkCombineResults(b *testing.B) {
+func TestCombineResults(t *testing.T) {
 	r1 := new(HiD).Geta()
 	r1.Weight = 0.5
 	r2 := new(BlueChip).Geta()

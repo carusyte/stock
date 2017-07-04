@@ -70,6 +70,8 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		//TODO select by specified stock codes
 	}
 
+	//FIXME fix consecutive year detection
+	//FIXME prefer SMA
 	for _, ih := range hids {
 		item := new(Item)
 		r.AddItem(item)

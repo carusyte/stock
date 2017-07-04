@@ -59,7 +59,6 @@ func finMark(stks *model.Stocks) *model.Stocks {
 	sql, e := dot.Raw("UPD_XPRICE")
 	util.CheckErr(e, "failed to get UPD_XPRICE sql")
 	sql = fmt.Sprintf(sql, util.Join(stks.Codes, ",", true))
-	fmt.Printf("sql:\n%s",sql)
 	_, e = dbmap.Exec(sql)
 	util.CheckErr(e, "failed to update xprice, sql:\n"+sql)
 	log.Printf("%d xprice mark updated", stks.Size())

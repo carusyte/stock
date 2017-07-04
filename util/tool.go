@@ -9,10 +9,25 @@ import (
 	"math"
 )
 
-func Reverse(s []*interface{}) {
+func Reverse(s []interface{}) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
+}
+
+func ReverseF64s(s []float64, returnNew bool) (rs []float64) {
+	if returnNew {
+		rs = make([]float64, len(s))
+		for i, f := range s {
+			rs[len(s)-i-1] = f
+		}
+	} else {
+		for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+			s[i], s[j] = s[j], s[i]
+		}
+		rs = s
+	}
+	return
 }
 
 func Str2F64(s string) (f float64) {

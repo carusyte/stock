@@ -261,7 +261,6 @@ FROM
     GROUP BY code) fi USING (code , year)) f USING (code)
 WHERE
     b.pe IS NOT NULL AND b.pe > 0
-        AND b.pe <= ?
 ORDER BY pe ASC
 
 -- name: BLUE_SCOPED
@@ -282,7 +281,6 @@ FROM
     GROUP BY code) fi USING (code , year)) f USING (code)
 WHERE
     b.pe IS NOT NULL AND b.pe > 0
-    AND b.pe <= ?
 ORDER BY pe ASC
 
 -- name: BLUE_HIST
@@ -293,7 +291,6 @@ FROM
 WHERE
     code = ?
 ORDER BY year DESC
-LIMIT ?
 
 -- name: UPD_XPRICE
 UPDATE xdxr x

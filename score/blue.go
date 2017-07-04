@@ -10,17 +10,18 @@ import (
 	"database/sql"
 	"github.com/montanaflynn/stats"
 	"strings"
+	"github.com/carusyte/stock/indc"
 )
 
 // Search for stocks with excellent financial report.
 // Medium to long term model, mainly focusing on yearly financial reports.
-// · Low latest P/E, normally below 50
-// · Growing EPS each year and quarter, up to 3 years
+// · Low latest P/E
+// · Growing EPS each year and quarter
 // · Low latest P/U
-// · Growing UDPPS each year and quarter, up to 3 years
+// · Growing UDPPS each year and quarter
 // Get warnings/penalties if:
 // · High latest DAR
-// · High average DAR, up to 3 years
+// · High average DAR
 type BlueChip struct {
 	model.Finance
 	Name       string
@@ -37,13 +38,13 @@ type BlueChip struct {
 
 // The assessment metric diverts, some of them are somewhat negative correlated.
 const (
-	SCORE_PE            = 20.
-	SCORE_GEPS          = 30.
-	SCORE_PU            = 35.
-	SCORE_GUDPPS        = 15.
-	PENALTY_DAR         = 15.
-	PE_THRESHOLD        = 50.
-	BLUE_HIST_SPAN_YEAR = 3.
+	SCORE_PE     = 20.
+	SCORE_GEPS   = 30.
+	SCORE_PU     = 35.
+	SCORE_GUDPPS = 15.
+	PENALTY_DAR  = 15.
+	//PE_THRESHOLD        = 50.
+	//BLUE_HIST_SPAN_YEAR = 3.
 )
 
 func (b *BlueChip) Geta() (r *Result) {
@@ -57,13 +58,13 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("BLUE")
 		util.CheckErr(e, "failed to get BLUE sql")
-		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
+		_, e = dbmap.Select(&blus, sql)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	} else {
 		sql, e := dot.Raw("BLUE_SCOPED")
 		util.CheckErr(e, "failed to get BLUE_SCOPED sql")
 		sql = fmt.Sprintf(sql, strings.Join(s, ","))
-		_, e = dbmap.Select(&blus, sql, PE_THRESHOLD)
+		_, e = dbmap.Select(&blus, sql)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	}
 
@@ -77,8 +78,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		item.Profiles[b.Id()] = ip
 		ip.FieldHolder = ib
 
-		hist := getFinHist(ib.Code, BLUE_HIST_SPAN_YEAR*4)
-
+		hist := getFinHist(ib.Code)
 		ip.Score += sEps(ib, hist)
 		ip.Score += sUdpps(ib, hist)
 		ip.Score -= pDar(ib, hist)
@@ -102,8 +102,8 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 
 // Fine for max penalty if
 // · Latest DAR >= 100
-// · Average DAR >= 95
-// Baseline: Latest DAR <= 80% and avg DAR <= 70%
+// · SMA(DAR,3) >= 95
+// Baseline: Latest DAR <= 80% and SMA DAR <= 70%
 func pDar(b *BlueChip, hist []*model.Finance) (s float64) {
 	MAX_DAR := 100.
 	ZERO_DAR := 80.
@@ -114,27 +114,42 @@ func pDar(b *BlueChip, hist []*model.Finance) (s float64) {
 		s = 1. / 2. * PENALTY_DAR * math.Min(1, math.Pow((b.Dar.Float64-ZERO_DAR)/(MAX_DAR-ZERO_DAR), 4.37))
 	}
 	// fine average DAR
-	dars := make([]float64, BLUE_HIST_SPAN_YEAR*4)
-	for i, h := range hist {
+	dars := make([]float64, 0, 16)
+	for _, h := range hist {
 		if h.Dar.Valid {
-			dars[i] = h.Dar.Float64
+			dars = append(dars, h.Dar.Float64)
 		} else {
-			dars[i] = 0
+			// default penalty for no DAR data available
+			dars = append(dars, 80)
 		}
 	}
-	avg, e := stats.Mean(dars)
-	util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", dars))
+	if len(dars) > 4 {
+		b.Dars = dars[:4]
+	} else {
+		b.Dars = dars
+	}
+	var (
+		avg float64 = 0
+		e   error
+	)
+	if len(dars) > 2 {
+		rdars := util.ReverseF64s(dars, true)
+		madars := indc.SMA(rdars, 3, 1)
+		avg = madars[len(madars)-1]
+	} else {
+		avg, e = stats.Mean(dars)
+		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", dars))
+	}
 	b.DarAvg = avg
 	if avg > 70 {
 		s += 1. / 2. * PENALTY_DAR * math.Min(1, math.Pow((avg-70.)/(95.-70.), 2.1))
 	}
-	b.Dars = dars
 	return
 }
 
 // Score by assessing UDPPS or P/U.
 // P/U: Get max score if latest P/U <= 1, get 0 if P/U >= 10
-// UDPPS: Get max score if UDPPS_YOY is all positive and complete, and avg UDPPS_YOY >= 10%;
+// UDPPS: Get max score if UDPPS_YOY is all positive and complete for 3 years, and SMA UDPPS_YOY >= 10%;
 //        Get 0 if avg negative growth rate is <= -70%
 func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 	ZERO_PU := 10.
@@ -146,22 +161,41 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 		s = SCORE_PU * math.Min(1, math.Pow((ZERO_PU-b.Pu.Float64)/(ZERO_PU-MAX_PU), 0.5))
 	}
 	// score UDPPS growth rate
-	grs := make([]float64, BLUE_HIST_SPAN_YEAR*4)
-	ngrs := make([]float64, 0)
+	grs := make([]float64, 0, 16)
+	ngrs := make([]float64, 0, 16)
+	yrs := .0
+	countyr := true
 	for i, f := range fins {
 		if f.UdppsYoy.Valid {
-			grs[i] = f.UdppsYoy.Float64
+			grs = append(grs, f.UdppsYoy.Float64)
 			if grs[i] < 0 {
 				ngrs = append(ngrs, grs[i])
 			}
+			if countyr {
+				yrs++
+			}
 		} else {
-			grs[i] = 0
+			grs = append(grs, 0)
+			countyr = false
 		}
 	}
-	avg, e := stats.Mean(grs)
-	util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
+	if len(grs) > 4 {
+		b.UdppsGrs = grs[:4]
+	} else {
+		b.UdppsGrs = grs
+	}
+	var avg = .0
+	var e error
+	if len(grs) > 2 {
+		rgrs := util.ReverseF64s(grs, true)
+		magrs := indc.SMA(rgrs, 3, 1)
+		avg = magrs[len(magrs)-1]
+	} else {
+		avg, e = stats.Mean(grs)
+		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
+	}
 	b.UdppsGrAvg = avg
-	s += 2. / 5. * SCORE_GUDPPS * math.Min(1, math.Pow(float64(len(fins))/BLUE_HIST_SPAN_YEAR/4., 1.74))
+	s += 2. / 5. * SCORE_GUDPPS * math.Min(1, math.Pow(yrs/3/4., 1.74))
 	if avg >= -20. {
 		s += 3. / 5. * SCORE_GUDPPS * math.Min(1, math.Pow((20.+avg)/30., 0.55))
 	}
@@ -169,22 +203,22 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 		navg, e := stats.Mean(ngrs)
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", ngrs))
 		s -= SCORE_GUDPPS * math.Min(1, math.Pow(navg / -70., 3.12))
+		s = math.Max(0, s)
 	}
-	b.UdppsGrs = grs
 	return
 }
 
-func getFinHist(code string, size int) (fins []*model.Finance) {
+func getFinHist(code string) (fins []*model.Finance) {
 	sql, e := dot.Raw("BLUE_HIST")
 	util.CheckErr(e, "failed to get BLUE_HIST sql")
-	_, e = dbmap.Select(&fins, sql, code, size)
+	_, e = dbmap.Select(&fins, sql, code)
 	util.CheckErr(e, "failed to query BLUE_HIST for "+code)
 	return
 }
 
 // Score by assessing EPS or P/E
 // P/E: Get max score if 0 < P/E <= 5, get 0 if P/E >= 40
-// EPS GR: Get max score if EPS_YOY is all positive and complete, and avg EPS_YOY >= 15;
+// EPS GR: Get max score if EPS_YOY is all positive and complete for 3 years, and SMA EPS_YOY >= 15;
 //         Get 0 if avg negative growth rate is <= -80%
 func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 	ZERO_PE := 40.
@@ -196,22 +230,41 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 		s = SCORE_PE * math.Min(1, math.Pow((ZERO_PE-b.Pe.Float64)/(ZERO_PE-MAX_PE), 0.5))
 	}
 	// score EPS growth rate
-	grs := make([]float64, BLUE_HIST_SPAN_YEAR*4)
-	ngrs := make([]float64, 0)
+	grs := make([]float64, 0, 16)
+	ngrs := make([]float64, 0, 16)
+	yrs := .0
+	countyr := true
 	for i, f := range hist {
 		if f.EpsYoy.Valid {
-			grs[i] = f.EpsYoy.Float64
+			grs = append(grs, f.EpsYoy.Float64)
 			if grs[i] < 0 {
 				ngrs = append(ngrs, grs[i])
 			}
+			if countyr {
+				yrs++
+			}
 		} else {
-			grs[i] = 0
+			grs = append(grs, 0)
+			countyr = false
 		}
 	}
-	avg, e := stats.Mean(grs)
-	util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
+	if len(grs) > 4 {
+		b.EpsGrs = grs[:4]
+	} else {
+		b.EpsGrs = grs
+	}
+	var avg = .0
+	var e error
+	if len(grs) > 2 {
+		rgrs := util.ReverseF64s(grs, true)
+		magrs := indc.SMA(rgrs, 3, 1)
+		avg = magrs[len(magrs)-1]
+	} else {
+		avg, e = stats.Mean(grs)
+		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
+	}
 	b.EpsGrAvg = avg
-	s += 2. / 5. * SCORE_GEPS * math.Min(1, math.Pow(float64(len(hist))/BLUE_HIST_SPAN_YEAR/4., 1.74))
+	s += 2. / 5. * SCORE_GEPS * math.Min(1, math.Pow(yrs/3/4., 1.74))
 	if avg >= -15. {
 		s += 3. / 5. * SCORE_GEPS * math.Min(1, math.Pow((15.+avg)/30., 0.55))
 	}
@@ -221,7 +274,6 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 		s -= SCORE_GEPS * math.Min(1, math.Pow(navg / -80., 3.12))
 		s = math.Max(0, s)
 	}
-	b.EpsGrs = grs
 	return
 }
 
