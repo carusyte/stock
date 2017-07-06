@@ -153,8 +153,15 @@ RETRY:
 		}
 
 		if klast.Data == "" {
-			log.Printf("%s last data may not be ready yet", code)
-			return []*model.Quote{}, false
+			if rt < RETRIES {
+				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code, rt+1, e,
+					url_last, string(body))
+				continue
+			} else {
+				log.Printf("%s last data may not be ready yet, please check with the web site. retried:%d"+
+					"\n%s\n%s", code, rt+1, url_last, string(body))
+				return []*model.Quote{}, false
+			}
 		}
 
 		ldate = ""
