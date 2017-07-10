@@ -23,6 +23,12 @@ func StocksDb() (allstk []*model.Stock) {
 	return
 }
 
+func StocksDbByCode(code ... string) (stocks []*model.Stock) {
+	sql := fmt.Sprintf("select * from basics where code in (%s)", util.Join(code, ",", true))
+	dbmap.Select(&stocks, sql)
+	return
+}
+
 func StocksDbTo(target interface{}) {
 	dbmap.Select(target, "select * from basics")
 	return

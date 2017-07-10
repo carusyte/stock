@@ -12,6 +12,18 @@ import (
 	"math"
 )
 
+type DBTab string
+
+const (
+	INDICATOR_DAY   DBTab = "indicator_d"
+	INDICATOR_WEEK  DBTab = "indicator_w"
+	INDICATOR_MONTH DBTab = "indicator_m"
+	KLINE_DAY             = "kline_d"
+	KLINE_DAY_NR          = "kline_d_n"
+	KLINE_WEEK            = "kline_w"
+	KLINE_MONTH           = "kline_m"
+)
+
 type Stock struct {
 	Code             string
 	Name             string
@@ -449,6 +461,7 @@ type Quote struct {
 	Volume float64
 	Amount float64
 	Xrate  sql.NullFloat64
+	Varate sql.NullFloat64
 	Udate  sql.NullString
 	Utime  sql.NullString
 }
@@ -471,7 +484,7 @@ type KlineW struct {
 }
 
 type KlineM struct {
-	KlineW
+	Quote
 }
 
 type Indicator struct {

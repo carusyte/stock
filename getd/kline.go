@@ -10,19 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-)
-
-type KLType string
-
-const (
-	DAY   KLType = "kline_d"
-	DAY_N        = "kline_d_n"
-	WEEK         = "kline_w"
-	MONTH        = "kline_m"
+	"math"
 )
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
-func GetKlines(stks *model.Stocks, kltype ... KLType) (rstks *model.Stocks) {
+func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks) {
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
@@ -48,8 +40,28 @@ func GetKlines(stks *model.Stocks, kltype ... KLType) (rstks *model.Stocks) {
 	return
 }
 
+func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*model.Quote) {
+	if limit == 0 {
+		return
+	} else if limit < 0 {
+		sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
+		if desc {
+			sql += " desc"
+		}
+		dbmap.Select(&hist, sql, code)
+	} else {
+		d := ""
+		if desc {
+			d = "desc"
+		}
+		sql := fmt.Sprintf("select * from %s where code = ? order by klid %s limit ?", tab, d)
+		dbmap.Select(&hist, sql, code, limit)
+	}
+	return
+}
+
 //convert slice of KLType to slice of string
-func kt2strs(kltype []KLType) (s []string) {
+func kt2strs(kltype []model.DBTab) (s []string) {
 	s = make([]string, len(kltype))
 	for i, e := range kltype {
 		s[i] = string(e)
@@ -57,7 +69,7 @@ func kt2strs(kltype []KLType) (s []string) {
 	return
 }
 
-func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan int, outstks chan *model.Stock) {
+func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *chan int, outstks chan *model.Stock) {
 	defer func() {
 		wg.Done()
 		<-*wf
@@ -66,11 +78,11 @@ func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan in
 	suc := false
 	for _, t := range kltype {
 		switch t {
-		case DAY:
+		case model.KLINE_DAY:
 			_, suc = getDailyKlines(stk.Code, t, xdxr == nil)
-		case DAY_N:
+		case model.KLINE_DAY_NR:
 			_, suc = getDailyKlines(stk.Code, t, true)
-		case WEEK, MONTH:
+		case model.KLINE_WEEK, model.KLINE_MONTH:
 			_, suc = getLongKlines(stk.Code, t, xdxr == nil)
 		default:
 			log.Panicf("unhandled kltype: %s", t)
@@ -81,7 +93,7 @@ func getKline(stk *model.Stock, kltype []KLType, wg *sync.WaitGroup, wf *chan in
 	}
 }
 
-func getDailyKlines(code string, klt KLType, incr bool) (kldy []*model.Quote, suc bool) {
+func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
 	RETRIES := 5
 	var (
 		klast  model.Klast
@@ -97,9 +109,9 @@ func getDailyKlines(code string, klt KLType, incr bool) (kldy []*model.Quote, su
 	// 01-forward reinstatement
 	// 02-backward reinstatement
 	switch klt {
-	case DAY:
+	case model.KLINE_DAY:
 		mode = "01"
-	case DAY_N:
+	case model.KLINE_DAY_NR:
 		mode = "00"
 	default:
 		log.Panicf("unhandled kltype: %s", klt)
@@ -115,7 +127,7 @@ RETRY:
 		ktoday = model.Ktoday{}
 		e = json.Unmarshal(strip(body), &ktoday)
 		if e != nil {
-			if rt < RETRIES {
+			if rt+1 < RETRIES {
 				log.Printf("retrying to parse kline json for %s [%d]: %+v\n%s", code, rt+1, e,
 					string(body))
 				continue
@@ -141,7 +153,7 @@ RETRY:
 		klast = model.Klast{}
 		e = json.Unmarshal(strip(body), &klast)
 		if e != nil {
-			if rt < RETRIES {
+			if rt+1 < RETRIES {
 				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code, rt+1, e,
 					url_last, string(body))
 				continue
@@ -153,7 +165,7 @@ RETRY:
 		}
 
 		if klast.Data == "" {
-			if rt < RETRIES {
+			if rt+1 < RETRIES {
 				log.Printf("retrying to parse last kline json for %s [%d]: %+v\n%s\n%s", code, rt+1, e,
 					url_last, string(body))
 				continue
@@ -215,7 +227,7 @@ RETRY:
 					yr)
 				body, e = util.HttpGetBytes(url_hist)
 				if e != nil {
-					if rt < RETRIES {
+					if rt+1 < RETRIES {
 						log.Printf("retrying to get hist daily quotes for %s, %d [%d]: %+v",
 							code, yr, rt+1, e)
 						continue RETRY
@@ -228,7 +240,7 @@ RETRY:
 				khist := model.Khist{}
 				e = json.Unmarshal(strip(body), &khist)
 				if e != nil {
-					if rt < RETRIES {
+					if rt+1 < RETRIES {
 						log.Printf("retrying to parse hist kline json for %s, %d [%d]: %+v", code,
 							yr, rt+1, e)
 						continue RETRY
@@ -247,6 +259,10 @@ RETRY:
 		break
 	}
 	supplementMisc(kldy, lklid)
+	if ldate != "" {
+		//skip last record which is for varate calculation
+		kldy = kldy[:len(kldy)-1]
+	}
 	binsert(kldy, string(klt))
 	return kldy, true
 }
@@ -266,13 +282,13 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 	return &ktoday.Quote, true, false
 }
 
-func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote, suc bool) {
+func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
 	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
 	var typ string
 	switch klt {
-	case WEEK:
+	case model.KLINE_WEEK:
 		typ = "11"
-	case MONTH:
+	case model.KLINE_MONTH:
 		typ = "21"
 	default:
 		log.Panicf("unhandled kltype: %s", klt)
@@ -311,7 +327,7 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote, s
 		khist := model.Khist{}
 		e = json.Unmarshal(strip(body), &khist)
 		if e != nil {
-			if rt < RETRIES {
+			if rt+1 < RETRIES {
 				log.Printf("retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
 				continue
 			} else {
@@ -333,13 +349,18 @@ func getLongKlines(code string, klt KLType, incr bool) (quotes []*model.Quote, s
 		break
 	}
 	supplementMisc(quotes, lklid)
+	if ldate != "" {
+		//skip last record which is for varate calculation
+		quotes = quotes[:len(quotes)-1]
+	}
 	binsert(quotes, string(klt))
 	return quotes, true
 }
 
-//Assign KLID, add update datetime
+//Assign KLID, calculate Varate, add update datetime
 func supplementMisc(klines []*model.Quote, start int) {
 	d, t := util.TimeStr()
+	preclose := math.NaN()
 	for i := len(klines) - 1; i >= 0; i-- {
 		start++
 		klines[i].Klid = start
@@ -347,16 +368,25 @@ func supplementMisc(klines []*model.Quote, start int) {
 		klines[i].Utime.Valid = true
 		klines[i].Udate.String = d
 		klines[i].Utime.String = t
+		klines[i].Varate.Valid = true
+		if math.IsNaN(preclose) {
+			klines[i].Varate.Float64 = 0
+		} else if preclose == 0 {
+			klines[i].Varate.Float64 = 100
+		} else {
+			klines[i].Varate.Float64 = math.Abs((klines[i].Close - preclose) / preclose) * 100
+		}
+		preclose = klines[i].Close
 	}
 }
 
 func binsert(quotes []*model.Quote, table string) (c int) {
 	if len(quotes) > 0 {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*12)
+		valueArgs := make([]interface{}, 0, len(quotes)*13)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), ?, ?)")
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -367,15 +397,16 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 			valueArgs = append(valueArgs, q.Volume)
 			valueArgs = append(valueArgs, q.Amount)
 			valueArgs = append(valueArgs, q.Xrate)
+			valueArgs = append(valueArgs, q.Varate)
 			valueArgs = append(valueArgs, q.Udate)
 			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
 		}
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),amount=values(amount),xrate=values(xrate),udate=values(udate),"+
-			"utime=values(utime)",
+			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
+			"(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
@@ -441,10 +472,9 @@ DATES:
 	return
 }
 
-func getLatestKl(code string, klt KLType, offset int) (q *model.Quote) {
-	e := dbmap.SelectOne(&q, fmt.Sprintf("select code, date, klid from %s where code = ? order by date desc limit 1 "+
-		"offset ?", klt),
-		code, offset)
+func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
+	e := dbmap.SelectOne(&q, fmt.Sprintf("select code, date, klid from %s where code = ? order by klid desc "+
+		"limit 1 offset ?", klt), code, offset+1) //plus one offset for pre-close, varate calculation
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return nil

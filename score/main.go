@@ -13,6 +13,7 @@ import (
 const JOB_CAPACITY = global.JOB_CAPACITY
 const MAX_CONCURRENCY = global.MAX_CONCURRENCY
 
+//TODO TRY 30/60 min ENE
 var (
 	dbmap = global.Dbmap
 	dot   = global.Dot

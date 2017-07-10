@@ -10,7 +10,7 @@ import (
 )
 
 func TestGetDailyKlines(t *testing.T) {
-	getDailyKlines("600242", DAY, true)
+	getDailyKlines("600242", model.KLINE_DAY, true)
 }
 
 func TestParseLastJson(t *testing.T) {
@@ -44,5 +44,5 @@ func TestGetKlines(t *testing.T) {
 	s.Name = "兴业证券"
 	ss := new(model.Stocks)
 	ss.Add(s)
-	GetKlines(ss, DAY_N, DAY)
+	GetKlines(ss, model.KLINE_DAY_NR, model.KLINE_DAY)
 }

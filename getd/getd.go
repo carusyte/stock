@@ -20,7 +20,7 @@ func Get() {
 	stop("GET_FINANCE", stgfi)
 
 	stgkdn := time.Now()
-	stks = GetKlines(stks, DAY_N)
+	stks = GetKlines(stks, model.KLINE_DAY_NR)
 	stop("GET_KLINES_DN", stgkdn)
 
 	stgx := time.Now()
@@ -28,7 +28,7 @@ func Get() {
 	stop("GET_XDXR", stgx)
 
 	stgkl := time.Now()
-	stks = GetKlines(stks, DAY, WEEK, MONTH)
+	stks = GetKlines(stks, model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH)
 	stop("GET_KLINES", stgkl)
 
 	updb := time.Now()
