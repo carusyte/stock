@@ -118,6 +118,7 @@ CREATE TABLE `kline_d` (
   `amount` double DEFAULT NULL,
   `factor` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`)
@@ -135,6 +136,7 @@ CREATE TABLE `kline_d_n` (
   `amount` double DEFAULT NULL,
   `factor` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`)
@@ -151,6 +153,7 @@ CREATE TABLE `kline_m` (
   `Volume` double DEFAULT NULL,
   `Amount` double DEFAULT NULL,
   `Xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
@@ -167,6 +170,7 @@ CREATE TABLE `kline_w` (
   `Volume` double DEFAULT NULL,
   `Amount` double DEFAULT NULL,
   `Xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
@@ -220,4 +224,3 @@ CREATE TABLE `xdxr` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
