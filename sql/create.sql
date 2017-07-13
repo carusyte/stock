@@ -70,6 +70,23 @@ CREATE TABLE `finance` (
   PRIMARY KEY (`code`,`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='财务信息';
 
+CREATE TABLE `indc_feat` (
+  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `indc` varchar(10) NOT NULL COMMENT '指标类型',
+  `cytp` varchar(5) NOT NULL COMMENT '周期类型（D:天/W:周/M:月）',
+  `bysl` varchar(2) NOT NULL COMMENT 'BY：买/SL：卖',
+  `smp_date` varchar(10) NOT NULL COMMENT '采样开始日期',
+  `smp_num` int(3) NOT NULL,
+  `fid` varchar(30) NOT NULL COMMENT '特征ID',
+  `mark` double DEFAULT NULL COMMENT '标记获利/亏损幅度',
+  `tspan` int(11) DEFAULT NULL COMMENT '获利/亏损的时间跨度',
+  `mpt` double DEFAULT NULL COMMENT '单位时间的获利/亏损（Mark/TSpan）',
+  `desc` varchar(200) DEFAULT NULL COMMENT '描述',
+  `udate` varchar(10) NOT NULL COMMENT '更新日期',
+  `utime` varchar(8) NOT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`indc`,`cytp`,`bysl`,`smp_date`,`smp_num`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征总表';
+
 CREATE TABLE `indicator_d` (
   `Code` varchar(6) NOT NULL,
   `Date` varchar(10) NOT NULL,
@@ -105,6 +122,16 @@ CREATE TABLE `indicator_w` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `kdj_feat_dat` (
+  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `fid` varchar(30) NOT NULL COMMENT '特征ID',
+  `seq` int(11) NOT NULL COMMENT '序号',
+  `K` double NOT NULL,
+  `D` double NOT NULL,
+  `J` double NOT NULL,
+  PRIMARY KEY (`code`,`fid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征数据';
 
 CREATE TABLE `kline_d` (
   `code` varchar(6) NOT NULL,
