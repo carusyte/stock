@@ -374,7 +374,7 @@ func supplementMisc(klines []*model.Quote, start int) {
 		} else if preclose == 0 {
 			klines[i].Varate.Float64 = 100
 		} else {
-			klines[i].Varate.Float64 = math.Abs((klines[i].Close - preclose) / preclose) * 100
+			klines[i].Varate.Float64 = (klines[i].Close - preclose) / math.Abs(preclose) * 100
 		}
 		preclose = klines[i].Close
 	}

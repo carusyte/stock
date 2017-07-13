@@ -604,3 +604,28 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 
 	return nil
 }
+
+type IndcFeat struct {
+	Code    string
+	Indc    string
+	Cytp    string
+	Bysl    string
+	SmpDate string `db:"smp_date"`
+	SmpNum  int `db:"smp_num"`
+	Fid     string
+	Mark    sql.NullFloat64
+	Tspan   sql.NullInt64
+	Mpt     sql.NullFloat64
+	Desc    sql.NullString
+	Udate   string
+	Utime   string
+}
+
+type KDJfd struct {
+	Code string
+	Fid  string
+	Seq  int
+	K    float64
+	D    float64
+	J    float64
+}
