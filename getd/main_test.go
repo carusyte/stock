@@ -37,3 +37,14 @@ func TestMean(t *testing.T) {
 	r, _ := stats.Median(data)
 	fmt.Println(r)
 }
+
+func TestAnalyzeKdjCC(t *testing.T) {
+	//smpKdjFeat("600104", model.MONTH, 5.0, 2.0, 2, 5, 600)
+	SmpKdjFeat("600104", model.MONTH, 5.0, 2.0, 2)
+	SmpKdjFeat("600104", model.WEEK, 5.0, 2.0, 2)
+	SmpKdjFeat("600104", model.DAY, 5.0, 2.0, 2)
+}
+
+func TestCalcDay(t *testing.T) {
+	calcDay("600104", 3)
+}

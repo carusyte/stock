@@ -13,15 +13,28 @@ import (
 )
 
 type DBTab string
+type CYTP string
+
+const (
+	DAY   CYTP = "D"
+	WEEK       = "W"
+	MONTH      = "M"
+	M120       = "M120"
+	M60        = "M60"
+	M30        = "M30"
+	M15        = "M15"
+	M5         = "M5"
+	M1         = "M1"
+)
 
 const (
 	INDICATOR_DAY   DBTab = "indicator_d"
 	INDICATOR_WEEK  DBTab = "indicator_w"
 	INDICATOR_MONTH DBTab = "indicator_m"
-	KLINE_DAY             = "kline_d"
-	KLINE_DAY_NR          = "kline_d_n"
-	KLINE_WEEK            = "kline_w"
-	KLINE_MONTH           = "kline_m"
+	KLINE_DAY       DBTab = "kline_d"
+	KLINE_DAY_NR    DBTab = "kline_d_n"
+	KLINE_WEEK      DBTab = "kline_w"
+	KLINE_MONTH     DBTab = "kline_m"
 )
 
 type Stock struct {
@@ -616,16 +629,23 @@ type IndcFeat struct {
 	Mark    sql.NullFloat64
 	Tspan   sql.NullInt64
 	Mpt     sql.NullFloat64
-	Desc    sql.NullString
+	Remarks sql.NullString
 	Udate   string
 	Utime   string
 }
 
+func (indf *IndcFeat) GenFid() string {
+	indf.Fid = fmt.Sprintf("%s%s%s", indf.Cytp, indf.Bysl, strings.Replace(indf.SmpDate, "-", "", -1))
+	return indf.Fid
+}
+
 type KDJfd struct {
-	Code string
-	Fid  string
-	Seq  int
-	K    float64
-	D    float64
-	J    float64
+	Code  string
+	Fid   string
+	Klid  int
+	K     float64
+	D     float64
+	J     float64
+	Udate string
+	Utime string
 }

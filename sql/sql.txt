@@ -317,12 +317,3 @@ WHERE
     x.code IN (%s)
         AND x.idx > COALESCE(tmn.idxmn, - 1)
 
--- name: KDJ_HIST
-SELECT
-    *
-FROM
-    %s
-WHERE
-    code = ?
-ORDER BY klid
-LIMIT ?

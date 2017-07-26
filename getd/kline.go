@@ -15,6 +15,7 @@ import (
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks) {
+	//TODO find a way to get minute level klines
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
@@ -41,21 +42,21 @@ func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks)
 }
 
 func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*model.Quote) {
-	if limit == 0 {
-		return
-	} else if limit < 0 {
+	if limit <= 0 {
 		sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
 		if desc {
 			sql += " desc"
 		}
-		dbmap.Select(&hist, sql, code)
+		_, e := dbmap.Select(&hist, sql, code)
+		util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
 	} else {
 		d := ""
 		if desc {
 			d = "desc"
 		}
 		sql := fmt.Sprintf("select * from %s where code = ? order by klid %s limit ?", tab, d)
-		dbmap.Select(&hist, sql, code, limit)
+		_, e := dbmap.Select(&hist, sql, code, limit)
+		util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
 	}
 	return
 }

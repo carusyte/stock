@@ -92,7 +92,7 @@ func calcWeek(code string, offset int64) {
 	}
 
 	kdjw := indc.DeftKDJ(qw)
-	if len(qw) > HIST_DATA_SIZE {
+	if mxw.Valid && len(qw) > HIST_DATA_SIZE {
 		kdjw = kdjw[HIST_DATA_SIZE+1:]
 	}
 
@@ -126,7 +126,7 @@ func calcMonth(code string, offset int64) {
 	}
 
 	kdjm := indc.DeftKDJ(qm)
-	if len(qm) > HIST_DATA_SIZE {
+	if mxm.Valid && len(qm) > HIST_DATA_SIZE {
 		kdjm = kdjm[HIST_DATA_SIZE+1:]
 	}
 
@@ -161,7 +161,7 @@ func calcDay(code string, offset int64) {
 	}
 
 	kdjd := indc.DeftKDJ(qd)
-	if len(qd) > HIST_DATA_SIZE {
+	if mxd.Valid && len(qd) > HIST_DATA_SIZE {
 		kdjd = kdjd[HIST_DATA_SIZE+1:]
 	}
 

@@ -39,8 +39,8 @@ type BlueChip struct {
 // The assessment metric diverts, some of them are somewhat negative correlated.
 const (
 	SCORE_PE     = 20.
-	SCORE_GEPS   = 30.
-	SCORE_PU     = 35.
+	SCORE_GEPS   = 40.
+	SCORE_PU     = 25.
 	SCORE_GUDPPS = 15.
 	PENALTY_DAR  = 15.
 	//PE_THRESHOLD        = 50.
