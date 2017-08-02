@@ -648,4 +648,5 @@ type KDJfd struct {
 	J     float64
 	Udate string
 	Utime string
+	Feat  *IndcFeat
 }

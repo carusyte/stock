@@ -317,3 +317,20 @@ WHERE
     x.code IN (%s)
         AND x.idx > COALESCE(tmn.idxmn, - 1)
 
+-- name: KDJ_FEAT_DAT
+SELECT
+    f.*,
+    k.klid,
+    k.k,
+    k.d,
+    k.j,
+    k.udate kudate,
+    k.utime kutime
+FROM
+    indc_feat f
+        INNER JOIN
+    kdj_feat_dat k USING (code , fid)
+WHERE
+    f.indc = 'KDJ' AND f.cytp = ?
+        AND f.bysl = ?
+ORDER BY k.fid , k.klid

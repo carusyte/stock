@@ -11,11 +11,11 @@ import (
 
 func GetKdjHist(code string, tab model.DBTab, retro int) (indcs []*model.Indicator) {
 	if retro > 0 {
-		sql := fmt.Sprintf("SELECT	* FROM %s WHERE	code = ? ORDER BY klid LIMIT ?", tab)
+		sql := fmt.Sprintf("SELECT * FROM %s WHERE	code = ? ORDER BY klid LIMIT ?", tab)
 		_, e := dbmap.Select(&indcs, sql, code, retro)
 		util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
 	} else {
-		sql := fmt.Sprintf("SELECT	* FROM %s WHERE	code = ? ORDER BY klid", tab)
+		sql := fmt.Sprintf("SELECT * FROM %s WHERE	code = ? ORDER BY klid", tab)
 		_, e := dbmap.Select(&indcs, sql, code)
 		util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
 	}
@@ -220,6 +220,39 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 		return kdjs[len(kdjs)-c:]
 	}
 	return kdjs;
+}
+
+func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
+	bysl := "BY"
+	if !buy {
+		bysl = "SL"
+	}
+	m := make(map[string][]*model.KDJfd)
+	sql, e := dot.Raw("KDJ_FEAT_DAT")
+	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
+	type FeatView struct{
+		model.IndcFeat
+		model.KDJfd
+		kudate string
+		kutime string
+	}
+	var fvs []FeatView
+	_, e = dbmap.Select(&fvs, sql, cytp, bysl)
+	util.CheckErr(e, "failed to query kdj feat dat, sql:\n"+sql)
+	for _, fv := range fvs {
+		fv.KDJfd.Udate = fv.kudate
+		fv.KDJfd.Utime = fv.kutime
+		fv.KDJfd.Feat = &fv.IndcFeat
+		k := &fv.KDJfd
+		if ks, exist := m[fv.IndcFeat.Fid]; !exist {
+			ks = make([]*model.KDJfd, 0, 16)
+			m[fv.IndcFeat.Fid] = ks
+			ks = append(ks, k)
+		} else {
+			ks = append(ks, k)
+		}
+	}
+	return m
 }
 
 func saveIndcFt(feats []*model.IndcFeat, kfds []*model.KDJfd) {
