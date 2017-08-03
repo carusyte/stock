@@ -162,7 +162,7 @@ func getKdjCC(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (fcc, b
 		}
 		k, d, j := extractKdjFd(fd)
 		cc := bestKdjCC(hk, hd, hj, k, d, j)
-		if cc >= 0 {
+		if cc >= 0.5 {
 			cc *= mod
 			ccs = append(ccs, cc)
 			if cc > bcc {

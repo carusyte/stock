@@ -248,12 +248,11 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
 	sql, e := dot.Raw("KDJ_FEAT_DAT")
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
 	type FeatView struct {
-		Code   string
-		Fid    string
-		Udate  string
-		Utime  string
 		model.IndcFeat
-		model.KDJfd
+		Klid   int
+		K      float64
+		D      float64
+		J      float64
 		Kudate string
 		Kutime string
 	}
@@ -261,20 +260,21 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
 	_, e = dbmap.Select(&fvs, sql, cytp, bysl)
 	util.CheckErr(e, "failed to query kdj feat dat, sql:\n"+sql)
 	for _, fv := range fvs {
-		fv.KDJfd.Udate = fv.Kudate
-		fv.KDJfd.Utime = fv.Kutime
-		fv.KDJfd.Feat = &fv.IndcFeat
-		fv.KDJfd.Code = fv.Code
-		fv.KDJfd.Fid = fv.Fid
-		fv.IndcFeat.Code = fv.Code
-		fv.IndcFeat.Fid = fv.Fid
-		fv.IndcFeat.Udate = fv.Udate
-		fv.IndcFeat.Utime = fv.Utime
-		k := &fv.KDJfd
-		if ks, exist := m[fv.Fid]; !exist {
-			m[fv.Fid] = append(make([]*model.KDJfd, 0, 16), k)
+		mk := fv.Code + fv.Fid
+		k := new(model.KDJfd)
+		k.Code = fv.Code
+		k.Fid = fv.Fid
+		k.Klid = fv.Klid
+		k.K = fv.K
+		k.D = fv.D
+		k.J = fv.J
+		k.Udate = fv.Kudate
+		k.Utime = fv.Kutime
+		k.Feat = &fv.IndcFeat
+		if ks, exist := m[mk]; !exist {
+			m[mk] = append(make([]*model.KDJfd, 0, 16), k)
 		} else {
-			m[fv.Fid] = append(ks, k)
+			m[mk] = append(ks, k)
 		}
 	}
 	return m

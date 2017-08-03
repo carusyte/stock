@@ -333,4 +333,4 @@ FROM
 WHERE
     f.indc = 'KDJ' AND f.cytp = ?
         AND f.bysl = ?
-ORDER BY k.fid , k.klid
+ORDER BY f.code, f.fid , k.klid
