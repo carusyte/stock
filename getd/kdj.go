@@ -88,6 +88,10 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			}
 			pc = nc
 		}
+		if sc == 0 {
+			sc = -0.01
+			lc -= 0.01
+		}
 		mark := (lc - sc) / math.Abs(sc) * 100
 		if mark <= -expvr {
 			//sample backward and find the last J, D cross point
@@ -161,6 +165,10 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			}
 			pc = nc
 		}
+		if sc == 0 {
+			sc = 0.01
+			hc += 0.01
+		}
 		mark := (hc - sc) / math.Abs(sc) * 100
 		if mark >= expvr {
 			//sample backward and find the last J, D cross point
@@ -206,16 +214,25 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 		j := kdjs[i].KDJ_J
 		d := kdjs[i].KDJ_D
 		if j == d {
+			if c == 1 {
+				c = int(math.Min(3.0, float64(len(kdjs))))
+			}
 			return kdjs[len(kdjs)-c:]
 		}
 		pj := kdjs[i-1].KDJ_J
 		pd := kdjs[i-1].KDJ_D
 		c++
 		if pj == pd {
+			if c == 1 {
+				c = int(math.Min(3.0, float64(len(kdjs))))
+			}
 			return kdjs[len(kdjs)-c:]
 		}
 		if (j < d && pj < pd) || (j > d && pj > pd) {
 			continue
+		}
+		if c == 1 {
+			c = int(math.Min(3.0, float64(len(kdjs))))
 		}
 		return kdjs[len(kdjs)-c:]
 	}
@@ -230,26 +247,34 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
 	m := make(map[string][]*model.KDJfd)
 	sql, e := dot.Raw("KDJ_FEAT_DAT")
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
-	type FeatView struct{
+	type FeatView struct {
+		Code   string
+		Fid    string
+		Udate  string
+		Utime  string
 		model.IndcFeat
 		model.KDJfd
-		kudate string
-		kutime string
+		Kudate string
+		Kutime string
 	}
 	var fvs []FeatView
 	_, e = dbmap.Select(&fvs, sql, cytp, bysl)
 	util.CheckErr(e, "failed to query kdj feat dat, sql:\n"+sql)
 	for _, fv := range fvs {
-		fv.KDJfd.Udate = fv.kudate
-		fv.KDJfd.Utime = fv.kutime
+		fv.KDJfd.Udate = fv.Kudate
+		fv.KDJfd.Utime = fv.Kutime
 		fv.KDJfd.Feat = &fv.IndcFeat
+		fv.KDJfd.Code = fv.Code
+		fv.KDJfd.Fid = fv.Fid
+		fv.IndcFeat.Code = fv.Code
+		fv.IndcFeat.Fid = fv.Fid
+		fv.IndcFeat.Udate = fv.Udate
+		fv.IndcFeat.Utime = fv.Utime
 		k := &fv.KDJfd
-		if ks, exist := m[fv.IndcFeat.Fid]; !exist {
-			ks = make([]*model.KDJfd, 0, 16)
-			m[fv.IndcFeat.Fid] = ks
-			ks = append(ks, k)
+		if ks, exist := m[fv.Fid]; !exist {
+			m[fv.Fid] = append(make([]*model.KDJfd, 0, 16), k)
 		} else {
-			ks = append(ks, k)
+			m[fv.Fid] = append(ks, k)
 		}
 	}
 	return m
@@ -258,7 +283,6 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
 func saveIndcFt(feats []*model.IndcFeat, kfds []*model.KDJfd) {
 	tran, e := dbmap.Begin()
 	util.CheckErr(e, "failed to begin new transaction")
-
 	if len(feats) > 0 && len(kfds) > 0 {
 		//delete the last two BY and SL feat
 		ftdel := make([]*model.IndcFeat, 0, 2)

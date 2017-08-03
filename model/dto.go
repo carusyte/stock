@@ -43,24 +43,26 @@ type Stock struct {
 	Industry         sql.NullString
 	Area             sql.NullString
 	Pe               sql.NullFloat64
+	Pu               sql.NullFloat64
+	Po               sql.NullFloat64
 	Outstanding      sql.NullFloat64
-	Totals           float64
-	TotalAssets      float64
-	LiquidAssets     float64
-	FixedAssets      float64
-	Reserved         float64
-	ReservedPerShare float32
-	Esp              float32
-	Bvps             float32
-	Pb               float32
-	TimeToMarket     string
-	Undp             float64
-	Perundp          float32
-	Rev              float32
-	Profit           float32
-	Gpr              float32
-	Npr              float32
-	Holders          int64
+	Totals           sql.NullFloat64
+	TotalAssets      sql.NullFloat64
+	LiquidAssets     sql.NullFloat64
+	FixedAssets      sql.NullFloat64
+	Reserved         sql.NullFloat64
+	ReservedPerShare sql.NullFloat64
+	Esp              sql.NullFloat64
+	Bvps             sql.NullFloat64
+	Pb               sql.NullFloat64
+	TimeToMarket     sql.NullString
+	Undp             sql.NullFloat64
+	Perundp          sql.NullFloat64
+	Rev              sql.NullFloat64
+	Profit           sql.NullFloat64
+	Gpr              sql.NullFloat64
+	Npr              sql.NullFloat64
+	Holders          sql.NullInt64
 	Price            sql.NullFloat64
 	Varate           sql.NullFloat64
 	Var              sql.NullFloat64
@@ -113,8 +115,8 @@ func (l *Stocks) Size() int {
 	return len(l.Codes)
 }
 
-func (l *Stocks) Add(s *Stock) {
-	if s == nil {
+func (l *Stocks) Add(stks ... *Stock) {
+	if stks == nil || len(stks) == 0 {
 		return
 	}
 	if l.Codes == nil {
@@ -126,9 +128,11 @@ func (l *Stocks) Add(s *Stock) {
 	if l.Map == nil {
 		l.Map = make(map[string]*Stock)
 	}
-	l.Map[s.Code] = s
-	l.List = append(l.List, s)
-	l.Codes = append(l.Codes, s.Code)
+	for _, s := range stks {
+		l.Map[s.Code] = s
+		l.List = append(l.List, s)
+		l.Codes = append(l.Codes, s.Code)
+	}
 }
 
 func (l *Stocks) String() string {
@@ -162,7 +166,8 @@ func (l *Stocks) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("failed to parse totalFlowShares: %+v, %+v", d["totalFlowShares"], e)
 		}
 		if v, ok := d["LISTING_DATE"].(string); ok {
-			s.TimeToMarket = v
+			s.TimeToMarket.String = v
+			s.TimeToMarket.Valid = true
 		} else {
 			return fmt.Errorf("failed to parse LISTING_DATE: %+v", d["LISTING_DATE"])
 		}
@@ -177,7 +182,8 @@ func (l *Stocks) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("failed to parse SECURITY_ABBR_A: %+v", d["SECURITY_ABBR_A"])
 		}
 		if v, e := strconv.ParseFloat(d["totalShares"].(string), 64); e == nil {
-			s.Totals = v / 10000.0
+			s.Totals.Float64 = v / 10000.0
+			s.Totals.Valid = true
 		} else {
 			return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
 		}
@@ -637,6 +643,11 @@ type IndcFeat struct {
 func (indf *IndcFeat) GenFid() string {
 	indf.Fid = fmt.Sprintf("%s%s%s", indf.Cytp, indf.Bysl, strings.Replace(indf.SmpDate, "-", "", -1))
 	return indf.Fid
+}
+
+func (indf *IndcFeat) String() string {
+	return fmt.Sprintf("|%s,%s,%s,%f,%d,%f|", indf.Code, indf.Fid, indf.Bysl, indf.Mark.Float64, indf.Tspan.Int64,
+		indf.Mpt.Float64)
 }
 
 type KDJfd struct {

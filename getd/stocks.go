@@ -25,7 +25,14 @@ func StocksDb() (allstk []*model.Stock) {
 
 func StocksDbByCode(code ... string) (stocks []*model.Stock) {
 	sql := fmt.Sprintf("select * from basics where code in (%s)", util.Join(code, ",", true))
-	dbmap.Select(&stocks, sql)
+	_, e := dbmap.Select(&stocks, sql)
+	if e != nil {
+		if "sql: no rows in result set" == e.Error() {
+			return
+		} else {
+			log.Panicln("failed to run sql", e)
+		}
+	}
 	return
 }
 
@@ -37,7 +44,7 @@ func StocksDbTo(target interface{}) {
 func GetStockInfo() (allstk *model.Stocks) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
-
+	//TODO need to get industry or area info
 	allstk = getFromExchanges()
 	log.Printf("total stocks: %d", allstk.Size())
 
@@ -88,11 +95,13 @@ func getSZSE() (list []*model.Stock) {
 			case 6:
 				s.Name = c
 			case 7:
-				s.TimeToMarket = c
+				s.TimeToMarket.String = c
+				s.TimeToMarket.Valid = true
 			case 8:
 				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1), 64)
 				util.CheckErr(e, "failed to parse total share in Shenzhen security list")
-				s.Totals = v / 100000000.0
+				s.Totals.Float64 = v / 100000000.0
+				s.Totals.Valid = true
 			case 9:
 				v, e := strconv.ParseFloat(strings.Replace(c, ",", "", -1), 64)
 				util.CheckErr(e, "failed to parse outstanding share in Shenzhen security list")

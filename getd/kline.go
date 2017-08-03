@@ -185,10 +185,10 @@ RETRY:
 				ldate = ldy.Date
 				lklid = ldy.Klid
 			} else {
-				log.Printf("%s latest kline data not found, will be fully refreshed", code)
+				log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 			}
 		} else {
-			log.Printf("%s kline data will be fully refreshed", code)
+			log.Printf("%s %s data will be fully refreshed", code, klt)
 		}
 
 		kls, more := parseKlines(code, klast.Data, ldate, "")
@@ -302,10 +302,10 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 			ldate = latest.Date
 			lklid = latest.Klid
 		} else {
-			log.Printf("%s latest kline data not found, will be fully refreshed", code)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		log.Printf("%s kline data will be fully refreshed", code)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 	RETRIES := 5
 	url := fmt.Sprintf(urlt, code, typ)

@@ -72,6 +72,7 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 		ip.Score += scoreKdjMon(kdjv) * SCORE_KDJV_MONTH
 		ip.Score += scoreKdjWk(kdjv) * SCORE_KDJV_WEEK
 		ip.Score += scoreKdjDy(kdjv) * SCORE_KDJV_DAY
+		ip.Score /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
 
 		//warn if...
 
@@ -181,22 +182,22 @@ func getKdjCC(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (fcc, b
 }
 
 func bestKdjCC(sk, sd, sj, tk, td, tj []float64) float64 {
-	if len(sk) > len(tk) {
-		cc := math.Inf(-1)
-		dif := len(sk) - len(tk)
+	dif := len(sk) - len(tk)
+	if dif > 0 {
+		cc := -100.0
 		for i := 0; i <= dif; i++ {
-			e := len(sk) - dif + i - 1
+			e := len(sk) - dif + i
 			tcc := calcKdjCC(sk[i:e], sd[i:e], sj[i:e], tk, td, tj)
 			if tcc > cc {
 				cc = tcc
 			}
 		}
 		return cc
-	} else if len(sk) < len(tk) {
-		cc := math.Inf(-1)
-		dif := len(tk) - len(sk)
+	} else if dif < 0 {
+		cc := -100.0
+		dif *= -1
 		for i := 0; i <= dif; i++ {
-			e := len(tk) - dif + i - 1
+			e := len(tk) - dif + i
 			tcc := calcKdjCC(sk, sd, sj, tk[i:e], td[i:e], tj[i:e])
 			if tcc > cc {
 				cc = tcc

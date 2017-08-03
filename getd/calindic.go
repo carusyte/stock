@@ -97,6 +97,8 @@ func calcWeek(code string, offset int64) {
 	}
 
 	binsIndc(kdjw, "indicator_w")
+
+	SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
 }
 
 func calcMonth(code string, offset int64) {
@@ -131,6 +133,8 @@ func calcMonth(code string, offset int64) {
 	}
 
 	binsIndc(kdjm, "indicator_m")
+
+	SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
 }
 
 func calcDay(code string, offset int64) {
@@ -166,6 +170,8 @@ func calcDay(code string, offset int64) {
 	}
 
 	binsIndc(kdjd, "indicator_d")
+
+	SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {

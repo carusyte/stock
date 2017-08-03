@@ -11,12 +11,22 @@ import (
 func TestCalcAllIndcs(t *testing.T) {
 	start := time.Now()
 	defer stop("GETD_TOTAL", start)
-	stks := GetStockInfo()
-	stop("STOCK_LIST", start)
+	stk := StocksDb()
+	stks := new(model.Stocks)
+	stks.Add(stk...)
 
 	stci := time.Now()
 	CalcIndics(stks)
 	stop("CALC_INDICS", stci)
+}
+
+func TestCalcIndcs(t *testing.T) {
+	s := &model.Stock{}
+	s.Code = "600048"
+	s.Name = "保利地产"
+	stks := &model.Stocks{}
+	stks.Add(s)
+	CalcIndics(stks)
 }
 
 func TestParseIfengBonus(t *testing.T) {
@@ -40,9 +50,9 @@ func TestMean(t *testing.T) {
 
 func TestAnalyzeKdjCC(t *testing.T) {
 	//smpKdjFeat("600104", model.MONTH, 5.0, 2.0, 2, 5, 600)
-	SmpKdjFeat("600104", model.MONTH, 5.0, 2.0, 2)
-	SmpKdjFeat("600104", model.WEEK, 5.0, 2.0, 2)
-	SmpKdjFeat("600104", model.DAY, 5.0, 2.0, 2)
+	SmpKdjFeat("600048", model.MONTH, 5.0, 2.0, 2)
+	SmpKdjFeat("600048", model.WEEK, 5.0, 2.0, 2)
+	SmpKdjFeat("600048", model.DAY, 5.0, 2.0, 2)
 }
 
 func TestCalcDay(t *testing.T) {
