@@ -6,10 +6,10 @@ import (
 	"github.com/carusyte/stock/getd"
 	"fmt"
 	"github.com/carusyte/stock/util"
-	"github.com/montanaflynn/stats"
 	"time"
 	"reflect"
 	"errors"
+	logr "github.com/sirupsen/logrus"
 )
 
 // Medium to Long term model.
@@ -56,6 +56,7 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 		stks = getd.StocksDbByCode(stock...)
 	}
 
+	//TODO need to speed up the evaluation process, now cost nearly 2 min each stock
 	for _, s := range stks {
 		kdjv := new(KdjV)
 		kdjv.Code = s.Code
@@ -91,14 +92,17 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 func scoreKdjDy(v *KdjV) (s float64) {
 	rkdj := getd.GetKdjHist(v.Code, model.INDICATOR_DAY, 100)
 	rkdj = getd.ToLstJDCross(rkdj)
+	start := time.Now()
 	byhist := getd.GetKdjFeatDat(model.DAY, true)
-	fcc, bcc, num, bm := getKdjCC(rkdj, byhist)
-	v.CCDY = fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s = 100 * math.Pow(fcc, 0.12)
+	logr.Debugf("DAILY kdj_feat_dat: %.2f", time.Since(start).Seconds())
+	start = time.Now()
+	rbuy := getKdjCCRatio(rkdj, byhist)
+	s = 100 * math.Pow(rbuy, 0.33)
 	slhist := getd.GetKdjFeatDat(model.DAY, false)
-	fcc, bcc, num, bm = getKdjCC(rkdj, slhist)
-	v.CCDY += fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s -= s * math.Pow(fcc, 0.02)
+	rsell := getKdjCCRatio(rkdj, slhist)
+	s -= s * math.Pow(rsell, 0.25)
+	logr.Debugf("DAILY score calculation: %.2f", time.Since(start).Seconds())
+	v.CCDY = fmt.Sprintf("%.2f : %.2f", rbuy, rsell)
 	return
 }
 
@@ -106,14 +110,17 @@ func scoreKdjDy(v *KdjV) (s float64) {
 func scoreKdjWk(v *KdjV) (s float64) {
 	rkdj := getd.GetKdjHist(v.Code, model.INDICATOR_WEEK, 100)
 	rkdj = getd.ToLstJDCross(rkdj)
+	start := time.Now()
 	byhist := getd.GetKdjFeatDat(model.WEEK, true)
-	fcc, bcc, num, bm := getKdjCC(rkdj, byhist)
-	v.CCWK = fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s = 100 * math.Pow(fcc, 0.12)
+	logr.Debugf("WEEKLY kdj_feat_dat: %.2f", time.Since(start).Seconds())
+	start = time.Now()
+	rbuy := getKdjCCRatio(rkdj, byhist)
+	s = 100 * math.Pow(rbuy, 0.33)
 	slhist := getd.GetKdjFeatDat(model.WEEK, false)
-	fcc, bcc, num, bm = getKdjCC(rkdj, slhist)
-	v.CCWK += fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s -= s * math.Pow(fcc, 0.02)
+	rsell := getKdjCCRatio(rkdj, slhist)
+	s -= s * math.Pow(rsell, 0.25)
+	logr.Debugf("WEEKLY score calculation: %.2f", time.Since(start).Seconds())
+	v.CCWK = fmt.Sprintf("%.2f : %.2f", rbuy, rsell)
 	return
 }
 
@@ -121,22 +128,23 @@ func scoreKdjWk(v *KdjV) (s float64) {
 func scoreKdjMon(v *KdjV) (s float64) {
 	rkdj := getd.GetKdjHist(v.Code, model.INDICATOR_MONTH, 100)
 	rkdj = getd.ToLstJDCross(rkdj)
+	start := time.Now()
 	byhist := getd.GetKdjFeatDat(model.MONTH, true)
-	fcc, bcc, num, bm := getKdjCC(rkdj, byhist)
-	v.CCMO = fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s = 100 * math.Pow(fcc, 0.12)
+	logr.Debugf("MONTHLY kdj_feat_dat: %.2f", time.Since(start).Seconds())
+	start = time.Now()
+	rbuy := getKdjCCRatio(rkdj, byhist)
+	s = 100 * math.Pow(rbuy, 0.33)
 	slhist := getd.GetKdjFeatDat(model.MONTH, false)
-	fcc, bcc, num, bm = getKdjCC(rkdj, slhist)
-	v.CCMO += fmt.Sprintf("%.2f/%.2f/%.0f/%s\n", fcc, bcc, num, bm)
-	s -= s * math.Pow(fcc, 0.02)
+	rsell := getKdjCCRatio(rkdj, slhist)
+	s -= s * math.Pow(rsell, 0.25)
+	logr.Debugf("MONTHLY score calculation: %.2f", time.Since(start).Seconds())
+	v.CCMO = fmt.Sprintf("%.2f : %.2f", rbuy, rsell)
 	return
 }
 
-// Evaluate CC against all historical kdj feature data of one direction.
-// CC is assessed according to number of matches, matched feature freshness, and each matched CC.
-// Returning the resulted final CC, best matched CC, number of match with CC greater than 0 and the best matched feature
-// ID.
-func getKdjCC(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (fcc, bcc, num float64, bm string) {
+// Calculates ratio of historical data likely matching the given feature data.
+func getKdjCCRatio(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (r float64) {
+	//TODO refine the meaning of return value to be more useful
 	hk := make([]float64, len(hist))
 	hd := make([]float64, len(hist))
 	hj := make([]float64, len(hist))
@@ -146,9 +154,8 @@ func getKdjCC(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (fcc, b
 		hd[i] = h.KDJ_D
 		hj[i] = h.KDJ_J
 	}
-	bcc = math.Inf(-1)
-	ccs := make([]float64, 0, 16)
-	for fid, fd := range fdsMap {
+	c := .0
+	for _, fd := range fdsMap {
 		//skip the identical
 		if code == fd[0].Code && hist[0].Klid == fd[0].Klid {
 			continue
@@ -161,23 +168,12 @@ func getKdjCC(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (fcc, b
 			mod = 0.8
 		}
 		k, d, j := extractKdjFd(fd)
-		cc := bestKdjCC(hk, hd, hj, k, d, j)
+		cc := bestKdjCC(hk, hd, hj, k, d, j) * mod
 		if cc >= 0.5 {
-			cc *= mod
-			ccs = append(ccs, cc)
-			if cc > bcc {
-				bcc = cc
-				bm = fid
-			}
+			c++
 		}
 	}
-	if bcc > math.Inf(-1) {
-		mcc, e := stats.Mean(ccs)
-		util.CheckErr(e, "failed to calculate mean for cc.")
-		num = float64(len(ccs))
-		fcc = bcc*0.8 + mcc*0.2
-		fcc += (1 - fcc) * math.Min(1.0, math.Pow(num, 0.3)/5)
-	}
+	r = c / float64(len(fdsMap))
 	return
 }
 
@@ -210,13 +206,14 @@ func bestKdjCC(sk, sd, sj, tk, td, tj []float64) float64 {
 }
 
 func calcKdjCC(sk, sd, sj, tk, td, tj []float64) float64 {
-	kcc, e := stats.Correlation(sk, tk)
+	kcc, e := util.Devi(sk, tk)
 	util.CheckErr(e, "failed to calculate kcc")
-	dcc, e := stats.Correlation(sd, td)
+	dcc, e := util.Devi(sd, td)
 	util.CheckErr(e, "failed to calculate dcc")
-	jcc, e := stats.Correlation(sj, tj)
+	jcc, e := util.Devi(sj, tj)
 	util.CheckErr(e, "failed to calculate jcc")
-	return (kcc*1.0 + dcc*4.0 + jcc*5.0) / 10.0
+	scc := (kcc*1.0 + dcc*4.0 + jcc*5.0) / 10.0
+	return -0.001*math.Pow(scc, math.E) + 1
 }
 
 func extractKdjFd(fds []*model.KDJfd) (k, d, j []float64) {

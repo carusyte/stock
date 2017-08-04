@@ -7,6 +7,7 @@ import (
 	"time"
 	"fmt"
 	"math"
+	"github.com/pkg/errors"
 )
 
 func Reverse(s []interface{}) {
@@ -176,4 +177,15 @@ func Join(ss []string, sep string, quote bool) string {
 	} else {
 		return strings.Join(ss, sep)
 	}
+}
+
+func Devi(a, b []float64) (float64, error) {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0, errors.New("invalid input")
+	}
+	s := .0
+	for i := 0; i < len(a); i++ {
+		s += math.Pow(a[i]-b[i], 2)
+	}
+	return math.Pow(s/float64(len(a)), 0.5), nil
 }

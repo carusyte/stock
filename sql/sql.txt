@@ -331,6 +331,5 @@ FROM
         INNER JOIN
     kdj_feat_dat k USING (code , fid)
 WHERE
-    f.indc = 'KDJ' AND f.cytp = ?
-        AND f.bysl = ?
-ORDER BY f.code, f.fid , k.klid
+    f.indc = 'KDJ' AND k.fid like '%s'
+ORDER BY k.code, k.fid , k.klid

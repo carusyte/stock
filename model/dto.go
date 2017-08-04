@@ -632,9 +632,9 @@ type IndcFeat struct {
 	SmpDate string `db:"smp_date"`
 	SmpNum  int `db:"smp_num"`
 	Fid     string
-	Mark    sql.NullFloat64
-	Tspan   sql.NullInt64
-	Mpt     sql.NullFloat64
+	Mark    float64
+	Tspan   int
+	Mpt     float64
 	Remarks sql.NullString
 	Udate   string
 	Utime   string
@@ -646,8 +646,7 @@ func (indf *IndcFeat) GenFid() string {
 }
 
 func (indf *IndcFeat) String() string {
-	return fmt.Sprintf("|%s,%s,%s,%f,%d,%f|", indf.Code, indf.Fid, indf.Bysl, indf.Mark.Float64, indf.Tspan.Int64,
-		indf.Mpt.Float64)
+	return fmt.Sprintf("|%s,%s,%s,%f,%d,%f|", indf.Code, indf.Fid, indf.Bysl, indf.Mark, indf.Tspan, indf.Mpt)
 }
 
 type KDJfd struct {

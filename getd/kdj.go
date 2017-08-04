@@ -7,6 +7,8 @@ import (
 	"math"
 	"log"
 	"github.com/carusyte/stock/util"
+	"time"
+	logr "github.com/sirupsen/logrus"
 )
 
 func GetKdjHist(code string, tab model.DBTab, retro int) (indcs []*model.Indicator) {
@@ -103,14 +105,11 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			kft.Bysl = "SL"
 			kft.Cytp = string(cytp)
 			kft.Indc = "KDJ"
-			kft.Mark.Valid = true
-			kft.Mark.Float64 = mark
+			kft.Mark = mark
 			kft.SmpDate = hist[i-samp+1].Date
 			kft.SmpNum = samp
-			kft.Tspan.Valid = true
-			kft.Tspan.Int64 = int64(tspan)
-			kft.Mpt.Valid = true
-			kft.Mpt.Float64 = mark / float64(tspan)
+			kft.Tspan = tspan
+			kft.Mpt = mark / float64(tspan)
 			fid := kft.GenFid()
 			indf = append(indf, kft)
 			for j := i - samp + 1; j <= i; j++ {
@@ -180,14 +179,11 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			kft.Bysl = "BY"
 			kft.Cytp = string(cytp)
 			kft.Indc = "KDJ"
-			kft.Mark.Valid = true
-			kft.Mark.Float64 = mark
+			kft.Mark = mark
 			kft.SmpDate = hist[i-samp+1].Date
 			kft.SmpNum = samp
-			kft.Tspan.Valid = true
-			kft.Tspan.Int64 = int64(tspan)
-			kft.Mpt.Valid = true
-			kft.Mpt.Float64 = mark / float64(tspan)
+			kft.Tspan = tspan
+			kft.Mpt = mark / float64(tspan)
 			fid := kft.GenFid()
 			indf = append(indf, kft)
 			for j := i - samp + 1; j <= i; j++ {
@@ -247,35 +243,31 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
 	m := make(map[string][]*model.KDJfd)
 	sql, e := dot.Raw("KDJ_FEAT_DAT")
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
-	type FeatView struct {
-		model.IndcFeat
-		Klid   int
-		K      float64
-		D      float64
-		J      float64
-		Kudate string
-		Kutime string
-	}
-	var fvs []FeatView
-	_, e = dbmap.Select(&fvs, sql, cytp, bysl)
+	rows, e := dbmap.Query(fmt.Sprintf(sql, string(cytp)+bysl+"%"))
 	util.CheckErr(e, "failed to query kdj feat dat, sql:\n"+sql)
-	for _, fv := range fvs {
-		mk := fv.Code + fv.Fid
+	defer rows.Close()
+	for rows.Next() {
 		k := new(model.KDJfd)
-		k.Code = fv.Code
-		k.Fid = fv.Fid
-		k.Klid = fv.Klid
-		k.K = fv.K
-		k.D = fv.D
-		k.J = fv.J
-		k.Udate = fv.Kudate
-		k.Utime = fv.Kutime
-		k.Feat = &fv.IndcFeat
+		f := new(model.IndcFeat)
+		k.Feat = f
+		var remark *string
+		rows.Scan(&k.Code, &f.Indc, &k.Fid, &f.Cytp, &f.Bysl, &f.SmpDate, &f.SmpNum, &f.Mark, &f.Tspan, &f.Mpt, &remark,
+			&f.Udate, &f.Utime, &k.Klid, &k.K, &k.D, &k.J, &k.Udate, &k.Utime)
+		f.Code = k.Code
+		f.Fid = k.Fid
+		if remark != nil {
+			f.Remarks.Valid = true
+			f.Remarks.String = *remark
+		}
+		mk := k.Code + k.Fid
 		if ks, exist := m[mk]; !exist {
 			m[mk] = append(make([]*model.KDJfd, 0, 16), k)
 		} else {
 			m[mk] = append(ks, k)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
 	}
 	return m
 }
