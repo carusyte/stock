@@ -20,7 +20,7 @@ func TestCombineResults(t *testing.T) {
 func TestKdjV(t *testing.T) {
 	initLog()
 	start := time.Now()
-	r1 := new(KdjV).Get([]string{"000429"}, -1, false)
+	r1 := new(KdjV).Get([]string{"000488"}, -1, false)
 	log.Printf("\n%+v", r1)
 	log.Printf("time cost: %v", time.Since(start).Seconds())
 }

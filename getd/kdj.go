@@ -7,8 +7,6 @@ import (
 	"math"
 	"log"
 	"github.com/carusyte/stock/util"
-	"time"
-	logr "github.com/sirupsen/logrus"
 )
 
 func GetKdjHist(code string, tab model.DBTab, retro int) (indcs []*model.Indicator) {
