@@ -7,7 +7,13 @@ import (
 	"math"
 	"log"
 	"github.com/carusyte/stock/util"
+	logr "github.com/sirupsen/logrus"
+	"time"
+	"sync"
 )
+
+var kdjFdMap map[string][]*model.KDJfdView = make(map[string][]*model.KDJfdView)
+var lock = sync.RWMutex{}
 
 func GetKdjHist(code string, tab model.DBTab, retro int) (indcs []*model.Indicator) {
 	if retro > 0 {
@@ -233,41 +239,61 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 	return kdjs;
 }
 
-func GetKdjFeatDat(cytp model.CYTP, buy bool) map[string][]*model.KDJfd {
+func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
+	//TODO return a pruned, compact, weighted and readily usable data structure instead. Or do it in sampling phrase?
+	lock.Lock()
+	defer lock.Unlock()
 	bysl := "BY"
 	if !buy {
 		bysl = "SL"
 	}
-	m := make(map[string][]*model.KDJfd)
+	mk := fmt.Sprintf("%s-%s-%d", cytp, bysl, num)
+	if fdvs, exists := kdjFdMap[mk]; exists {
+		return fdvs
+	}
+	start := time.Now()
 	sql, e := dot.Raw("KDJ_FEAT_DAT")
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
-	rows, e := dbmap.Query(fmt.Sprintf(sql, string(cytp)+bysl+"%"))
-	util.CheckErr(e, "failed to query kdj feat dat, sql:\n"+sql)
-	defer rows.Close()
-	for rows.Next() {
-		k := new(model.KDJfd)
-		f := new(model.IndcFeat)
-		k.Feat = f
-		var remark *string
-		rows.Scan(&k.Code, &f.Indc, &k.Fid, &f.Cytp, &f.Bysl, &f.SmpDate, &f.SmpNum, &f.Mark, &f.Tspan, &f.Mpt, &remark,
-			&f.Udate, &f.Utime, &k.Klid, &k.K, &k.D, &k.J, &k.Udate, &k.Utime)
-		f.Code = k.Code
-		f.Fid = k.Fid
-		if remark != nil {
-			f.Remarks.Valid = true
-			f.Remarks.String = *remark
-		}
-		mk := k.Code + k.Fid
-		if ks, exist := m[mk]; !exist {
-			m[mk] = append(make([]*model.KDJfd, 0, 16), k)
+	rows, e := dbmap.Query(sql, string(cytp)+bysl+"%", cytp, bysl, num)
+	if e != nil {
+		if "sql: no rows in result set" != e.Error() {
+			fdvs := make([]*model.KDJfdView, 0)
+			kdjFdMap[mk] = fdvs
+			return fdvs
 		} else {
-			m[mk] = append(ks, k)
+			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 		}
+	}
+	defer rows.Close()
+	var (
+		code, fid, smpDate string
+		pcode, pfid        string
+		smpNum, klid       int
+		k, d, j            float64
+		kfv                *model.KDJfdView
+	)
+	fdvs := make([]*model.KDJfdView, 0, 16)
+	for rows.Next() {
+		rows.Scan(&code, &fid, &smpDate, &smpNum, &klid, &k, &d, &j)
+		if code != pcode || fid != pfid {
+			kfv = newKDJfdView(code, smpDate, smpNum)
+			fdvs = append(fdvs, kfv)
+		}
+		kfv.Add(klid, k, d, j)
+		pcode = code
+		pfid = fid
 	}
 	if err := rows.Err(); err != nil {
 		log.Fatal(err)
 	}
-	return m
+	kdjFdMap[mk] = fdvs
+	logr.Debugf("query kdj_feat_dat(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
+	return fdvs
+}
+
+func newKDJfdView(code, date string, num int) *model.KDJfdView {
+	return &model.KDJfdView{code, date, num, make([]int, 0, 16), make([]float64, 0, 16),
+		make([]float64, 0, 16), make([]float64, 0, 16)}
 }
 
 func saveIndcFt(feats []*model.IndcFeat, kfds []*model.KDJfd) {

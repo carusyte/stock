@@ -660,3 +660,20 @@ type KDJfd struct {
 	Utime string
 	Feat  *IndcFeat
 }
+
+type KDJfdView struct {
+	Code    string
+	SmpDate string
+	SmpNum  int
+	Klid    []int
+	K       []float64
+	D       []float64
+	J       []float64
+}
+
+func (kfv *KDJfdView) Add(klid int, k, d, j float64) {
+	kfv.Klid = append(kfv.Klid, klid)
+	kfv.K = append(kfv.K, k)
+	kfv.D = append(kfv.D, d)
+	kfv.J = append(kfv.J, j)
+}

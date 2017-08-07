@@ -22,8 +22,8 @@ func TestCalcAllIndcs(t *testing.T) {
 
 func TestCalcIndcs(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "600048"
-	s.Name = "保利地产"
+	s.Code = "603313"
+	s.Name = "梦百合"
 	stks := &model.Stocks{}
 	stks.Add(s)
 	CalcIndics(stks)

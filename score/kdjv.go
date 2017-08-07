@@ -12,6 +12,8 @@ import (
 	logr "github.com/sirupsen/logrus"
 	"github.com/montanaflynn/stats"
 	"log"
+	"sync"
+	"runtime"
 )
 
 // Medium to Long term model.
@@ -19,6 +21,7 @@ import (
 type KdjV struct {
 	Code string
 	Name string
+	Len  string
 	CCMO string
 	CCWK string
 	CCDY string
@@ -32,6 +35,8 @@ const (
 
 func (k *KdjV) GetFieldStr(name string) string {
 	switch name {
+	case "LEN":
+		return k.Len
 	case "KDJ_DY":
 		return k.CCDY
 	case "KDJ_WK":
@@ -57,45 +62,58 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
-
 	//TODO need to speed up the evaluation process, now cost nearly 2 min each stock
-	start := time.Now()
-	bymo := getd.GetKdjFeatDat(model.MONTH, true)
-	slmo := getd.GetKdjFeatDat(model.MONTH, false)
-	bywk := getd.GetKdjFeatDat(model.WEEK, true)
-	slwk := getd.GetKdjFeatDat(model.WEEK, false)
-	bydy := getd.GetKdjFeatDat(model.DAY, true)
-	sldy := getd.GetKdjFeatDat(model.DAY, false)
-	logr.Debugf("query kdj_feat_dat: %.2f", time.Since(start).Seconds())
+	// use goroutines to see if performance can be better
+	cpu := runtime.NumCPU()
+	logr.Debugf("Number of CPU: %d", cpu)
+	var wg sync.WaitGroup
+	chitm := make(chan *Item, cpu)
 	for _, s := range stks {
-		kdjv := new(KdjV)
-		kdjv.Code = s.Code
-		kdjv.Name = s.Name
+		wg.Add(1)
 		item := new(Item)
 		r.AddItem(item)
 		item.Code = s.Code
 		item.Name = s.Name
-		item.Profiles = make(map[string]*Profile)
-		ip := new(Profile)
-		item.Profiles[k.Id()] = ip
-		ip.FieldHolder = kdjv
-
-		kdjhist := getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_MONTH, 100))
-		ip.Score += scoreKdj(kdjv, model.MONTH, kdjhist, bymo, slmo) * SCORE_KDJV_MONTH
-
-		kdjhist = getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_WEEK, 100))
-		ip.Score += scoreKdj(kdjv, model.WEEK, kdjhist, bywk, slwk) * SCORE_KDJV_WEEK
-
-		kdjhist = getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_DAY, 100))
-		ip.Score += scoreKdj(kdjv, model.DAY, kdjhist, bydy, sldy) * SCORE_KDJV_DAY
-
-		ip.Score /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
-
-		//warn if...
-
-		ip.Score = math.Min(100, math.Max(0, ip.Score))
-		item.Score += ip.Score
+		chitm <- item
+		go scoreKdjAsyn(item, &wg, chitm)
 	}
+	wg.Wait()
+	close(chitm)
+	//for _, s := range stks {
+	//
+	//	start := time.Now()
+	//	kdjv := new(KdjV)
+	//	kdjv.Code = s.Code
+	//	kdjv.Name = s.Name
+	//	item := new(Item)
+	//	r.AddItem(item)
+	//	item.Code = s.Code
+	//	item.Name = s.Name
+	//	item.Profiles = make(map[string]*Profile)
+	//	ip := new(Profile)
+	//	item.Profiles[k.Id()] = ip
+	//	ip.FieldHolder = kdjv
+	//
+	//	histmo := getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_MONTH, 100))
+	//	ip.Score += scoreKdj(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
+	//
+	//	histwk := getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_WEEK, 100))
+	//	ip.Score += scoreKdj(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
+	//
+	//	histdy := getd.ToLstJDCross(getd.GetKdjHist(s.Code, model.INDICATOR_DAY, 100))
+	//	ip.Score += scoreKdj(kdjv, model.DAY, histdy) * SCORE_KDJV_DAY
+	//
+	//	kdjv.Len = fmt.Sprintf("%d/%d/%d", len(histdy), len(histwk), len(histmo))
+	//
+	//	ip.Score /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
+	//
+	//	//warn if...
+	//
+	//	ip.Score = math.Min(100, math.Max(0, ip.Score))
+	//	item.Score += ip.Score
+	//
+	//	logr.Debugf("%s kdjv: %.2f, time: %.2f", s.Code, ip.Score, time.Since(start).Seconds())
+	//}
 	r.SetFields(k.Id(), k.Fields()...)
 	if ranked {
 		r.Sort()
@@ -104,12 +122,45 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
-//Score by assessing the historical data against feature data.
-func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator, byhist,
-slhist map[string][]*model.KDJfd) (s float64) {
+func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
+	defer func() {
+		wg.Done()
+		<-chitm
+	}()
 	start := time.Now()
-	defer logr.Debugf("cycle %s score calculation: %.2f", cytp, time.Since(start).Seconds())
+	kdjv := new(KdjV)
+	kdjv.Code = item.Code
+	kdjv.Name = item.Name
+	item.Profiles = make(map[string]*Profile)
+	ip := new(Profile)
+	item.Profiles[kdjv.Id()] = ip
+	ip.FieldHolder = kdjv
+
+	histmo := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100))
+	ip.Score += scoreKdj(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
+
+	histwk := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100))
+	ip.Score += scoreKdj(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
+
+	histdy := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100))
+	ip.Score += scoreKdj(kdjv, model.DAY, histdy) * SCORE_KDJV_DAY
+
+	kdjv.Len = fmt.Sprintf("%d/%d/%d", len(histdy), len(histwk), len(histmo))
+
+	ip.Score /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
+
+	//warn if...
+
+	ip.Score = math.Min(100, math.Max(0, ip.Score))
+	item.Score += ip.Score
+
+	logr.Debugf("%s kdjv: %.2f, time: %.2f", item.Code, ip.Score, time.Since(start).Seconds())
+}
+
+//Score by assessing the historical data against feature data.
+func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) {
 	var val string
+	byhist, slhist := getKDJfdViews(cytp, len(kdjhist))
 	hdr, pdr, mpd, bdi := calcKdjDI(kdjhist, byhist)
 	val = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n", hdr, pdr, mpd, bdi)
 	hdr, pdr, mpd, sdi := calcKdjDI(kdjhist, slhist)
@@ -145,10 +196,22 @@ slhist map[string][]*model.KDJfd) (s float64) {
 	return
 }
 
+func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdView) {
+	buy = make([]*model.KDJfdView, 0, 1024)
+	sell = make([]*model.KDJfdView, 0, 1024)
+	for i := -2; i < 3; i++ {
+		n := len + i
+		if n >= 2 {
+			buy = append(buy, getd.GetKdjFeatDat(cytp, true, n)...)
+			sell = append(sell, getd.GetKdjFeatDat(cytp, false, n)...)
+		}
+	}
+	return
+}
+
 // Evaluates KDJ DEVIA indicator, returns the following result:
 // Ratio of high DEVIA, ratio of positive DEVIA, mean of positive DEVIA, and DEVIA indicator, ranging from 0 to 1
-func calcKdjDI(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (hdr, pdr, mpd, di float64) {
-	//TODO refine algorithm
+func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdView) (hdr, pdr, mpd, di float64) {
 	hk := make([]float64, len(hist))
 	hd := make([]float64, len(hist))
 	hj := make([]float64, len(hist))
@@ -160,20 +223,19 @@ func calcKdjDI(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (hdr, 
 	}
 	pds := make([]float64, 0, 16)
 	hdc := .0
-	for _, fd := range fdsMap {
+	for _, fd := range fdvs {
 		//skip the identical
-		if code == fd[0].Code && hist[0].Klid == fd[0].Klid {
+		if code == fd.Code && hist[0].Klid == fd.Klid[0] {
 			continue
 		}
 		mod := 1.0
-		tsmp, e := time.Parse("2006-01-02", fd[0].Feat.SmpDate)
-		util.CheckErr(e, "failed to parse sample date: "+fd[0].Feat.SmpDate)
+		tsmp, e := time.Parse("2006-01-02", fd.SmpDate)
+		util.CheckErr(e, "failed to parse sample date: "+fd.SmpDate)
 		days := time.Now().Sub(tsmp).Hours() / 24.0
 		if days > 800 {
 			mod = math.Max(0.8, -0.0003*math.Pow(days-800, 1.0002)+1)
 		}
-		k, d, j := extractKdjFd(fd)
-		bkd := bestKdjDevi(hk, hd, hj, k, d, j) * mod
+		bkd := bestKdjDevi(hk, hd, hj, fd.K, fd.D, fd.J) * mod
 		if bkd >= 0 {
 			pds = append(pds, bkd)
 			if bkd >= 0.8 {
@@ -181,12 +243,14 @@ func calcKdjDI(hist []*model.Indicator, fdsMap map[string][]*model.KDJfd) (hdr, 
 			}
 		}
 	}
-	total := float64(len(fdsMap))
+	total := float64(len(fdvs))
 	pdr = float64(len(pds)) / total
 	hdr = hdc / total
 	var e error
-	mpd, e = stats.Mean(pds)
-	util.CheckErr(e, code+" failed to calculate mean of devia")
+	if len(pds) > 0 {
+		mpd, e = stats.Mean(pds)
+		util.CheckErr(e, code+" failed to calculate mean of devia")
+	}
 	di = 0.5 * math.Min(1, math.Pow(hdr+0.92, 50))
 	di += 0.3 * math.Min(1, math.Pow(math.Log(pdr+1), 0.37)+0.4*math.Pow(pdr, math.Pi)+math.Pow(pdr, 0.476145))
 	di += 0.2 * math.Min(1, math.Pow(math.Log(math.Pow(mpd, math.E*math.Pi/1.1)+1), 0.06)+
@@ -251,7 +315,7 @@ func (k *KdjV) Id() string {
 }
 
 func (k *KdjV) Fields() []string {
-	return []string{"KDJ_DY", "KDJ_WK", "KDJ_MO"}
+	return []string{"LEN", "KDJ_DY", "KDJ_WK", "KDJ_MO"}
 }
 
 func (k *KdjV) Description() string {

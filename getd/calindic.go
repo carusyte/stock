@@ -58,17 +58,18 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mod
 		if lx != nil {
 			offd, offw, offm = -1, -1, -1
 		}
-		calcDay(code, offd)
-		calcWeek(code, offw)
-		calcMonth(code, offm)
+		calcDay(stock, offd)
+		calcWeek(stock, offw)
+		calcMonth(stock, offm)
 		chrstk <- stock
 	}
 }
 
-func calcWeek(code string, offset int64) {
+func calcWeek(stk *model.Stock, offset int64) {
 	var (
 		mxw sql.NullInt64
 		err error
+		code = stk.Code
 	)
 	if offset >= 0 {
 		mxw, err = dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
@@ -93,18 +94,21 @@ func calcWeek(code string, offset int64) {
 
 	kdjw := indc.DeftKDJ(qw)
 	if mxw.Valid && len(qw) > HIST_DATA_SIZE {
-		kdjw = kdjw[HIST_DATA_SIZE+1:]
+		kdjw = kdjw[HIST_DATA_SIZE:]
 	}
 
 	binsIndc(kdjw, "indicator_w")
 
-	SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
+	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
+		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
+	}
 }
 
-func calcMonth(code string, offset int64) {
+func calcMonth(stk *model.Stock, offset int64) {
 	var (
 		mxm sql.NullInt64
 		err error
+		code = stk.Code
 	)
 	if offset >= 0 {
 		mxm, err = dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
@@ -129,18 +133,21 @@ func calcMonth(code string, offset int64) {
 
 	kdjm := indc.DeftKDJ(qm)
 	if mxm.Valid && len(qm) > HIST_DATA_SIZE {
-		kdjm = kdjm[HIST_DATA_SIZE+1:]
+		kdjm = kdjm[HIST_DATA_SIZE:]
 	}
 
 	binsIndc(kdjm, "indicator_m")
 
-	SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
+	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
+		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
+	}
 }
 
-func calcDay(code string, offset int64) {
+func calcDay(stk *model.Stock, offset int64) {
 	var (
-		mxd sql.NullInt64
-		err error
+		mxd  sql.NullInt64
+		err  error
+		code = stk.Code
 	)
 	if offset >= 0 {
 		mxd, err = dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
@@ -166,12 +173,14 @@ func calcDay(code string, offset int64) {
 
 	kdjd := indc.DeftKDJ(qd)
 	if mxd.Valid && len(qd) > HIST_DATA_SIZE {
-		kdjd = kdjd[HIST_DATA_SIZE+1:]
+		kdjd = kdjd[HIST_DATA_SIZE:]
 	}
 
 	binsIndc(kdjd, "indicator_d")
 
-	SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
+	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
+		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
+	}
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {
