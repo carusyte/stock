@@ -56,5 +56,5 @@ func TestAnalyzeKdjCC(t *testing.T) {
 }
 
 func TestCalcDay(t *testing.T) {
-	calcDay("600104", 3)
+	//calcDay("600104", 3)
 }

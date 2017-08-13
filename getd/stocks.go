@@ -88,6 +88,8 @@ func getSZSE() (list []*model.Stock) {
 			continue
 		}
 		s := &model.Stock{}
+		s.Market.Valid = true
+		s.Market.String = "SZ"
 		for i, c := range r {
 			switch i {
 			case 5:
@@ -133,6 +135,7 @@ func getSSE() *model.Stocks {
 	if e != nil {
 		log.Panicf("failed to parse json from %s\n%+v", url_sh, e)
 	}
+	list.SetMarket("SH")
 	return list
 }
 
@@ -140,11 +143,12 @@ func getSSE() *model.Stocks {
 func save(allstk []*model.Stock) {
 	if len(allstk) > 0 {
 		valueStrings := make([]string, 0, len(allstk))
-		valueArgs := make([]interface{}, 0, len(allstk)*16)
+		valueArgs := make([]interface{}, 0, len(allstk)*17)
 		for _, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
+			valueArgs = append(valueArgs, stk.Market)
 			valueArgs = append(valueArgs, stk.Price)
 			valueArgs = append(valueArgs, stk.Varate)
 			valueArgs = append(valueArgs, stk.Var)
@@ -160,9 +164,9 @@ func save(allstk []*model.Stock) {
 			valueArgs = append(valueArgs, stk.UDate)
 			valueArgs = append(valueArgs, stk.UTime)
 		}
-		stmt := fmt.Sprintf("INSERT INTO basics (code,name,price,varate,var,accer,xrate,volratio,ampl,"+
+		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,price,varate,var,accer,xrate,volratio,ampl,"+
 			"turnover,outstanding,totals,circmarval,timeToMarket,udate,utime) VALUES %s on duplicate key update "+
-			"name=values(name),"+
+			"name=values(name),market=values(market),"+
 			"price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
 			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
 			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+

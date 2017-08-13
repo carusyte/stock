@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/montanaflynn/stats"
 	"github.com/carusyte/stock/indc"
+	"strings"
 )
 
 // Medium to Long term model.
@@ -59,6 +60,7 @@ func (h *HiD) Geta() (r *Result) {
 }
 
 func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
+	//TODO deal with the no-xdxr more fairly
 	r = &Result{}
 	r.PfIds = append(r.PfIds, h.Id())
 	var hids []*HiD
@@ -68,7 +70,11 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		_, e = dbmap.Select(&hids, sql)
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	} else {
-		//TODO select by specified stock codes
+		sql, e := dot.Raw("HID_SCOPED")
+		util.CheckErr(e, "failed to get HID_SCOPED sql")
+		sql = fmt.Sprintf(sql, strings.Join(s, ","))
+		_, e = dbmap.Select(&hids, sql)
+		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	}
 
 	for _, ih := range hids {

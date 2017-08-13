@@ -190,8 +190,11 @@ func Devi(a, b []float64) (float64, error) {
 	return math.Pow(s/float64(len(a)), 0.5), nil
 }
 
-func DaysSince(then string) float64 {
+func DaysSince(then string) (float64, error) {
 	t, err := time.Parse("2006-01-02", then)
-	CheckErr(err, "failed to parse date "+then)
-	return time.Since(t).Hours() / 24.0
+	if err != nil {
+		return 0, err
+	} else {
+		return time.Since(t).Hours() / 24.0, nil
+	}
 }

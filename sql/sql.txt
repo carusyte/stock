@@ -90,7 +90,7 @@ SELECT
     x1.*
 FROM
     (SELECT
-        code,
+            code,
             name,
             SUBSTR(board_date, 1, 4) AS year,
             ROUND(SUM(divi), 2) AS divi,
@@ -100,6 +100,31 @@ FROM
             SUM(shares_cvt) AS shares_cvt
     FROM
         xdxr
+    GROUP BY code , name , year) x1
+        INNER JOIN
+    (SELECT
+        code, MAX(SUBSTR(board_date, 1, 4)) AS year
+    FROM
+        xdxr
+    GROUP BY code) x2 USING (code , year)
+ORDER BY x1.dyr DESC
+
+-- name: HID_SCOPED
+SELECT
+    x1.*
+FROM
+    (SELECT
+            code,
+            name,
+            SUBSTR(board_date, 1, 4) AS year,
+            ROUND(SUM(divi), 2) AS divi,
+            SUM(dyr) AS dyr,
+            SUM(dpr) AS dpr,
+            SUM(shares_allot) AS shares_allot,
+            SUM(shares_cvt) AS shares_cvt
+    FROM
+        xdxr
+    WHERE code in (%s)
     GROUP BY code , name , year) x1
         INNER JOIN
     (SELECT

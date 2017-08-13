@@ -26,3 +26,7 @@ func TestChannel(t *testing.T) {
 	wg.Wait()
 	fmt.Printf("size: %d", len(rl))
 }
+
+func TestBlue(t *testing.T) {
+	blue()
+}

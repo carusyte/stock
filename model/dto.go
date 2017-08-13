@@ -35,11 +35,13 @@ const (
 	KLINE_DAY_NR    DBTab = "kline_d_n"
 	KLINE_WEEK      DBTab = "kline_w"
 	KLINE_MONTH     DBTab = "kline_m"
+	KLINE_60M       DBTab = "kline_60m"
 )
 
 type Stock struct {
 	Code             string
 	Name             string
+	Market           sql.NullString
 	Industry         sql.NullString
 	Area             sql.NullString
 	Pe               sql.NullFloat64
@@ -113,6 +115,13 @@ func (l *Stocks) Diff(a *Stocks) (same bool, diff []string) {
 
 func (l *Stocks) Size() int {
 	return len(l.Codes)
+}
+
+func (l *Stocks) SetMarket(m string) {
+	for _, s := range l.List {
+		s.Market.Valid = true
+		s.Market.String = m
+	}
 }
 
 func (l *Stocks) Add(stks ... *Stock) {
@@ -472,6 +481,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 type Quote struct {
 	Code   string `db:",size:6"`
 	Date   string `db:",size:10"`
+	Time   sql.NullString
 	Klid   int
 	Open   float64
 	High   float64
@@ -481,6 +491,10 @@ type Quote struct {
 	Amount float64
 	Xrate  sql.NullFloat64
 	Varate sql.NullFloat64
+	Ma5    sql.NullFloat64
+	Ma10   sql.NullFloat64
+	Ma20   sql.NullFloat64
+	Ma30   sql.NullFloat64
 	Udate  sql.NullString
 	Utime  sql.NullString
 }
@@ -491,6 +505,10 @@ func (q *Quote) String() string {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+type K60MinList struct {
+	Quotes []*Quote
 }
 
 type Kline struct {
@@ -525,6 +543,35 @@ type IndicatorW struct {
 
 type IndicatorM struct {
 	Indicator
+}
+
+func (k *K60MinList) UnmarshalJSON(b []byte) error {
+	var f interface{}
+	json.Unmarshal(b, &f)
+	clist := f.(map[string]interface{})["chartlist"].([]interface{})
+	k.Quotes = make([]*Quote, len(clist))
+	for i, ci := range clist {
+		im := ci.(map[string]interface{})
+		q := new(Quote)
+		k.Quotes[i] = q
+		for k := range im {
+			switch k {
+			case "volume":
+				q.Volume = im[k].(float64)
+			case "open":
+				q.Open = im[k].(float64)
+			case "high":
+				q.High = im[k].(float64)
+			case "close":
+				q.Close = im[k].(float64)
+			case "low":
+				q.Low = im[k].(float64)
+			default:
+				//do nothing
+			}
+		}
+	}
+	return nil
 }
 
 func (k *KlineW) String() string {
@@ -676,4 +723,10 @@ func (kfv *KDJfdView) Add(klid int, k, d, j float64) {
 	kfv.K = append(kfv.K, k)
 	kfv.D = append(kfv.D, d)
 	kfv.J = append(kfv.J, j)
+}
+
+type KDJVStat struct {
+	Code, Ddate, Udate, Utime                           string
+	Dod, Sl, Sh, Bl, Bh, Ol, Oh, Sor, Bor, Smean, Bmean float64
+	Scnt, Bcnt                                          int
 }

@@ -39,9 +39,9 @@ type BlueChip struct {
 // The assessment metric diverts, some of them are somewhat negative correlated.
 const (
 	SCORE_PE     = 20.
-	SCORE_GEPS   = 40.
-	SCORE_PU     = 25.
-	SCORE_GUDPPS = 15.
+	SCORE_GEPS   = 60.
+	SCORE_PU     = 10.
+	SCORE_GUDPPS = 10.
 	PENALTY_DAR  = 15.
 	//PE_THRESHOLD        = 50.
 	//BLUE_HIST_SPAN_YEAR = 3.
@@ -165,16 +165,19 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 	// score UDPPS growth rate
 	grs := make([]float64, 0, 16)
 	ngrs := make([]float64, 0, 16)
-	yrs := .0
+	pnum := .0
 	countyr := true
 	for i, f := range fins {
 		if f.UdppsYoy.Valid {
 			grs = append(grs, f.UdppsYoy.Float64)
 			if grs[i] < 0 {
-				ngrs = append(ngrs, grs[i])
+				if i < 4 {
+					ngrs = append(ngrs, grs[i])
+				}
+				countyr = false
 			}
 			if countyr {
-				yrs++
+				pnum++
 			}
 		} else {
 			grs = append(grs, 0)
@@ -197,7 +200,7 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
 	}
 	b.UdppsGrAvg = avg
-	s += 2. / 5. * SCORE_GUDPPS * math.Min(1, math.Pow(yrs/3/4., 1.74))
+	s += 2. / 5. * SCORE_GUDPPS * math.Min(1, math.Log((math.E-1)*pnum/4.+1))
 	if avg >= -20. {
 		s += 3. / 5. * SCORE_GUDPPS * math.Min(1, math.Pow((20.+avg)/30., 0.55))
 	}
@@ -221,9 +224,9 @@ func getFinHist(code string) (fins []*model.Finance) {
 // Score by assessing EPS or P/E
 // P/E: Get max score if 0 < P/E <= 5, get 0 if P/E >= 40
 // EPS GR: Get max score if EPS_YOY is all positive and complete for 3 years, and SMA EPS_YOY >= 15;
-//         Get 0 if avg negative growth rate is <= -80%
+//         Get 0 if recent 5 avg negative growth rate is <= -80%
 func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
-	ZERO_PE := 40.
+	ZERO_PE := 80.
 	MAX_PE := 5.
 	// score latest P/E
 	if b.Pe.Float64 < 0 || b.Pe.Float64 >= ZERO_PE {
@@ -234,20 +237,22 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 	// score EPS growth rate
 	grs := make([]float64, 0, 16)
 	ngrs := make([]float64, 0, 16)
-	yrs := .0
-	countyr := true
+	pnum := .0
+	count := true
 	for i, f := range hist {
 		if f.EpsYoy.Valid {
 			grs = append(grs, f.EpsYoy.Float64)
 			if grs[i] < 0 {
-				ngrs = append(ngrs, grs[i])
-				countyr = false
-			} else if countyr {
-				yrs++
+				if i < 4 {
+					ngrs = append(ngrs, grs[i])
+				}
+				count = false
+			} else if count {
+				pnum++
 			}
 		} else {
 			grs = append(grs, 0)
-			countyr = false
+			count = false
 		}
 	}
 	if len(grs) > 4 {
@@ -266,14 +271,14 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", grs))
 	}
 	b.EpsGrAvg = avg
-	s += 2. / 5. * SCORE_GEPS * math.Min(1, math.Pow(yrs/3/4., 1.74))
+	s += 2. / 5. * SCORE_GEPS * math.Min(1, math.Log((math.E-1)*pnum/4.+1))
 	if avg >= -15. {
 		s += 3. / 5. * SCORE_GEPS * math.Min(1, math.Pow((15.+avg)/30., 1.75))
 	}
 	if len(ngrs) > 0 {
 		navg, e := stats.Mean(ngrs)
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", ngrs))
-		s -= SCORE_GEPS * math.Min(1, math.Pow(navg / -80., 3.12))
+		s -= 0.7 * SCORE_GEPS * math.Min(1, math.Pow(navg / -80., 3.12))
 		s = math.Max(0, s)
 	}
 	return
@@ -285,8 +290,8 @@ func (*BlueChip) Id() string {
 
 func (b *BlueChip) Fields() []string {
 	return []string{"Latest Report", "PE", "EPS GR%",
-					"EPS GR AVG%", "PU", "UDPPS GR%", "UDPPS GR AVG%",
-					"DARS%", "DAR AVG%"}
+		"EPS GR AVG%", "PU", "UDPPS GR%", "UDPPS GR AVG%",
+		"DARS%", "DAR AVG%"}
 }
 
 func (b *BlueChip) GetFieldStr(name string) string {

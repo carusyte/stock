@@ -10,6 +10,7 @@ import (
 	"sync"
 	"github.com/carusyte/stock/global"
 	"database/sql"
+	"runtime"
 )
 
 const HIST_DATA_SIZE = 200
@@ -28,7 +29,7 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < MAX_CONCURRENCY; i++ {
+	for i := 0; i < runtime.NumCPU(); i++ {
 		wg.Add(1)
 		go doCalcIndices(chstk, &wg, chrstk)
 	}
@@ -67,8 +68,8 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mod
 
 func calcWeek(stk *model.Stock, offset int64) {
 	var (
-		mxw sql.NullInt64
-		err error
+		mxw  sql.NullInt64
+		err  error
 		code = stk.Code
 	)
 	if offset >= 0 {
@@ -93,21 +94,16 @@ func calcWeek(stk *model.Stock, offset int64) {
 	}
 
 	kdjw := indc.DeftKDJ(qw)
-	if mxw.Valid && len(qw) > HIST_DATA_SIZE {
-		kdjw = kdjw[HIST_DATA_SIZE:]
-	}
 
 	binsIndc(kdjw, "indicator_w")
 
-	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
-		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
-	}
+	SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
 }
 
 func calcMonth(stk *model.Stock, offset int64) {
 	var (
-		mxm sql.NullInt64
-		err error
+		mxm  sql.NullInt64
+		err  error
 		code = stk.Code
 	)
 	if offset >= 0 {
@@ -132,15 +128,10 @@ func calcMonth(stk *model.Stock, offset int64) {
 	}
 
 	kdjm := indc.DeftKDJ(qm)
-	if mxm.Valid && len(qm) > HIST_DATA_SIZE {
-		kdjm = kdjm[HIST_DATA_SIZE:]
-	}
 
 	binsIndc(kdjm, "indicator_m")
 
-	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
-		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
-	}
+	SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
 }
 
 func calcDay(stk *model.Stock, offset int64) {
@@ -172,15 +163,10 @@ func calcDay(stk *model.Stock, offset int64) {
 	}
 
 	kdjd := indc.DeftKDJ(qd)
-	if mxd.Valid && len(qd) > HIST_DATA_SIZE {
-		kdjd = kdjd[HIST_DATA_SIZE:]
-	}
 
 	binsIndc(kdjd, "indicator_d")
 
-	if !stk.TimeToMarket.Valid || util.DaysSince(stk.TimeToMarket.String) >= 180 {
-		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
-	}
+	SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {
@@ -209,10 +195,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 			"(kdj_j),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		ps, err := dbmap.Prepare(stmt)
-		defer ps.Close()
-		util.CheckErrNop(err, code+" failed to prepare statement")
-		_, err = ps.Exec(valueArgs...)
+		_, err := dbmap.Exec(stmt,valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
 			c = len(indc)
 		}
