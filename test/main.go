@@ -6,6 +6,8 @@ import (
 	"log"
 	logr "github.com/sirupsen/logrus"
 	"github.com/carusyte/stock/getd"
+	"github.com/carusyte/stock/global"
+	"github.com/carusyte/stock/util"
 )
 
 func main() {
@@ -16,11 +18,20 @@ func main() {
 	//BLUE
 	//blue()
 	//kdjOnly()
-	renewKdjStats()
+	renewKdjStats(true)
 }
 
-func renewKdjStats() {
-	new(score.KdjV).RenewStats("600104")
+func renewKdjStats(resume bool) {
+	kv := new(score.KdjV)
+	if resume {
+		sql, e := global.Dot.Raw("KDJV_STATS_UNDONE")
+		util.CheckErr(e, "failed to get sql KDJV_STATS_UNDONE")
+		var stocks []string
+		_, e = global.Dbmap.Select(&stocks, sql)
+		kv.RenewStats(stocks...)
+	} else {
+		kv.RenewStats()
+	}
 }
 
 func blue() {

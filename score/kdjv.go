@@ -102,6 +102,7 @@ func (k *KdjV) RenewStats(stock ... string) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
+	//TODO 200 sec each stock, needs enhancement, needs stop-continue
 	cpu := runtime.NumCPU()
 	logr.Debugf("Number of CPU: %d", cpu)
 	var wg sync.WaitGroup
@@ -243,7 +244,13 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 		util.CheckErr(e, fmt.Sprintf("%s failed to round BOR %f", s.Code, kps.Bor))
 		kps.Sor, e = stats.Round(float64(soc)/float64(kps.Scnt), 2)
 		util.CheckErr(e, fmt.Sprintf("%s failed to round SOR %f", s.Code, kps.Sor))
-		dod := 100 * (1 - math.Pow(math.Abs(kps.Bor-kps.Sor)-1, 2))
+		dor := kps.Bor - kps.Sor
+		dod := .0
+		if dor >= 0 {
+			dod = 100 * (1 - math.Pow(dor-1, 2))
+		} else {
+			dod = 100 * (-1 + math.Pow(dor+1, 2))
+		}
 		kps.Dod, e = stats.Round(dod, 2)
 		util.CheckErr(e, fmt.Sprintf("failed to round DOD: %f", dod))
 	} else {

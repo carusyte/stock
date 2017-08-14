@@ -2,9 +2,10 @@ CREATE DATABASE `secu` /*!40100 DEFAULT CHARACTER SET utf8 */;
 
 CREATE TABLE `basics` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
-  `name` text COMMENT '名称',
-  `industry` text COMMENT '所属行业',
-  `area` text COMMENT '地区',
+  `name` varchar(10) DEFAULT NULL COMMENT '名称',
+  `market` varchar(2) DEFAULT NULL COMMENT '市场',
+  `industry` varchar(20) DEFAULT NULL COMMENT '所属行业',
+  `area` varchar(20) DEFAULT NULL COMMENT '地区',
   `pe` double DEFAULT NULL COMMENT '市盈率',
   `pu` double DEFAULT NULL COMMENT 'Price / UDPPS',
   `po` double DEFAULT NULL COMMENT 'Price / OCFPS',
@@ -84,9 +85,17 @@ CREATE TABLE `indc_feat` (
   `remarks` varchar(200) DEFAULT NULL COMMENT '备注',
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`fid`,`cytp`,`bysl`,`indc`),
-  KEY `INDEX_1` (`indc`,`cytp`,`bysl`)
+  PRIMARY KEY (`code`,`fid`,`indc`),
+  KEY `INDEX` (`smp_num`,`cytp`,`bysl`,`indc`,`smp_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征总表';
+
+CREATE TABLE `indc_stats` (
+  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `indc` varchar(10) NOT NULL COMMENT '指标类型',
+  `param` varchar(20) NOT NULL COMMENT '参数名称',
+  `value` varchar(10) DEFAULT NULL COMMENT '参数值',
+  PRIMARY KEY (`code`,`indc`,`param`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标统计信息';
 
 CREATE TABLE `indicator_d` (
   `Code` varchar(6) NOT NULL,
@@ -135,6 +144,50 @@ CREATE TABLE `kdj_feat_dat` (
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`fid`,`klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征数据';
+
+CREATE TABLE `kdjv_stats` (
+  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `dod` double DEFAULT NULL COMMENT 'Degree of Distinction',
+  `sl` double DEFAULT NULL COMMENT 'Sell Low',
+  `sh` double DEFAULT NULL COMMENT 'Sell High',
+  `bl` double DEFAULT NULL COMMENT 'Buy Low',
+  `bh` double DEFAULT NULL COMMENT 'Buy High',
+  `ol` double DEFAULT NULL COMMENT 'Overlap Low',
+  `oh` double DEFAULT NULL COMMENT 'Overlap High',
+  `sor` double DEFAULT NULL COMMENT 'Sell Overlap Ratio',
+  `bor` double DEFAULT NULL COMMENT 'Buy Overlap Ratio',
+  `scnt` int(5) DEFAULT NULL COMMENT 'Sell Count',
+  `bcnt` int(5) DEFAULT NULL COMMENT 'Buy Count',
+  `smean` double DEFAULT NULL COMMENT 'Sell Mean',
+  `bmean` double DEFAULT NULL COMMENT 'Buy Mean',
+  `frmdt` varchar(10) DEFAULT NULL COMMENT 'Data Date Start',
+  `todt` varchar(10) DEFAULT NULL COMMENT 'Data Date End',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Update Date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Update Time',
+  PRIMARY KEY (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJV Scorer Performance Statistics';
+
+CREATE TABLE `kline_60m` (
+  `code` varchar(6) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `time` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60分钟K线（前复权）';
 
 CREATE TABLE `kline_d` (
   `code` varchar(6) NOT NULL,
@@ -253,4 +306,5 @@ CREATE TABLE `xdxr` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 

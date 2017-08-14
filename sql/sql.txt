@@ -362,3 +362,16 @@ FROM
             AND bysl = ?
             AND smp_num = ?) f USING (code , fid)
 ORDER BY k.code , k.fid , k.klid
+
+-- name: KDJV_STATS_UNDONE
+SELECT
+    b.code
+FROM
+    basics b
+WHERE
+    NOT EXISTS( SELECT
+            ks.code
+        FROM
+            kdjv_stats ks
+        WHERE
+            ks.code = b.code)
