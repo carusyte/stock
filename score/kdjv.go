@@ -95,9 +95,8 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
-func (k *KdjV) RenewStats(stock []string) {
+func (k *KdjV) RenewStats(stock ... string) {
 	var stks []*model.Stock
-	kps := make([]*model.KDJVStat, 0, 16)
 	if stock == nil || len(stock) == 0 {
 		stks = getd.StocksDb()
 	} else {
@@ -112,8 +111,10 @@ func (k *KdjV) RenewStats(stock []string) {
 	wgr.Add(1)
 	go func() {
 		defer wgr.Done()
-		for k := range chkps {
-			kps = append(kps, k)
+		c := 0
+		for range chkps {
+			c++
+			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
 		}
 	}()
 	for _, s := range stks {
@@ -125,15 +126,14 @@ func (k *KdjV) RenewStats(stock []string) {
 	wg.Wait()
 	close(chkps)
 	wgr.Wait()
-	saveKps(kps)
 }
 
-func saveKps(kps []*model.KDJVStat) {
-	if len(kps) > 0 {
+func saveKps(kps ... *model.KDJVStat) {
+	if kps != nil && len(kps) > 0 {
 		valueStrings := make([]string, 0, len(kps))
-		valueArgs := make([]interface{}, 0, len(kps)*17)
+		valueArgs := make([]interface{}, 0, len(kps)*18)
 		for _, k := range kps {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, k.Code)
 			valueArgs = append(valueArgs, k.Dod)
 			valueArgs = append(valueArgs, k.Sl)
@@ -148,34 +148,36 @@ func saveKps(kps []*model.KDJVStat) {
 			valueArgs = append(valueArgs, k.Bcnt)
 			valueArgs = append(valueArgs, k.Smean)
 			valueArgs = append(valueArgs, k.Bmean)
-			valueArgs = append(valueArgs, k.Ddate)
+			valueArgs = append(valueArgs, k.Frmdt)
+			valueArgs = append(valueArgs, k.Todt)
 			valueArgs = append(valueArgs, k.Udate)
 			valueArgs = append(valueArgs, k.Utime)
 		}
 		stmt := fmt.Sprintf("INSERT INTO kdjv_stats (code,dod,sl,sh,bl,bh,ol,oh,sor,bor,scnt,bcnt,smean,bmean,"+
-			"ddate,udate,utime) VALUES %s on duplicate key update "+
+			"frmdt,todt,udate,utime) VALUES %s on duplicate key update "+
 			"dod=values(dod),sl=values(sl),"+
 			"sh=values(sh),bl=values(bl),bh=values(bh),ol=values(oh),"+
-			"sor=values(bor),scnt=values(bcnt),smean=values(bmean),ddate=values(ddate),"+
+			"sor=values(bor),scnt=values(bcnt),smean=values(bmean),frmdt=values(frmdt),todt=values(todt),"+
 			"udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, "failed to bulk update kdjv_stats")
-		log.Printf("%d kdjv_stats updated", len(kps))
+		logr.Debugf("%d kdjv_stats updated", len(kps))
 	}
 }
 
+// collect kdjv stats and save to database
 func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, chkps chan *model.KDJVStat) {
 	defer func() {
 		wg.Done()
 		<-chstk
 	}()
-	//TODO collect kdjv stats
+	start := time.Now()
 	var e error
 	expvr := 5.0
 	mxrt := 2.0
 	mxhold := 3
-	retro := 350
+	retro := 600
 	kps := new(model.KDJVStat)
 	klhist := getd.GetKlineDb(s.Code, model.KLINE_DAY, retro, false)
 	if len(klhist) < retro {
@@ -183,27 +185,43 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 		return
 	}
 	kps.Code = s.Code
-	kps.Ddate = klhist[len(klhist)-1].Date
+	kps.Frmdt = klhist[0].Date
+	kps.Todt = klhist[len(klhist)-1].Date
 	kps.Udate, kps.Utime = util.TimeStr()
-	buys := getKdjBuyStats(s.Code, klhist, expvr, mxrt, mxhold)
-	sells := getKdjSellStats(s.Code, klhist, expvr, mxrt, mxhold)
+	st := time.Now()
+	buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold)
+	dur := time.Since(st).Seconds()
+	logr.Debugf("%s buy score: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
+	st = time.Now()
+	sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold)
+	dur = time.Since(st).Seconds()
+	logr.Debugf("%s sell score: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
 	sort.Float64s(buys)
 	sort.Float64s(sells)
-	kps.Bl = buys[0]
-	kps.Sl = sells[0]
-	kps.Bh = buys[len(buys)-1]
-	kps.Sh = sells[len(sells)-1]
+	kps.Bl, e = stats.Round(buys[0], 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BL %f", s.Code, buys[0]))
+	kps.Sl, e = stats.Round(sells[0], 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SL %f", s.Code, sells[0]))
+	kps.Bh, e = stats.Round(buys[len(buys)-1], 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BH %f", s.Code, buys[len(buys)-1]))
+	kps.Sh, e = stats.Round(sells[len(sells)-1], 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SH %f", s.Code, sells[len(sells)-1]))
 	kps.Bcnt = len(buys)
 	kps.Scnt = len(sells)
 	kps.Bmean, e = stats.Mean(buys)
 	util.CheckErr(e, s.Code+" failed to calculate mean for buy scores")
+	kps.Bmean, e = stats.Round(kps.Bmean, 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BMean %f", s.Code, kps.Bmean))
 	kps.Smean, e = stats.Mean(sells)
 	util.CheckErr(e, s.Code+" failed to calculate mean for sell scores")
+	kps.Smean, e = stats.Round(kps.Smean, 2)
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SMean %f", s.Code, kps.Smean))
 	if kps.Sh >= kps.Bl {
 		soc, boc := 0, 0
-		for _, s := range buys {
-			if s <= kps.Sh {
+		for _, b := range buys {
+			if b <= kps.Sh {
 				boc++
+				kps.Oh = b
 			} else {
 				break
 			}
@@ -212,21 +230,33 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 			s := sells[i]
 			if s >= kps.Bl {
 				soc++
+				kps.Ol = s
 			} else {
 				break
 			}
 		}
-		kps.Bor = float64(boc) / float64(kps.Bcnt)
-		kps.Sor = float64(soc) / float64(kps.Scnt)
+		kps.Oh, e = stats.Round(kps.Oh, 2)
+		util.CheckErr(e, fmt.Sprintf("%s failed to round OH %f", s.Code, kps.Oh))
+		kps.Ol, e = stats.Round(kps.Ol, 2)
+		util.CheckErr(e, fmt.Sprintf("%s failed to round OL %f", s.Code, kps.Ol))
+		kps.Bor, e = stats.Round(float64(boc)/float64(kps.Bcnt), 2)
+		util.CheckErr(e, fmt.Sprintf("%s failed to round BOR %f", s.Code, kps.Bor))
+		kps.Sor, e = stats.Round(float64(soc)/float64(kps.Scnt), 2)
+		util.CheckErr(e, fmt.Sprintf("%s failed to round SOR %f", s.Code, kps.Sor))
+		dod := 100 * (1 - math.Pow(math.Abs(kps.Bor-kps.Sor)-1, 2))
+		kps.Dod, e = stats.Round(dod, 2)
+		util.CheckErr(e, fmt.Sprintf("failed to round DOD: %f", dod))
+	} else {
+		kps.Dod = 100
 	}
-	//TODO assess degree of distinction
-	//kps.Dod = ?
+	saveKps(kps)
+	logr.Debugf("%s kdjv DOD: %.2f, time: %.2f", s.Code, kps.Dod, time.Since(start).Seconds())
 	chkps <- kps
 }
 
 // collect kdjv buy stats
-func getKdjBuyStats(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
-	for i := 50; i < len(klhist)-1; i++ {
+func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
+	for i := 1; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
 		if sc >= klhist[i+1].Close {
@@ -271,7 +301,7 @@ func getKdjBuyStats(code string, klhist []*model.Quote, expvr, mxrt float64, mxh
 }
 
 // collect kdjv sell stats
-func getKdjSellStats(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
+func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
 	for i := 50; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close

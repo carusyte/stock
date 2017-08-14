@@ -726,7 +726,7 @@ func (kfv *KDJfdView) Add(klid int, k, d, j float64) {
 }
 
 type KDJVStat struct {
-	Code, Ddate, Udate, Utime                           string
+	Code, Frmdt, Todt, Udate, Utime                     string
 	Dod, Sl, Sh, Bl, Bh, Ol, Oh, Sor, Bor, Smean, Bmean float64
 	Scnt, Bcnt                                          int
 }

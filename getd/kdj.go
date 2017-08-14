@@ -17,63 +17,74 @@ var kdjFdMap map[string][]*model.KDJfdView = make(map[string][]*model.KDJfdView)
 var lock = sync.RWMutex{}
 
 func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs []*model.Indicator) {
+	defer func() {
+		if r := recover(); r != nil {
+			if er, hasError := r.(error); hasError {
+				log.Panicf("%s, %s, %d, %s, error:\n%+v", code, tab, retro, toDate, er)
+			}
+		}
+	}()
+	var (
+		e   error
+		sql string
+	)
 	if toDate == "" {
 		if retro > 0 {
-			sql := fmt.Sprintf("SELECT * FROM (SELECT * FROM %s WHERE code = ? ORDER BY klid DESC LIMIT ?) t"+
+			sql = fmt.Sprintf("SELECT * FROM (SELECT * FROM %s WHERE code = ? ORDER BY klid DESC LIMIT ?) t"+
 				" ORDER BY t.klid", tab)
-			_, e := dbmap.Select(&indcs, sql, code, retro)
-			util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
+			_, e = dbmap.Select(&indcs, sql, code, retro)
 		} else {
-			sql := fmt.Sprintf("SELECT * FROM %s WHERE code = ? ORDER BY klid", tab)
-			_, e := dbmap.Select(&indcs, sql, code)
-			util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
+			sql = fmt.Sprintf("SELECT * FROM %s WHERE code = ? ORDER BY klid", tab)
+			_, e = dbmap.Select(&indcs, sql, code)
+		}
+		if e != nil {
+			if "sql: no rows in result set" != e.Error() {
+				return
+			} else {
+				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
+			}
 		}
 	} else {
 		if retro > 0 {
 			sql := fmt.Sprintf("SELECT * FROM (SELECT * FROM %s WHERE code = ? and date <= ? ORDER BY klid "+
 				"DESC LIMIT ?) t ORDER BY t.klid", tab)
-			_, e := dbmap.Select(&indcs, sql, code, toDate, retro)
-			util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
+			_, e = dbmap.Select(&indcs, sql, code, toDate, retro)
 		} else {
 			sql := fmt.Sprintf("SELECT * FROM %s WHERE code = ? and date <= ? ORDER BY klid", tab)
-			_, e := dbmap.Select(&indcs, sql, code, toDate)
-			util.CheckErr(e, "failed to query kdj hist, sql:\n"+sql)
+			_, e = dbmap.Select(&indcs, sql, code, toDate)
 		}
-		if len(indcs) == 0 {
+		if e != nil {
+			if "sql: no rows in result set" != e.Error() {
+				return
+			} else {
+				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
+			}
+		}
+		if indcs[len(indcs)-1].Date == toDate {
 			return
 		}
+		var oqs []*model.Quote
 		switch tab {
 		case model.INDICATOR_DAY:
 			return
 		case model.INDICATOR_WEEK:
-			if indcs[len(indcs)-1].Date == toDate {
-				return
-			}
-			//re-calculate the latest weekly kdj
-			var oqs []*model.Quote
-			_, err := dbmap.Select(&oqs, "select * from kline_w where code = ? and date < ? order by klid",
-				code, toDate)
-			util.CheckErr(err, "Failed to query kline_w for "+code)
-			//generate the latest week quote toDate
-			qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
-			nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
-			nidcs := indc.DeftKDJ(append(oqs, nq))
-			return append(indcs, nidcs[len(nidcs)-1])
+			sql = "select * from kline_w where code = ? and date < ? order by klid"
 		case model.INDICATOR_MONTH:
-			if indcs[len(indcs)-1].Date == toDate {
-				return
-			}
-			//re-calculate the latest monthly kdj
-			var oqs []*model.Quote
-			_, err := dbmap.Select(&oqs, "select * from kline_m where code = ? and date < ? order by klid",
-				code, toDate)
-			util.CheckErr(err, "Failed to query kline_m for "+code)
-			//generate the latest month quote toDate
-			qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
-			nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
-			nidcs := indc.DeftKDJ(append(oqs, nq))
-			return append(indcs, nidcs[len(nidcs)-1])
+			sql = "select * from kline_m where code = ? and date < ? order by klid"
 		}
+		_, e = dbmap.Select(&oqs, sql, code, toDate)
+		if e != nil {
+			if "sql: no rows in result set" != e.Error() {
+				return
+			} else {
+				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
+			}
+		}
+		qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
+		//FIXME 000006, indicator_w, 100, 2017-01-16, error: nil pointer
+		nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
+		nidcs := indc.DeftKDJ(append(oqs, nq))
+		return append(indcs, nidcs[len(nidcs)-1])
 	}
 	return
 }

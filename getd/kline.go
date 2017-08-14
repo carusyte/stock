@@ -68,9 +68,11 @@ func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist [
 	op2 := "<"
 	if strings.HasPrefix(dt1, "[") {
 		op1 += "="
+		dt1 = dt1[1:]
 	}
 	if strings.HasSuffix(dt2, "]") {
 		op2 += "="
+		dt2 = dt2[:len(dt2)-1]
 	}
 	d := ""
 	if desc {
@@ -319,6 +321,7 @@ func tryDailyKlines(code string, mode string, klt model.DBTab, incr bool, ldate 
 			"string:%s, error: %+v", code, klast.Start, e)
 		return kldy, false, false
 	}
+	yr++
 	for more {
 		yr--
 		if yr < start {

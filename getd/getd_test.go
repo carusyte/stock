@@ -14,3 +14,11 @@ func TestFinMark(t *testing.T) {
 	finMark(ss)
 }
 
+func TestCalcIndics(t *testing.T) {
+	stks := StocksDb()
+	allstk := new(model.Stocks)
+	for _, s := range stks {
+		allstk.Add(s)
+	}
+	CalcIndics(allstk)
+}

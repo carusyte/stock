@@ -9,12 +9,18 @@ import (
 )
 
 func main() {
+	logr.SetLevel(logr.DebugLevel)
 	//getData()
 	//kdjFirst()
-	holistic()
+	//holistic()
 	//BLUE
 	//blue()
 	//kdjOnly()
+	renewKdjStats()
+}
+
+func renewKdjStats() {
+	new(score.KdjV).RenewStats("600104")
 }
 
 func blue() {
@@ -23,7 +29,6 @@ func blue() {
 }
 
 func holistic() {
-	logr.SetLevel(logr.DebugLevel)
 	start := time.Now()
 	//r1 := new(score.HiD).Geta()
 	//r1.Weight = 0.1
@@ -38,7 +43,6 @@ func holistic() {
 }
 
 func kdjFirst() {
-	logr.SetLevel(logr.DebugLevel)
 	start := time.Now()
 	r1 := new(score.KdjV).Geta().Sort().Shrink(50)
 	r2 := new(score.HiD).Get(r1.Stocks(), -1, false)
@@ -49,10 +53,9 @@ func kdjFirst() {
 	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
-func kdjOnly(code... string) {
-	logr.SetLevel(logr.DebugLevel)
+func kdjOnly(code ... string) {
 	start := time.Now()
-	r1 := new(score.KdjV).Get(code,-1,true)
+	r1 := new(score.KdjV).Get(code, -1, true)
 	log.Printf("\n%+v", r1)
 	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
