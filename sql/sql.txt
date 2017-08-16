@@ -363,6 +363,40 @@ FROM
             AND smp_num = ?) f USING (code , fid)
 ORDER BY k.code , k.fid , k.klid
 
+-- name: KDJ_FEAT_DAT_RAW_UNPRUNED_COUNT
+SELECT
+    *
+FROM
+    (SELECT
+        cytp, bysl, smp_num, COUNT(*) count
+    FROM
+        indc_feat_raw
+    GROUP BY cytp , bysl , smp_num) r
+WHERE
+    NOT EXISTS( SELECT
+            cytp, bysl, smp_num
+        FROM
+            indc_feat f
+        WHERE
+            f.cytp = r.cytp AND f.bysl = r.bysl
+                AND f.smp_num = r.smp_num)
+
+-- name: KDJ_FEAT_DAT
+SELECT
+    f.fid, f.smp_num, f.fd_num, f.weight, k.seq, k.k, k.d, k.j
+FROM
+    kdj_feat_dat k
+        INNER JOIN
+    (SELECT
+        *
+    FROM
+        indc_feat
+    WHERE
+        indc = 'KDJ' AND cytp = ?
+            AND bysl = ?
+            AND smp_num = ?) f USING (fid)
+ORDER BY f.fd_num desc, k.seq
+
 -- name: KDJV_STATS_UNDONE
 SELECT
     b.code

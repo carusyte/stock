@@ -729,6 +729,12 @@ type KDJfdView struct {
 	J                        []float64
 }
 
+func (kfv *KDJfdView) Add(k, d, j float64) {
+	kfv.K = append(kfv.K, k)
+	kfv.D = append(kfv.D, d)
+	kfv.J = append(kfv.J, j)
+}
+
 func (v *KDJfdView) String() string {
 	j, e := json.Marshal(v)
 	if e != nil {

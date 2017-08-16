@@ -144,7 +144,6 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		wg.Done()
 		<-*wf
 	}()
-	// FIXME remove possible duplicates, e.g. 600093, daily
 	xdxr := latestUFRXdxr(stk.Code)
 	suc := false
 	for _, t := range kltype {

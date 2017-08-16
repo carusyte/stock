@@ -15,8 +15,11 @@ import (
 	"runtime"
 )
 
-var kdjFdMap map[string][]*model.KDJfdrView = make(map[string][]*model.KDJfdrView)
-var lock = sync.RWMutex{}
+var (
+	kdjFdrMap map[string][]*model.KDJfdrView = make(map[string][]*model.KDJfdrView)
+	kdjFdMap  map[string][]*model.KDJfdView  = make(map[string][]*model.KDJfdView)
+	lock                                     = sync.RWMutex{}
+)
 
 func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs []*model.Indicator) {
 	defer func() {
@@ -83,7 +86,6 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			}
 		}
 		qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
-		//FIXME 000006, indicator_w, 100, 2017-01-16, error: nil pointer
 		nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
 		nidcs := indc.DeftKDJ(append(oqs, nq))
 		return append(indcs, nidcs[len(nidcs)-1])
@@ -302,7 +304,7 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 	return kdjs;
 }
 
-func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
+func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	bysl := "BY"
 	if !buy {
 		bysl = "SL"
@@ -310,7 +312,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	mk := fmt.Sprintf("%s-%s-%d", cytp, bysl, num)
 	lock.Lock()
 	defer lock.Unlock()
-	if fdvs, exists := kdjFdMap[mk]; exists {
+	if fdvs, exists := kdjFdrMap[mk]; exists {
 		return fdvs
 	}
 	start := time.Now()
@@ -320,10 +322,10 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	if e != nil {
 		if "sql: no rows in result set" != e.Error() {
 			fdvs := make([]*model.KDJfdrView, 0)
-			kdjFdMap[mk] = fdvs
+			kdjFdrMap[mk] = fdvs
 			return fdvs
 		} else {
-			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
+			log.Panicf("failed to query kdj feat dat raw, sql:\n%s\n%+v", sql, e)
 		}
 	}
 	defer rows.Close()
@@ -338,7 +340,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	for rows.Next() {
 		rows.Scan(&code, &fid, &smpDate, &smpNum, &klid, &k, &d, &j)
 		if code != pcode || fid != pfid {
-			kfv = newKDJfdView(code, smpDate, smpNum)
+			kfv = newKDJfdrView(code, smpDate, smpNum)
 			fdvs = append(fdvs, kfv)
 		}
 		kfv.Add(klid, k, d, j)
@@ -348,14 +350,79 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	if err := rows.Err(); err != nil {
 		log.Fatal(err)
 	}
-	kdjFdMap[mk] = fdvs
+	kdjFdrMap[mk] = fdvs
 	logr.Debugf("query kdj_feat_dat_raw(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
 	return fdvs
 }
 
-func newKDJfdView(code, date string, num int) *model.KDJfdrView {
+func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
+	bysl := "BY"
+	if !buy {
+		bysl = "SL"
+	}
+	mk := fmt.Sprintf("%s-%s-%d", cytp, bysl, num)
+	lock.Lock()
+	defer lock.Unlock()
+	if fdvs, exists := kdjFdMap[mk]; exists {
+		return fdvs
+	}
+	start := time.Now()
+	sql, e := dot.Raw("KDJ_FEAT_DAT")
+	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
+	rows, e := dbmap.Query(sql, cytp, bysl, num)
+	if e != nil {
+		if "sql: no rows in result set" != e.Error() {
+			fdvs := make([]*model.KDJfdView, 0)
+			kdjFdMap[mk] = fdvs
+			return fdvs
+		} else {
+			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
+		}
+	}
+	defer rows.Close()
+	var (
+		fid                string
+		pfid               string
+		smpNum, fdNum, seq int
+		weight, k, d, j    float64
+		kfv                *model.KDJfdView
+	)
+	fdvs := make([]*model.KDJfdView, 0, 16)
+	for rows.Next() {
+		rows.Scan(&fid, &smpNum, &fdNum, &weight, &seq, &k, &d, &j)
+		if fid != pfid {
+			kfv = newKDJfdView(fid, bysl, cytp, smpNum, fdNum, weight)
+			fdvs = append(fdvs, kfv)
+		}
+		kfv.Add(k, d, j)
+		pfid = fid
+	}
+	if err := rows.Err(); err != nil {
+		log.Panicln("failed to query kdj feat dat.", err)
+	}
+	kdjFdMap[mk] = fdvs
+	logr.Debugf("query kdj_feat_dat(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
+	return fdvs
+}
+
+func newKDJfdrView(code, date string, num int) *model.KDJfdrView {
 	return &model.KDJfdrView{code, date, num, make([]int, 0, 16), make([]float64, 0, 16),
 		make([]float64, 0, 16), make([]float64, 0, 16)}
+}
+
+func newKDJfdView(fid, bysl string, cytp model.CYTP, smpNum, fdNum int, weight float64) *model.KDJfdView {
+	v := &model.KDJfdView{}
+	v.Indc = "KDJ"
+	v.Cytp = model.CYTP(cytp)
+	v.Fid = fid
+	v.Bysl = bysl
+	v.SmpNum = smpNum
+	v.FdNum = fdNum
+	v.Weight = weight
+	v.K = make([]float64, 0, 16)
+	v.D = make([]float64, 0, 16)
+	v.J = make([]float64, 0, 16)
+	return v
 }
 
 func purgeKdjFeatDat(code string) {
@@ -441,12 +508,20 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 	}
 }
 
-func PruneKdjFeatDat(prec float64, pass int) {
+func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	st := time.Now()
-	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d", prec, pass)
+	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d, resume: %t", prec, pass, resume)
 	var fdks []*fdKey
-	_, e := dbmap.Select(&fdks, "select cytp, bysl, smp_num, count(*) count from indc_feat_raw group by cytp, bysl, "+
-		"smp_num")
+	var e error
+	if resume {
+		// skip data already in indc_feat
+		sql, e := dot.Raw("KDJ_FEAT_DAT_RAW_UNPRUNED_COUNT")
+		util.CheckErr(e, "failed to get sql KDJ_FEAT_DAT_RAW_UNPRUNED_COUNT")
+		_, e = dbmap.Select(&fdks, sql)
+	} else {
+		_, e = dbmap.Select(&fdks, "select cytp, bysl, smp_num, count(*) count from "+
+			"indc_feat_raw group by cytp, bysl, smp_num")
+	}
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return
@@ -454,10 +529,12 @@ func PruneKdjFeatDat(prec float64, pass int) {
 			log.Panicln("failed to query indc_feat_dat_raw", e)
 		}
 	}
-	_, e = dbmap.Exec("truncate table indc_feat")
-	util.CheckErr(e, "failed to truncate indc_feat")
-	_, e = dbmap.Exec("truncate table kdj_feat_dat")
-	util.CheckErr(e, "failed to truncate kdj_feat_dat")
+	if !resume {
+		_, e = dbmap.Exec("truncate table indc_feat")
+		util.CheckErr(e, "failed to truncate indc_feat")
+		_, e = dbmap.Exec("truncate table kdj_feat_dat")
+		util.CheckErr(e, "failed to truncate kdj_feat_dat")
+	}
 	var wg sync.WaitGroup
 	chfdk := make(chan *fdKey, JOB_CAPACITY)
 	for i := 0; i < runtime.NumCPU(); i++ {
@@ -482,13 +559,13 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 	defer wg.Done()
 	for fdk := range chfdk {
 		st := time.Now()
-		fdrvs := GetKdjFeatDat(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
+		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
 		logr.Debugf("pruning: %s-%s-%d size: %d", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs))
 		fdvs := convert2Fdvs(fdk, fdrvs)
 		for p := 0; p < pass; p++ {
 			stp := time.Now()
 			bfc := len(fdvs)
-			fdvs = passKdjFeatDatPrune(fdk, fdvs, prec)
+			fdvs = passKdjFeatDatPrune(fdvs, prec)
 			prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
 			logr.Debugf("%s-%s-%d pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
 				fdk.Cytp, fdk.Bysl, fdk.SmpNum, p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
@@ -560,17 +637,13 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 	}
 }
 
-func passKdjFeatDatPrune(fdk *fdKey, fdvs []*model.KDJfdView, prec float64) ([]*model.KDJfdView) {
-	for i := 0; i < len(fdvs); i++ {
+func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) ([]*model.KDJfdView) {
+	for i := 0; i < len(fdvs)-1; i++ {
 		f1 := fdvs[i]
 		pend := make([]*model.KDJfdView, 1, 16)
 		pend[0] = f1
-		for j := 0; j < len(fdvs); {
+		for j := i + 1; j < len(fdvs); {
 			f2 := fdvs[j]
-			if f1 == f2 {
-				j++
-				continue
-			}
 			d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
 			if d >= prec {
 				pend = append(pend, f2)

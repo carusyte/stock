@@ -101,7 +101,7 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
-func (k *KdjV) RenewStats(stock ... string) {
+func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	var stks []*model.Stock
 	if stock == nil || len(stock) == 0 {
 		stks = getd.StocksDb()
@@ -128,7 +128,7 @@ func (k *KdjV) RenewStats(stock ... string) {
 	for _, s := range stks {
 		wg.Add(1)
 		chstk <- s
-		go renewKdjStats(s, &wg, chstk, chkps)
+		go renewKdjStats(s, useRaw, &wg, chstk, chkps)
 	}
 	close(chstk)
 	wg.Wait()
@@ -173,7 +173,8 @@ func saveKps(kps ... *model.KDJVStat) {
 }
 
 // collect kdjv stats and save to database
-func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, chkps chan *model.KDJVStat) {
+func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *model.Stock,
+	chkps chan *model.KDJVStat) {
 	defer func() {
 		wg.Done()
 		<-chstk
@@ -195,11 +196,11 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 	kps.Todt = klhist[len(klhist)-1].Date
 	kps.Udate, kps.Utime = util.TimeStr()
 	st := time.Now()
-	buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold)
+	buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 	dur := time.Since(st).Seconds()
 	logr.Debugf("%s buy score: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
 	st = time.Now()
-	sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold)
+	sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 	dur = time.Since(st).Seconds()
 	logr.Debugf("%s sell score: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
 	sort.Float64s(buys)
@@ -267,7 +268,8 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 }
 
 // collect kdjv buy stats
-func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
+func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64,
+	mxhold int, useRawData bool) (s []float64) {
 	for i := 1; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
@@ -305,7 +307,11 @@ func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 			histmo := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
 			histwk := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
 			histdy := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
-			s = append(s, wgtKdjScore(nil, histmo, histwk, histdy))
+			if useRawData {
+				s = append(s, wgtKdjScoreRaw(nil, histmo, histwk, histdy))
+			} else {
+				s = append(s, wgtKdjScore(nil, histmo, histwk, histdy))
+			}
 		}
 		i += tspan
 	}
@@ -313,7 +319,8 @@ func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 }
 
 // collect kdjv sell stats
-func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (s []float64) {
+func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
+	mxhold int, useRawData bool) (s []float64) {
 	for i := 50; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
@@ -351,7 +358,11 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64, m
 			histmo := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
 			histwk := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
 			histdy := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
-			s = append(s, wgtKdjScore(nil, histmo, histwk, histdy))
+			if useRawData {
+				s = append(s, wgtKdjScoreRaw(nil, histmo, histwk, histdy))
+			} else {
+				s = append(s, wgtKdjScore(nil, histmo, histwk, histdy))
+			}
 		}
 		i += tspan
 	}
@@ -379,6 +390,7 @@ func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
 
 	//warn if...
 
+	//ip.Score = wgtKdjScoreRaw(kdjv, histmo, histwk, histdy)
 	ip.Score = wgtKdjScore(kdjv, histmo, histwk, histdy)
 	item.Score += ip.Score
 
@@ -399,6 +411,15 @@ func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
 	logr.Debugf("%s %s kdjv: %.2f, time: %.2f", item.Code, item.Name, ip.Score, time.Since(start).Seconds())
 }
 
+func wgtKdjScoreRaw(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
+	s += scoreKdjRaw(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
+	s += scoreKdjRaw(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
+	s += scoreKdjRaw(kdjv, model.DAY, histdy) * SCORE_KDJV_DAY
+	s /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
+	s = math.Min(100, math.Max(0, s))
+	return
+}
+
 func wgtKdjScore(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
 	s += scoreKdj(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
 	s += scoreKdj(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
@@ -408,7 +429,7 @@ func wgtKdjScore(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float
 	return
 }
 
-//Score by assessing the historical data against feature data.
+//Score by assessing the historical data against pruned kdj feature data.
 func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) {
 	var val string
 	byhist, slhist := getKDJfdViews(cytp, len(kdjhist))
@@ -449,9 +470,63 @@ func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) 
 	return
 }
 
-func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdrView) {
+//Score by assessing the historical data against raw kdj feature data.
+func scoreKdjRaw(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) {
+	var val string
+	byhist, slhist := getKDJfdrViews(cytp, len(kdjhist))
+	hdr, pdr, mpd, bdi := calcKdjDIRaw(kdjhist, byhist)
+	val = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n", hdr, pdr, mpd, bdi)
+	hdr, pdr, mpd, sdi := calcKdjDIRaw(kdjhist, slhist)
+	val += fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n", hdr, pdr, mpd, sdi)
+	dirat := .0
+	s = .0
+	if sdi == 0 {
+		dirat = bdi
+	} else {
+		dirat = (bdi - sdi) / math.Abs(sdi)
+	}
+	if dirat > 0 && dirat < 0.995 {
+		s = 30 * (0.0015 + 3.3609*dirat - 4.3302*math.Pow(dirat, 2.) + 2.5115*math.Pow(dirat, 3.) -
+			0.5449*math.Pow(dirat, 4.))
+	} else if dirat >= 0.995 {
+		s = 30
+	}
+	if bdi > 0.201 && bdi < 0.81 {
+		s += 70 * (0.0283 - 1.8257*bdi + 10.4231*math.Pow(bdi, 2.) - 10.8682*math.Pow(bdi, 3.) + 3.2234*math.Pow(bdi, 4.))
+	} else if bdi >= 0.81 {
+		s += 70
+	}
+	if v != nil {
+		switch cytp {
+		case model.DAY:
+			v.CCDY = val
+		case model.WEEK:
+			v.CCWK = val
+		case model.MONTH:
+			v.CCMO = val
+		default:
+			log.Panicf("unsupported cytp: %s", cytp)
+		}
+	}
+	return
+}
+
+func getKDJfdrViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdrView) {
 	buy = make([]*model.KDJfdrView, 0, 1024)
 	sell = make([]*model.KDJfdrView, 0, 1024)
+	for i := -2; i < 3; i++ {
+		n := len + i
+		if n >= 2 {
+			buy = append(buy, getd.GetKdjFeatDatRaw(cytp, true, n)...)
+			sell = append(sell, getd.GetKdjFeatDatRaw(cytp, false, n)...)
+		}
+	}
+	return
+}
+
+func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdView) {
+	buy = make([]*model.KDJfdView, 0, 1024)
+	sell = make([]*model.KDJfdView, 0, 1024)
 	for i := -2; i < 3; i++ {
 		n := len + i
 		if n >= 2 {
@@ -462,9 +537,9 @@ func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdrView) {
 	return
 }
 
-// Evaluates KDJ DEVIA indicator, returns the following result:
+// Evaluates KDJ DEVIA indicator against raw feature data, returns the following result:
 // Ratio of high DEVIA, ratio of positive DEVIA, mean of positive DEVIA, and DEVIA indicator, ranging from 0 to 1
-func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdrView) (hdr, pdr, mpd, di float64) {
+func calcKdjDIRaw(hist []*model.Indicator, fdvs []*model.KDJfdrView) (hdr, pdr, mpd, di float64) {
 	if len(hist) == 0 {
 		return 0, 0, 0, 0
 	}
@@ -506,6 +581,45 @@ func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdrView) (hdr, pdr, mpd
 	if len(pds) > 0 {
 		mpd, e = stats.Mean(pds)
 		util.CheckErr(e, code+" failed to calculate mean of devia")
+	}
+	di = 0.5 * math.Min(1, math.Pow(hdr+0.92, 50))
+	di += 0.3 * math.Min(1, math.Pow(math.Log(pdr+1), 0.37)+0.4*math.Pow(pdr, math.Pi)+math.Pow(pdr, 0.476145))
+	di += 0.2 * math.Min(1, math.Pow(math.Log(math.Pow(mpd, math.E*math.Pi/1.1)+1), 0.06)+
+		math.E/1.25/math.Pi*math.Pow(mpd, math.E*math.Pi))
+	return
+}
+
+// Evaluates KDJ DEVIA indicator against pruned feature data, returns the following result:
+// Ratio of high DEVIA, ratio of positive DEVIA, mean of positive DEVIA, and DEVIA indicator, ranging from 0 to 1
+func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdView) (hdr, pdr, mpd, di float64) {
+	if len(hist) == 0 {
+		return 0, 0, 0, 0
+	}
+	code := hist[0].Code
+	hk := make([]float64, len(hist))
+	hd := make([]float64, len(hist))
+	hj := make([]float64, len(hist))
+	for i, h := range hist {
+		hk[i] = h.KDJ_K
+		hd[i] = h.KDJ_D
+		hj[i] = h.KDJ_J
+	}
+	pds := make([]float64, 0, 16)
+	for _, fd := range fdvs {
+		mod := 1.0
+		bkd := bestKdjDevi(hk, hd, hj, fd.K, fd.D, fd.J) * mod
+		if bkd >= 0 {
+			pds = append(pds, bkd)
+			pdr += fd.Weight
+			if bkd >= 0.8 {
+				hdr += fd.Weight
+			}
+		}
+	}
+	var e error
+	if len(pds) > 0 {
+		mpd, e = stats.Mean(pds)
+		util.CheckErr(e, code+" failed to calculate mean of positive devia")
 	}
 	di = 0.5 * math.Min(1, math.Pow(hdr+0.92, 50))
 	di += 0.3 * math.Min(1, math.Pow(math.Log(pdr+1), 0.37)+0.4*math.Pow(pdr, math.Pi)+math.Pow(pdr, 0.476145))

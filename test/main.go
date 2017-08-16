@@ -13,17 +13,17 @@ import (
 func main() {
 	logr.SetLevel(logr.DebugLevel)
 	//getData()
-	pruneKdjFd()
+	pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
 	//BLUE
 	//blue()
 	//kdjOnly()
-	//renewKdjStats(true)
+	//renewKdjStats(false)
 }
 
-func pruneKdjFd() {
-	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS)
+func pruneKdjFd(resume bool) {
+	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS,resume)
 }
 
 func renewKdjStats(resume bool) {
@@ -33,9 +33,9 @@ func renewKdjStats(resume bool) {
 		util.CheckErr(e, "failed to get sql KDJV_STATS_UNDONE")
 		var stocks []string
 		_, e = global.Dbmap.Select(&stocks, sql)
-		kv.RenewStats(stocks...)
+		kv.RenewStats(false, stocks...)
 	} else {
-		kv.RenewStats()
+		kv.RenewStats(false)
 	}
 }
 
