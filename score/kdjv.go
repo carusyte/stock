@@ -23,8 +23,10 @@ import (
 type KdjV struct {
 	Code  string
 	Name  string
-	Dod   float64 // Degree of Distinction
-	Stats string
+	Dod   float64 // Degree of Distinction in stats
+	Sfl   float64 // Safe Line in stats
+	Bmean float64 // Buy Score Mean in stats
+	Smean float64 // Sell Score Mean in stats
 	Len   string
 	CCMO  string
 	CCWK  string
@@ -41,8 +43,12 @@ func (k *KdjV) GetFieldStr(name string) string {
 	switch name {
 	case "DOD":
 		return fmt.Sprintf("%.2f", k.Dod)
-	case "STATS":
-		return k.Stats
+	case "SFL":
+		return fmt.Sprintf("%.2f", k.Sfl)
+	case "BMEAN":
+		return fmt.Sprintf("%.2f", k.Bmean)
+	case "SMEAN":
+		return fmt.Sprintf("%.2f", k.Smean)
 	case "LEN":
 		return k.Len
 	case "KDJ_DY":
@@ -103,6 +109,7 @@ func (k *KdjV) RenewStats(stock ... string) {
 		stks = getd.StocksDbByCode(stock...)
 	}
 	//TODO 200 sec each stock, needs enhancement, needs stop-continue
+	logr.Debugf("#Stocks: %d", len(stks))
 	cpu := runtime.NumCPU()
 	logr.Debugf("Number of CPU: %d", cpu)
 	var wg sync.WaitGroup
@@ -132,17 +139,15 @@ func (k *KdjV) RenewStats(stock ... string) {
 func saveKps(kps ... *model.KDJVStat) {
 	if kps != nil && len(kps) > 0 {
 		valueStrings := make([]string, 0, len(kps))
-		valueArgs := make([]interface{}, 0, len(kps)*18)
+		valueArgs := make([]interface{}, 0, len(kps)*16)
 		for _, k := range kps {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, k.Code)
 			valueArgs = append(valueArgs, k.Dod)
 			valueArgs = append(valueArgs, k.Sl)
 			valueArgs = append(valueArgs, k.Sh)
 			valueArgs = append(valueArgs, k.Bl)
 			valueArgs = append(valueArgs, k.Bh)
-			valueArgs = append(valueArgs, k.Ol)
-			valueArgs = append(valueArgs, k.Oh)
 			valueArgs = append(valueArgs, k.Sor)
 			valueArgs = append(valueArgs, k.Bor)
 			valueArgs = append(valueArgs, k.Scnt)
@@ -154,10 +159,10 @@ func saveKps(kps ... *model.KDJVStat) {
 			valueArgs = append(valueArgs, k.Udate)
 			valueArgs = append(valueArgs, k.Utime)
 		}
-		stmt := fmt.Sprintf("INSERT INTO kdjv_stats (code,dod,sl,sh,bl,bh,ol,oh,sor,bor,scnt,bcnt,smean,bmean,"+
+		stmt := fmt.Sprintf("INSERT INTO kdjv_stats (code,dod,sl,sh,bl,bh,sor,bor,scnt,bcnt,smean,bmean,"+
 			"frmdt,todt,udate,utime) VALUES %s on duplicate key update "+
 			"dod=values(dod),sl=values(sl),"+
-			"sh=values(sh),bl=values(bl),bh=values(bh),ol=values(oh),"+
+			"sh=values(sh),bl=values(bl),bh=values(bh),"+
 			"sor=values(bor),scnt=values(bcnt),smean=values(bmean),frmdt=values(frmdt),todt=values(todt),"+
 			"udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
@@ -222,7 +227,6 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 		for _, b := range buys {
 			if b <= kps.Sh {
 				boc++
-				kps.Oh = b
 			} else {
 				break
 			}
@@ -231,26 +235,27 @@ func renewKdjStats(s *model.Stock, wg *sync.WaitGroup, chstk chan *model.Stock, 
 			s := sells[i]
 			if s >= kps.Bl {
 				soc++
-				kps.Ol = s
 			} else {
 				break
 			}
 		}
-		kps.Oh, e = stats.Round(kps.Oh, 2)
-		util.CheckErr(e, fmt.Sprintf("%s failed to round OH %f", s.Code, kps.Oh))
-		kps.Ol, e = stats.Round(kps.Ol, 2)
-		util.CheckErr(e, fmt.Sprintf("%s failed to round OL %f", s.Code, kps.Ol))
 		kps.Bor, e = stats.Round(float64(boc)/float64(kps.Bcnt), 2)
 		util.CheckErr(e, fmt.Sprintf("%s failed to round BOR %f", s.Code, kps.Bor))
 		kps.Sor, e = stats.Round(float64(soc)/float64(kps.Scnt), 2)
 		util.CheckErr(e, fmt.Sprintf("%s failed to round SOR %f", s.Code, kps.Sor))
-		dor := kps.Bor - kps.Sor
-		dod := .0
-		if dor >= 0 {
-			dod = 100 * (1 - math.Pow(dor-1, 2))
+		dor := math.Abs(kps.Bor - kps.Sor)
+		dod := 0.
+		x := 0.
+		//TODO assess dod more fairly
+		if kps.Bor >= kps.Sor {
+			x = kps.Bor
 		} else {
-			dod = 100 * (-1 + math.Pow(dor+1, 2))
+			//dod = 100 * (-1 + math.Pow(dor+1, 2))
+			x = kps.Sor
 		}
+		dod = 100 * (1 - math.Pow(dor-1, 2))
+		dod += 100 * math.Max(0, 1-math.E*math.Pi*math.Pow(x, math.Pi/2.))
+		dod = math.Min(100, dod)
 		kps.Dod, e = stats.Round(dod, 2)
 		util.CheckErr(e, fmt.Sprintf("failed to round DOD: %f", dod))
 	} else {
@@ -377,6 +382,20 @@ func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
 	ip.Score = wgtKdjScore(kdjv, histmo, histwk, histdy)
 	item.Score += ip.Score
 
+	stat := new(model.KDJVStat)
+	_, e := dbmap.Select(&stat, "select * from kdjv_stats where code = ?", item.Code)
+	if e != nil {
+		if "sql: no rows in result set" != e.Error() {
+		} else {
+			log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
+		}
+	} else {
+		kdjv.Sfl = stat.Bh
+		kdjv.Bmean = stat.Bmean
+		kdjv.Smean = stat.Smean
+		kdjv.Dod = stat.Dod
+	}
+
 	logr.Debugf("%s %s kdjv: %.2f, time: %.2f", item.Code, item.Name, ip.Score, time.Since(start).Seconds())
 }
 
@@ -430,9 +449,9 @@ func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) 
 	return
 }
 
-func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdView) {
-	buy = make([]*model.KDJfdView, 0, 1024)
-	sell = make([]*model.KDJfdView, 0, 1024)
+func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdrView) {
+	buy = make([]*model.KDJfdrView, 0, 1024)
+	sell = make([]*model.KDJfdrView, 0, 1024)
 	for i := -2; i < 3; i++ {
 		n := len + i
 		if n >= 2 {
@@ -445,7 +464,7 @@ func getKDJfdViews(cytp model.CYTP, len int) (buy, sell []*model.KDJfdView) {
 
 // Evaluates KDJ DEVIA indicator, returns the following result:
 // Ratio of high DEVIA, ratio of positive DEVIA, mean of positive DEVIA, and DEVIA indicator, ranging from 0 to 1
-func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdView) (hdr, pdr, mpd, di float64) {
+func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdrView) (hdr, pdr, mpd, di float64) {
 	if len(hist) == 0 {
 		return 0, 0, 0, 0
 	}
@@ -505,7 +524,7 @@ func bestKdjDevi(sk, sd, sj, tk, td, tj []float64) float64 {
 		cc := -100.0
 		for i := 0; i <= dif; i++ {
 			e := len(sk) - dif + i
-			tcc := calcKdjDevi(sk[i:e], sd[i:e], sj[i:e], tk, td, tj)
+			tcc := getd.CalcKdjDevi(sk[i:e], sd[i:e], sj[i:e], tk, td, tj)
 			if tcc > cc {
 				cc = tcc
 			}
@@ -516,29 +535,18 @@ func bestKdjDevi(sk, sd, sj, tk, td, tj []float64) float64 {
 		dif *= -1
 		for i := 0; i <= dif; i++ {
 			e := len(tk) - dif + i
-			tcc := calcKdjDevi(sk, sd, sj, tk[i:e], td[i:e], tj[i:e])
+			tcc := getd.CalcKdjDevi(sk, sd, sj, tk[i:e], td[i:e], tj[i:e])
 			if tcc > cc {
 				cc = tcc
 			}
 		}
 		return cc
 	} else {
-		return calcKdjDevi(sk, sd, sj, tk, td, tj)
+		return getd.CalcKdjDevi(sk, sd, sj, tk, td, tj)
 	}
 }
 
-func calcKdjDevi(sk, sd, sj, tk, td, tj []float64) float64 {
-	kcc, e := util.Devi(sk, tk)
-	util.CheckErr(e, "failed to calculate kcc")
-	dcc, e := util.Devi(sd, td)
-	util.CheckErr(e, "failed to calculate dcc")
-	jcc, e := util.Devi(sj, tj)
-	util.CheckErr(e, "failed to calculate jcc")
-	scc := (kcc*1.0 + dcc*4.0 + jcc*5.0) / 10.0
-	return -0.001*math.Pow(scc, math.E) + 1
-}
-
-func extractKdjFd(fds []*model.KDJfd) (k, d, j []float64) {
+func extractKdjFd(fds []*model.KDJfdRaw) (k, d, j []float64) {
 	for _, f := range fds {
 		k = append(k, f.K)
 		d = append(d, f.D)
@@ -552,7 +560,7 @@ func (k *KdjV) Id() string {
 }
 
 func (k *KdjV) Fields() []string {
-	return []string{"DOD", "STATS", "LEN", "KDJ_DY", "KDJ_WK", "KDJ_MO"}
+	return []string{"DOD", "SFL", "BMEAN", "SMEAN", "LEN", "KDJ_DY", "KDJ_WK", "KDJ_MO"}
 }
 
 func (k *KdjV) Description() string {

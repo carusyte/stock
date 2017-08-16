@@ -13,9 +13,13 @@ import (
 	"runtime"
 )
 
-const HIST_DATA_SIZE = 200
-const JOB_CAPACITY = global.JOB_CAPACITY
-const MAX_CONCURRENCY = global.MAX_CONCURRENCY
+const (
+	HIST_DATA_SIZE    = 200
+	JOB_CAPACITY      = global.JOB_CAPACITY
+	MAX_CONCURRENCY   = global.MAX_CONCURRENCY
+	KDJ_FD_PRUNE_PREC = 0.99
+	KDJ_FD_PRUNE_PASS = 3
+)
 
 var (
 	dbmap = global.Dbmap
@@ -47,6 +51,8 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 			log.Printf("Failed: %+v", skp)
 		}
 	}
+	//Pruning takes too long to complete, make it a separate process
+	//PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_FD_PRUNE_PASS)
 	return
 }
 
@@ -59,6 +65,7 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mod
 		if lx != nil {
 			offd, offw, offm = -1, -1, -1
 		}
+		purgeKdjFeatDat(code)
 		calcDay(stock, offd)
 		calcWeek(stock, offw)
 		calcMonth(stock, offm)
@@ -195,7 +202,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 			"(kdj_j),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt,valueArgs...)
+		_, err := dbmap.Exec(stmt, valueArgs...)
 		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
 			c = len(indc)
 		}

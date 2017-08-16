@@ -3,6 +3,7 @@ package getd
 import (
 	"testing"
 	"github.com/carusyte/stock/model"
+	"github.com/sirupsen/logrus"
 )
 
 func TestFinMark(t *testing.T) {
@@ -15,6 +16,7 @@ func TestFinMark(t *testing.T) {
 }
 
 func TestCalcIndics(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	stks := StocksDb()
 	allstk := new(model.Stocks)
 	for _, s := range stks {

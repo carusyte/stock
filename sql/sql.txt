@@ -181,15 +181,15 @@ FROM
         xdxr
     WHERE
         progress = '实施方案'
-            AND code = ?
-            AND xdxr_date <= CURRENT_DATE()
-            AND (xprice <> 'Y' OR xprice IS NULL)
-            AND idx > (SELECT
-                COALESCE(MAX(idx), - 1) idx
-            FROM
-                xdxr
-            WHERE
-                code = ? AND xprice = 'Y')
+        AND code = ?
+        AND xdxr_date <= CURRENT_DATE()
+        AND (xprice <> 'Y' OR xprice IS NULL)
+        AND idx > (SELECT
+            COALESCE(MAX(idx), - 1) idx
+        FROM
+            xdxr
+        WHERE
+            code = ? AND xprice = 'Y')
     GROUP BY code) t USING (code , idx)
 
 -- name: lastNTD
@@ -342,21 +342,21 @@ WHERE
     x.code IN (%s)
         AND x.idx > COALESCE(tmn.idxmn, - 1)
 
--- name: KDJ_FEAT_DAT
+-- name: KDJ_FEAT_DAT_RAW
 SELECT
     f.code, f.fid, f.smp_date, f.smp_num, k.klid, k.k, k.d, k.j
 FROM
     (SELECT
         *
     FROM
-        kdj_feat_dat
+        kdj_feat_dat_raw
     WHERE
         fid LIKE ?) k
         INNER JOIN
     (SELECT
         *
     FROM
-        indc_feat
+        indc_feat_raw
     WHERE
         indc = 'KDJ' AND cytp = ?
             AND bysl = ?

@@ -671,7 +671,7 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 	return nil
 }
 
-type IndcFeat struct {
+type IndcFeatRaw struct {
 	Code    string
 	Indc    string
 	Cytp    string
@@ -687,16 +687,57 @@ type IndcFeat struct {
 	Utime   string
 }
 
-func (indf *IndcFeat) GenFid() string {
+func (indf *IndcFeatRaw) GenFid() string {
 	indf.Fid = fmt.Sprintf("%s%s%s", indf.Cytp, indf.Bysl, strings.Replace(indf.SmpDate, "-", "", -1))
 	return indf.Fid
 }
 
-func (indf *IndcFeat) String() string {
+func (indf *IndcFeatRaw) String() string {
 	return fmt.Sprintf("|%s,%s,%s,%f,%d,%f|", indf.Code, indf.Fid, indf.Bysl, indf.Mark, indf.Tspan, indf.Mpt)
 }
 
+type IndcFeat struct {
+	Indc    string
+	Fid     string
+	Cytp    string
+	Bysl    string
+	SmpNum  int `db:"smp_num"`
+	FdNum   int `db:"fd_num"`
+	Weight  float64
+	Remarks sql.NullString
+	Udate   string
+	Utime   string
+}
+
 type KDJfd struct {
+	Fid   string
+	Seq   int
+	K     float64
+	D     float64
+	J     float64
+	Udate string
+	Utime string
+}
+
+type KDJfdView struct {
+	Indc, Fid, Bysl, Remarks string
+	Cytp                     CYTP
+	SmpNum, FdNum            int
+	Weight                   float64
+	K                        []float64
+	D                        []float64
+	J                        []float64
+}
+
+func (v *KDJfdView) String() string {
+	j, e := json.Marshal(v)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}
+
+type KDJfdRaw struct {
 	Code  string
 	Fid   string
 	Klid  int
@@ -705,10 +746,10 @@ type KDJfd struct {
 	J     float64
 	Udate string
 	Utime string
-	Feat  *IndcFeat
+	Feat  *IndcFeatRaw
 }
 
-type KDJfdView struct {
+type KDJfdrView struct {
 	Code    string
 	SmpDate string
 	SmpNum  int
@@ -718,7 +759,7 @@ type KDJfdView struct {
 	J       []float64
 }
 
-func (kfv *KDJfdView) Add(klid int, k, d, j float64) {
+func (kfv *KDJfdrView) Add(klid int, k, d, j float64) {
 	kfv.Klid = append(kfv.Klid, klid)
 	kfv.K = append(kfv.K, k)
 	kfv.D = append(kfv.D, d)
@@ -726,7 +767,7 @@ func (kfv *KDJfdView) Add(klid int, k, d, j float64) {
 }
 
 type KDJVStat struct {
-	Code, Frmdt, Todt, Udate, Utime                     string
-	Dod, Sl, Sh, Bl, Bh, Ol, Oh, Sor, Bor, Smean, Bmean float64
-	Scnt, Bcnt                                          int
+	Code, Frmdt, Todt, Udate, Utime             string
+	Dod, Sl, Sh, Bl, Bh, Sor, Bor, Smean, Bmean float64
+	Scnt, Bcnt                                  int
 }

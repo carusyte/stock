@@ -31,6 +31,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 	dbmap.AddTableWithName(model.Indicator{}, "indicator_d").SetKeys(false, "Code", "Date", "Klid")
 	dbmap.AddTableWithName(model.IndicatorW{}, "indicator_w").SetKeys(false, "Code", "Date", "Klid")
 	dbmap.AddTableWithName(model.IndicatorM{}, "indicator_m").SetKeys(false, "Code", "Date", "Klid")
+	dbmap.AddTableWithName(model.IndcFeatRaw{}, "indc_feat_raw").SetKeys(false, "Code", "Indc", "Fid")
 	if create {
 		err = dbmap.CreateTablesIfNotExists()
 		util.CheckErr(err, "Create tables failed,")

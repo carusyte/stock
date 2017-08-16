@@ -12,6 +12,7 @@ import (
 	"sync"
 	"math"
 	"sort"
+	"time"
 )
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
@@ -191,7 +192,7 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 }
 
 func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
-	RETRIES := 5
+	RETRIES := 10
 	var (
 		ldate string
 		lklid int
@@ -218,6 +219,8 @@ func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quot
 		} else {
 			if retry && rt+1 < RETRIES {
 				log.Printf("%s retrying to get %s [%d]", code, klt, rt+1)
+				ms := time.Duration(500 + rt*500)
+				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
 				log.Printf("%s failed to get %s", code, klt)
@@ -416,13 +419,15 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 	} else {
 		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
-	RETRIES := 5
+	RETRIES := 10
 	url := fmt.Sprintf(urlt, code, typ)
 	for rt := 0; rt < RETRIES; rt++ {
 		ktoday, ok, retry := getToday(code, typ)
 		if !ok {
 			if retry {
 				log.Printf("retrying to parse %s json for %s [%d]", klt, code, rt+1)
+				ms := time.Duration(500 + rt*500)
+				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
 				log.Printf("stop retrying to parse %s json for %s [%d]", klt, code, rt+1)
@@ -439,6 +444,8 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 		if e != nil || khist.Data == "" {
 			if rt+1 < RETRIES {
 				log.Printf("retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
+				ms := time.Duration(500 + rt*500)
+				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
 				log.Printf("stop retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
@@ -458,17 +465,19 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 		}
 		break
 	}
-	sort.Strings(dkeys)
-	quotes = make([]*model.Quote, len(dkeys))
-	for i, k := range dkeys {
-		quotes[i] = klmap[k]
+	if len(dkeys) > 0 {
+		sort.Strings(dkeys)
+		quotes = make([]*model.Quote, len(dkeys))
+		for i, k := range dkeys {
+			quotes[i] = klmap[k]
+		}
+		supplementMisc(quotes, lklid)
+		if ldate != "" {
+			//skip the first record which is for varate calculation
+			quotes = quotes[1:]
+		}
+		binsert(quotes, string(klt))
 	}
-	supplementMisc(quotes, lklid)
-	if ldate != "" {
-		//skip the first record which is for varate calculation
-		quotes = quotes[1:]
-	}
-	binsert(quotes, string(klt))
 	return quotes, true
 }
 
