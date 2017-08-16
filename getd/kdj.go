@@ -442,7 +442,8 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 }
 
 func PruneKdjFeatDat(prec float64, pass int) {
-	logr.Debugf("Pruning KDJ feature data. precision:%f, pass:%d", prec, pass)
+	st := time.Now()
+	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d", prec, pass)
 	var fdks []*fdKey
 	_, e := dbmap.Select(&fdks, "select cytp, bysl, smp_num, count(*) count from indc_feat_raw group by cytp, bysl, "+
 		"smp_num")
@@ -472,8 +473,9 @@ func PruneKdjFeatDat(prec float64, pass int) {
 	wg.Wait()
 	sumaf, e := dbmap.SelectInt("select count(*) from indc_feat")
 	util.CheckErr(e, "failed to count indc_feat")
-	log.Printf("raw kdj feature data pruned. before: %d, after: %d, rate: %.2f%%", sumbf, sumaf,
-		float64(sumaf)/float64(sumbf))
+	prate := float64(sumbf-int(sumaf)) / float64(sumbf) * 100
+	log.Printf("raw kdj feature data pruned. before: %d, after: %d, rate: %.2f%%, time: %.2f",
+		sumbf, sumaf, prate, time.Since(st).Seconds())
 }
 
 func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass int) {
@@ -484,14 +486,20 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 		logr.Debugf("pruning: %s-%s-%d size: %d", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs))
 		fdvs := convert2Fdvs(fdk, fdrvs)
 		for p := 0; p < pass; p++ {
+			stp := time.Now()
+			bfc := len(fdvs)
 			fdvs = passKdjFeatDatPrune(fdk, fdvs, prec)
+			prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
+			logr.Debugf("%s-%s-%d pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
+				fdk.Cytp, fdk.Bysl, fdk.SmpNum, p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
 		}
 		for _, fdv := range fdvs {
-			fdv.Weight = float64(fdv.SmpNum) / float64(len(fdrvs))
+			fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
 		}
 		saveKdjFd(fdvs)
-		logr.Debugf("%s-%s-%d pruned, before: %d, after: %d,  time: %.2f", fdk.Cytp, fdk.Bysl, fdk.SmpNum, fdk.Count,
-			len(fdvs), time.Since(st).Seconds())
+		prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
+		logr.Debugf("%s-%s-%d pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
+			fdk.Cytp, fdk.Bysl, fdk.SmpNum, fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
 	}
 }
 
@@ -578,7 +586,7 @@ func passKdjFeatDatPrune(fdk *fdKey, fdvs []*model.KDJfdView, prec float64) ([]*
 		if len(pend) < 2 {
 			continue
 		}
-		logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
+		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
 		nk := make([]float64, len(f1.K))
 		nd := make([]float64, len(f1.D))
 		nj := make([]float64, len(f1.J))

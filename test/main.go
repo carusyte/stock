@@ -12,13 +12,18 @@ import (
 
 func main() {
 	logr.SetLevel(logr.DebugLevel)
-	getData()
+	//getData()
+	pruneKdjFd()
 	//kdjFirst()
 	//holistic()
 	//BLUE
 	//blue()
 	//kdjOnly()
 	//renewKdjStats(true)
+}
+
+func pruneKdjFd() {
+	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS)
 }
 
 func renewKdjStats(resume bool) {
