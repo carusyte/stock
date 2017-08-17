@@ -537,7 +537,8 @@ func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	}
 	var wg sync.WaitGroup
 	chfdk := make(chan *fdKey, JOB_CAPACITY)
-	for i := 0; i < runtime.NumCPU(); i++ {
+	p := int(float64(runtime.NumCPU()) * 0.7)
+	for i := 0; i < p; i++ {
 		wg.Add(1)
 		go doPruneKdjFeatDat(chfdk, &wg, prec, pass)
 	}
@@ -560,15 +561,19 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 	for fdk := range chfdk {
 		st := time.Now()
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
-		logr.Debugf("pruning: %s-%s-%d size: %d", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs))
+		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(fdk.SmpNum-2),
+			1+1./(math.Sqrt2*math.Pi)))
+		logr.Debugf("pruning: %s-%s-%d size: %d, nprec: %.3f", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
-		for p := 0; p < pass; p++ {
-			stp := time.Now()
-			bfc := len(fdvs)
-			fdvs = passKdjFeatDatPrune(fdvs, prec)
-			prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
-			logr.Debugf("%s-%s-%d pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
-				fdk.Cytp, fdk.Bysl, fdk.SmpNum, p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
+		if len(fdvs) > 2*pass {
+			for p := 0; p < pass; p++ {
+				stp := time.Now()
+				bfc := len(fdvs)
+				fdvs = passKdjFeatDatPrune(fdvs, nprec)
+				prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
+				logr.Debugf("%s-%s-%d pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
+					fdk.Cytp, fdk.Bysl, fdk.SmpNum, p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
+			}
 		}
 		for _, fdv := range fdvs {
 			fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))

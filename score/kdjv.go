@@ -78,8 +78,8 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	}
 	//TODO need to speed up the evaluation process, now cost nearly 13 mins all stock
 	// use goroutines to see if performance can be better
-	cpu := runtime.NumCPU()
-	logr.Debugf("Number of CPU: %d", cpu)
+	cpu := int(float64(runtime.NumCPU()) * 0.7)
+	logr.Debugf("Parallel Level: %d", cpu)
 	var wg sync.WaitGroup
 	chitm := make(chan *Item, cpu)
 	for _, s := range stks {
@@ -110,8 +110,8 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	}
 	//TODO 200 sec each stock, needs enhancement, needs stop-continue
 	logr.Debugf("#Stocks: %d", len(stks))
-	cpu := runtime.NumCPU()
-	logr.Debugf("Number of CPU: %d", cpu)
+	cpu := int(float64(runtime.NumCPU()) * 0.7)
+	logr.Debugf("Parallel Level: %d", cpu)
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, cpu)
 	chkps := make(chan *model.KDJVStat, JOB_CAPACITY)

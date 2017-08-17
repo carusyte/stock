@@ -33,7 +33,7 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for i := 0; i < int(float64(runtime.NumCPU()) * 0.7); i++ {
 		wg.Add(1)
 		go doCalcIndices(chstk, &wg, chrstk)
 	}
