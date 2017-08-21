@@ -395,7 +395,22 @@ FROM
         indc = 'KDJ' AND cytp = ?
             AND bysl = ?
             AND smp_num = ?) f USING (fid)
-ORDER BY f.fd_num desc, k.seq
+ORDER BY k.fid, f.fd_num desc, k.seq
+
+-- name: KDJ_FEAT_DAT_ALL
+SELECT
+    f.fid, f.bysl, f.cytp, f.smp_num, f.fd_num, f.weight, k.seq, k.k, k.d, k.j
+FROM
+    kdj_feat_dat k
+        INNER JOIN
+    (SELECT
+        *
+    FROM
+        indc_feat
+    WHERE
+        indc = 'KDJ') f USING (fid)
+ORDER BY f.cytp, f.bysl, f.smp_num, k.fid, f.fd_num desc, k.seq
+limit 10
 
 -- name: KDJV_STATS_UNDONE
 SELECT

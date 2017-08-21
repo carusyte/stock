@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"strings"
 	"sort"
+	"github.com/carusyte/stock/global"
+	"github.com/carusyte/rima/rsec"
 )
 
 // Medium to Long term model.
@@ -34,9 +36,9 @@ type KdjV struct {
 }
 
 const (
-	SCORE_KDJV_MONTH float64 = 40.0
-	SCORE_KDJV_WEEK          = 30.0
-	SCORE_KDJV_DAY           = 30.0
+	WEIGHT_KDJV_MONTH float64 = 40.0
+	WEIGHT_KDJV_WEEK  float64 = 30.0
+	WEIGHT_KDJV_DAY   float64 = 30.0
 )
 
 func (k *KdjV) GetFieldStr(name string) string {
@@ -125,6 +127,9 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
 		}
 	}()
+	if global.RUN_MODE == global.RPC_SERVICE {
+		InitKdjFeatDat()
+	}
 	for _, s := range stks {
 		wg.Add(1)
 		chstk <- s
@@ -134,6 +139,22 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	wg.Wait()
 	close(chkps)
 	wgr.Wait()
+}
+
+func InitKdjFeatDat() bool {
+	st := time.Now()
+	logr.Debug("Getting all kdj feature data...")
+	fdMap, count := getd.GetAllKdjFeatDat()
+	var suc bool
+	logr.Debug("rpc call start: IndcScorer.InitKdjFeatDat")
+	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
+	util.CheckErr(e, "failed to init kdj feat dat")
+	if suc {
+		logr.Debugf("%d KDJ feature data has been sent to remote rpc server. time: %.2f", count, time.Since(st).Seconds())
+	} else {
+		logr.Debugf("%d KDJ feature data init failed. time: %.2f", count, time.Since(st).Seconds())
+	}
+	return suc
 }
 
 func saveKps(kps ... *model.KDJVStat) {
@@ -163,8 +184,9 @@ func saveKps(kps ... *model.KDJVStat) {
 			"frmdt,todt,udate,utime) VALUES %s on duplicate key update "+
 			"dod=values(dod),sl=values(sl),"+
 			"sh=values(sh),bl=values(bl),bh=values(bh),"+
-			"sor=values(bor),scnt=values(bcnt),smean=values(bmean),frmdt=values(frmdt),todt=values(todt),"+
-			"udate=values(udate),utime=values(utime)",
+			"sor=values(sor),bor=values(bor),scnt=values(scnt),bcnt=values(bcnt),smean=values(smean),"+
+			"bmean=values(bmean),"+
+			"frmdt=values(frmdt),todt=values(todt),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, "failed to bulk update kdjv_stats")
@@ -195,14 +217,33 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	kps.Frmdt = klhist[0].Date
 	kps.Todt = klhist[len(klhist)-1].Date
 	kps.Udate, kps.Utime = util.TimeStr()
-	st := time.Now()
-	buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
-	dur := time.Since(st).Seconds()
-	logr.Debugf("%s buy score: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
-	st = time.Now()
-	sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
-	dur = time.Since(st).Seconds()
-	logr.Debugf("%s sell score: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
+	var buys, sells []float64
+	if global.RUN_MODE == global.RPC_SERVICE {
+		st := time.Now()
+		logr.Debugf("%s connecting rpc server for kdj score calculation...", s.Code)
+		buys, e = fetchKdjScores(getKdjBuySeries(s.Code, klhist, expvr, mxrt, mxhold))
+		if e != nil {
+			return
+		}
+		dur := time.Since(st).Seconds()
+		logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
+		st = time.Now()
+		sells, e = fetchKdjScores(getKdjSellSeries(s.Code, klhist, expvr, mxrt, mxhold))
+		if e != nil {
+			return
+		}
+		dur = time.Since(st).Seconds()
+		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
+	} else {
+		st := time.Now()
+		buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		dur := time.Since(st).Seconds()
+		logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
+		st = time.Now()
+		sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		dur = time.Since(st).Seconds()
+		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
+	}
 	sort.Float64s(buys)
 	sort.Float64s(sells)
 	kps.Bl, e = stats.Round(buys[0], 2)
@@ -267,6 +308,115 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	chkps <- kps
 }
 
+func fetchKdjScores(s []*rsec.KdjSeries) ([]float64, error) {
+	req := &rsec.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
+	var rep *rsec.KdjScoreRep
+	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.ScoreKdj", req, rep)
+	if e != nil {
+		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
+		return nil, e
+	}
+	return rep.Scores, nil
+}
+
+// collect kdjv buy samples
+func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
+	mxhold int) (s []*rsec.KdjSeries) {
+	for i := 1; i < len(klhist)-1; i++ {
+		kl := klhist[i]
+		sc := kl.Close
+		if sc >= klhist[i+1].Close {
+			continue
+		}
+		hc := math.Inf(-1)
+		tspan := 0
+		pc := klhist[i-1].Close
+		for w, j := 0, 0; i+j < len(klhist); j++ {
+			nc := klhist[i+j].Close
+			if nc > hc {
+				hc = nc
+				tspan = j
+			}
+			if pc >= nc {
+				rt := (hc - nc) / math.Abs(hc) * 100
+				if rt >= mxrt || w > mxhold {
+					break
+				}
+				if j > 0 {
+					w++
+				}
+			} else {
+				w = 0
+			}
+			pc = nc
+		}
+		if sc == 0 {
+			sc = 0.01
+			hc += 0.01
+		}
+		mark := (hc - sc) / math.Abs(sc) * 100
+		if mark >= expvr {
+			ks := new(rsec.KdjSeries)
+			s = append(s, ks)
+			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+		}
+		i += tspan
+	}
+	logr.Debugf("%s kdj buy series: %d", code, len(s))
+	return s
+}
+
+// collect kdjv sell samples
+func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
+	mxhold int) (s []*rsec.KdjSeries) {
+	for i := 1; i < len(klhist)-1; i++ {
+		kl := klhist[i]
+		sc := kl.Close
+		if sc <= klhist[i+1].Close {
+			continue
+		}
+		lc := math.Inf(0)
+		tspan := 0
+		pc := klhist[i-1].Close
+		for w, j := 0, 0; i+j < len(klhist); j++ {
+			nc := klhist[i+j].Close
+			if nc < lc {
+				lc = nc
+				tspan = j
+			}
+			if pc <= nc {
+				rt := (nc - lc) / math.Abs(lc) * 100
+				if rt >= mxrt || w > mxhold {
+					break
+				}
+				if j > 0 {
+					w++
+				}
+			} else {
+				w = 0
+			}
+			pc = nc
+		}
+		if sc == 0 {
+			sc = -0.01
+			lc -= 0.01
+		}
+		mark := (lc - sc) / math.Abs(sc) * 100
+		if mark <= -expvr {
+			ks := new(rsec.KdjSeries)
+			s = append(s, ks)
+			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+		}
+		i += tspan
+	}
+	logr.Debugf("%s kdj sell series: %d", code, len(s))
+	return s
+}
+
 // collect kdjv buy stats
 func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 	mxhold int, useRawData bool) (s []float64) {
@@ -321,7 +471,7 @@ func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 // collect kdjv sell stats
 func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 	mxhold int, useRawData bool) (s []float64) {
-	for i := 50; i < len(klhist)-1; i++ {
+	for i := 1; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
 		if sc <= klhist[i+1].Close {
@@ -412,19 +562,28 @@ func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
 }
 
 func wgtKdjScoreRaw(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
-	s += scoreKdjRaw(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
-	s += scoreKdjRaw(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
-	s += scoreKdjRaw(kdjv, model.DAY, histdy) * SCORE_KDJV_DAY
-	s /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
+	s += scoreKdjRaw(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
+	s += scoreKdjRaw(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
+	s += scoreKdjRaw(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
+	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
 	s = math.Min(100, math.Max(0, s))
 	return
 }
 
 func wgtKdjScore(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
-	s += scoreKdj(kdjv, model.MONTH, histmo) * SCORE_KDJV_MONTH
-	s += scoreKdj(kdjv, model.WEEK, histwk) * SCORE_KDJV_WEEK
-	s += scoreKdj(kdjv, model.DAY, histdy) * SCORE_KDJV_DAY
-	s /= SCORE_KDJV_MONTH + SCORE_KDJV_WEEK + SCORE_KDJV_DAY
+	s += scoreKdj(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
+	s += scoreKdj(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
+	s += scoreKdj(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
+	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
+	s = math.Min(100, math.Max(0, s))
+	return
+}
+
+func wgtKdjScoreRpc(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
+	s += scoreKdj(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
+	s += scoreKdj(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
+	s += scoreKdj(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
+	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
 	s = math.Min(100, math.Max(0, s))
 	return
 }
@@ -432,10 +591,10 @@ func wgtKdjScore(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float
 //Score by assessing the historical data against pruned kdj feature data.
 func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) {
 	var val string
-	byhist, slhist := getKDJfdViews(cytp, len(kdjhist))
-	hdr, pdr, mpd, bdi := calcKdjDI(kdjhist, byhist)
+	byfds, slfds := getKDJfdViews(cytp, len(kdjhist))
+	hdr, pdr, mpd, bdi := calcKdjDI(kdjhist, byfds)
 	val = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n", hdr, pdr, mpd, bdi)
-	hdr, pdr, mpd, sdi := calcKdjDI(kdjhist, slhist)
+	hdr, pdr, mpd, sdi := calcKdjDI(kdjhist, slfds)
 	val += fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n", hdr, pdr, mpd, sdi)
 	dirat := .0
 	s = .0
@@ -606,8 +765,7 @@ func calcKdjDI(hist []*model.Indicator, fdvs []*model.KDJfdView) (hdr, pdr, mpd,
 	}
 	pds := make([]float64, 0, 16)
 	for _, fd := range fdvs {
-		mod := 1.0
-		bkd := bestKdjDevi(hk, hd, hj, fd.K, fd.D, fd.J) * mod
+		bkd := bestKdjDevi(hk, hd, hj, fd.K, fd.D, fd.J)
 		if bkd >= 0 {
 			pds = append(pds, bkd)
 			pdr += fd.Weight

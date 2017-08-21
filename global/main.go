@@ -13,6 +13,7 @@ import (
 const LOGFILE = "stock.log"
 const MAX_CONCURRENCY = 16
 const JOB_CAPACITY = 512
+const RUN_MODE = RPC_SERVICE
 
 // will make some of the requests via proxy, 0.6 = 3/5
 const PART_PROXY = 0
@@ -21,6 +22,17 @@ const PROXY_ADDR = "127.0.0.1:1080"
 var (
 	Dbmap *gorp.DbMap
 	Dot   *dotsql.DotSql
+)
+
+type RunMode string
+
+const(
+	LOCAL RunMode= "local"
+	RPC_SERVICE RunMode= "rpc"
+	DISTRIBUTED RunMode= "distributed"
+
+	//RPC_SERVER_ADDRESS = "115.159.237.46:45321"
+	RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
 )
 
 func init() {

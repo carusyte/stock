@@ -405,6 +405,61 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 	return fdvs
 }
 
+func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
+	lock.Lock()
+	defer lock.Unlock()
+	if len(kdjFdMap) > 0 {
+		count := 0
+		for _, fds := range kdjFdMap {
+			count += len(fds)
+		}
+		return kdjFdMap, count
+	}
+	start := time.Now()
+	sql, e := dot.Raw("KDJ_FEAT_DAT_ALL")
+	util.CheckErr(e, "failed to get KDJ_FEAT_DAT_ALL sql")
+	rows, e := dbmap.Query(sql)
+	if e != nil {
+		if "sql: no rows in result set" != e.Error() {
+			return kdjFdMap, 0
+		} else {
+			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
+		}
+	}
+	defer rows.Close()
+	var (
+		fid, bysl, cytp    string
+		pfid, mk, pmk      string
+		smpNum, fdNum, seq int
+		count              = 0
+		weight, k, d, j    float64
+		kfv                *model.KDJfdView
+	)
+	fdvs := make([]*model.KDJfdView, 0, 16)
+	for rows.Next() {
+		rows.Scan(&fid, &bysl, &cytp, &smpNum, &fdNum, &weight, &seq, &k, &d, &j)
+		mk = fmt.Sprintf("%s-%s-%d", cytp, bysl, smpNum)
+		if mk != pmk && pmk != "" {
+			kdjFdMap[pmk] = fdvs
+			fdvs = make([]*model.KDJfdView, 0, 16)
+		}
+		if fid != pfid {
+			kfv = newKDJfdView(fid, bysl, model.CYTP(cytp), smpNum, fdNum, weight)
+			fdvs = append(fdvs, kfv)
+		}
+		kfv.Add(k, d, j)
+		pfid = fid
+		pmk = mk
+		count++
+	}
+	kdjFdMap[mk] = fdvs
+	if err := rows.Err(); err != nil {
+		log.Panicln("failed to query kdj feat dat.", err)
+	}
+	logr.Debugf("query all kdj_feat_dat: %d, mk: %d,  time: %.2f", count, len(kdjFdMap), time.Since(start).Seconds())
+	return kdjFdMap, count
+}
+
 func newKDJfdrView(code, date string, num int) *model.KDJfdrView {
 	return &model.KDJfdrView{code, date, num, make([]int, 0, 16), make([]float64, 0, 16),
 		make([]float64, 0, 16), make([]float64, 0, 16)}
