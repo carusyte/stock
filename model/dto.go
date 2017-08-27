@@ -17,14 +17,14 @@ type CYTP string
 
 const (
 	DAY   CYTP = "D"
-	WEEK       = "W"
-	MONTH      = "M"
-	M120       = "M120"
-	M60        = "M60"
-	M30        = "M30"
-	M15        = "M15"
-	M5         = "M5"
-	M1         = "M1"
+	WEEK  CYTP = "W"
+	MONTH CYTP = "M"
+	M120  CYTP = "M120"
+	M60   CYTP = "M60"
+	M30   CYTP = "M30"
+	M15   CYTP = "M15"
+	M5    CYTP = "M5"
+	M1    CYTP = "M1"
 )
 
 const (

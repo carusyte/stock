@@ -410,7 +410,6 @@ FROM
     WHERE
         indc = 'KDJ') f USING (fid)
 ORDER BY f.cytp, f.bysl, f.smp_num, k.fid, f.fd_num desc, k.seq
-limit 10
 
 -- name: KDJV_STATS_UNDONE
 SELECT

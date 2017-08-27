@@ -31,8 +31,8 @@ const(
 	RPC_SERVICE RunMode= "rpc"
 	DISTRIBUTED RunMode= "distributed"
 
-	//RPC_SERVER_ADDRESS = "115.159.237.46:45321"
-	RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
+	RPC_SERVER_ADDRESS = "115.159.237.46:45321"
+	//RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
 )
 
 func init() {

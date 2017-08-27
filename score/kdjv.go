@@ -127,9 +127,6 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
 		}
 	}()
-	if global.RUN_MODE == global.RPC_SERVICE {
-		InitKdjFeatDat()
-	}
 	for _, s := range stks {
 		wg.Add(1)
 		chstk <- s
@@ -141,18 +138,18 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	wgr.Wait()
 }
 
-func InitKdjFeatDat() bool {
+func (k *KdjV)SyncKdjFeatDat() bool {
 	st := time.Now()
 	logr.Debug("Getting all kdj feature data...")
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
-	logr.Debug("rpc call start: IndcScorer.InitKdjFeatDat")
-	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
-	util.CheckErr(e, "failed to init kdj feat dat")
+	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
+	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "DataSync.SyncKdjFd", fdMap, &suc)
+	util.CheckErr(e, "failed to sync kdj feat dat")
 	if suc {
 		logr.Debugf("%d KDJ feature data has been sent to remote rpc server. time: %.2f", count, time.Since(st).Seconds())
 	} else {
-		logr.Debugf("%d KDJ feature data init failed. time: %.2f", count, time.Since(st).Seconds())
+		logr.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
 	}
 	return suc
 }
@@ -236,11 +233,11 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
 	} else {
 		st := time.Now()
-		buys := getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		buys = getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 		dur := time.Since(st).Seconds()
 		logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
 		st = time.Now()
-		sells := getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		sells = getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 		dur = time.Since(st).Seconds()
 		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
 	}
@@ -311,7 +308,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 func fetchKdjScores(s []*rsec.KdjSeries) ([]float64, error) {
 	req := &rsec.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
 	var rep *rsec.KdjScoreRep
-	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.ScoreKdj", req, rep)
+	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.ScoreKdj", req, &rep)
 	if e != nil {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, e

@@ -371,7 +371,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT sql")
 	rows, e := dbmap.Query(sql, cytp, bysl, num)
 	if e != nil {
-		if "sql: no rows in result set" != e.Error() {
+		if "sql: no rows in result set" == e.Error() {
 			fdvs := make([]*model.KDJfdView, 0)
 			kdjFdMap[mk] = fdvs
 			return fdvs
