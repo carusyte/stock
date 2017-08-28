@@ -18,6 +18,7 @@ import (
 	"sort"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/rima/rsec"
+	"github.com/satori/go.uuid"
 )
 
 // Medium to Long term model.
@@ -138,7 +139,7 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	wgr.Wait()
 }
 
-func (k *KdjV)SyncKdjFeatDat() bool {
+func (k *KdjV) SyncKdjFeatDat() bool {
 	st := time.Now()
 	logr.Debug("Getting all kdj feature data...")
 	fdMap, count := getd.GetAllKdjFeatDat()
@@ -355,9 +356,10 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		if mark >= expvr {
 			ks := new(rsec.KdjSeries)
 			s = append(s, ks)
-			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
-			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
 			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			ks.RowId = fmt.Sprintf("BUY-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.NewV1())
 		}
 		i += tspan
 	}
@@ -407,6 +409,7 @@ func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
 			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
 			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			ks.RowId = fmt.Sprintf("SELL-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.NewV1())
 		}
 		i += tspan
 	}
