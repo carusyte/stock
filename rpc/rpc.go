@@ -10,12 +10,44 @@ import (
 	"github.com/bitly/go-hostpool"
 	"github.com/carusyte/stock/conf"
 	"fmt"
+	"sync"
 )
 
 var (
 	hp hostpool.HostPool = hostpool.New(conf.Args.RpcServers)
 	//lock                   = sync.RWMutex{}
 )
+
+// Publish data to all rpc servers
+func RpcPub(service string, request interface{}, reply interface{}, retry int) (e []error) {
+	var wg sync.WaitGroup
+	cherr := make(chan error)
+	for _, srv := range hp.Hosts() {
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, cherr chan error) {
+			defer wg.Done()
+			for i := 0; i < retry; i++ {
+				logr.Debugf("rpc call start, server: %s, service: %s", srv, service)
+				err := tryRpcCall(srv, service, request, reply)
+				if err == nil {
+					return
+				} else if i+1 < retry {
+					logr.Warnf("retrying to call rpc service: %d\n, %s", i+1, fmt.Sprintln(err))
+					time.Sleep(time.Millisecond * time.Duration(500+500*i))
+				} else {
+					logr.Errorf("failed to call rpc service\n%s", fmt.Sprintln(err))
+					cherr <- err
+				}
+			}
+		}(&wg, cherr)
+	}
+	wg.Wait()
+	for err := range cherr {
+		e = append(e, err)
+	}
+	close(cherr)
+	return nil
+}
 
 func RpcCall(service string, request interface{}, reply interface{}, retry int) (e error) {
 	for i := 0; i < retry; i++ {

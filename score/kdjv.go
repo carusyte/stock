@@ -128,7 +128,6 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 		pl = conf.Args.Concurrency
 	}
 	logr.Debugf("Parallel Level: %d", pl)
-	//TODO 200 sec each stock, needs enhancement, needs stop-continue
 	logr.Debugf("#Stocks: %d", len(stks))
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, pl)
@@ -147,6 +146,9 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 		wg.Add(1)
 		chstk <- s
 		go renewKdjStats(s, useRaw, &wg, chstk, chkps)
+		if len(chstk) < pl {
+			time.Sleep(time.Millisecond * 500)
+		}
 	}
 	close(chstk)
 	wg.Wait()
@@ -160,14 +162,18 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
 	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
-	e := rpc.RpcCall("DataSync.SyncKdjFd", fdMap, &suc, 3)
-	util.CheckErr(e, "failed to sync kdj feat dat")
-	if suc {
-		logr.Debugf("%d KDJ feature data has been sent to remote rpc server. time: %.2f", count, time.Since(st).Seconds())
-	} else {
+	es := rpc.RpcPub("DataSync.SyncKdjFd", fdMap, &suc, 3)
+	if es != nil && len(es) > 0 {
 		logr.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
+		for _, e := range es {
+			logr.Error(e)
+		}
+		return false
+	} else {
+		logr.Debugf("%d KDJ feature data has been publish to remote rpc server. time: %.2f",
+			count, time.Since(st).Seconds())
+		return true
 	}
-	return suc
 }
 
 func saveKps(kps ... *model.KDJVStat) {
@@ -372,9 +378,11 @@ func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, e
 	} else if len(rep.Scores) != len(rep.RowIds) {
-		return nil, errors.New("len of Scores does not match len of RowIds")
+		return nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
+			len(rep.Scores), len(rep.RowIds))
 	} else if len(rep.Scores) != len(s) {
-		return nil, errors.New("len of Scores does not match len of KdjSeries")
+		return nil, errors.Errorf("len of Scores[%d] does not match len of KdjSeries[%d]",
+			len(rep.Scores), len(s))
 	}
 	return rep.Scores, nil
 }

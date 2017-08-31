@@ -17,34 +17,36 @@ const (
 )
 
 type Arguments struct {
-	RpcServers  []string `mapstructure:"rpc_servers"`
-	RunMode     RunMode `mapstructure:"run_mode"`
-	Concurrency int `mapstructure:"concurrency"`
+	RpcServers        []string `mapstructure:"rpc_servers"`
+	RunMode           RunMode `mapstructure:"run_mode"`
+	Concurrency       int `mapstructure:"concurrency"`
 	CpuUsageThreshold float64 `mapstructure:"cpu_usage_threshold"`
+	LogLevel          string `mapstructure:"log_level"`
 }
 
 func init() {
 	setDefaults()
-	v := viper.New()
-	v.SetConfigName("stock") // name of config file (without extension)
-	v.AddConfigPath("$GOPATH/bin")
-	v.AddConfigPath(".") // optionally look for config in the working directory
-	v.AddConfigPath("$HOME")
-	err := v.ReadInConfig()
+	viper.SetConfigName("stock") // name of config file (without extension)
+	viper.AddConfigPath("$GOPATH/bin")
+	viper.AddConfigPath(".") // optionally look for config in the working directory
+	viper.AddConfigPath("$HOME")
+	err := viper.ReadInConfig()
 	if err != nil {
 		logrus.Errorf("config file error: %+v", err)
 		return
 	}
-	err = v.Unmarshal(&Args)
+	err = viper.Unmarshal(&Args)
 	if err != nil {
 		logrus.Errorf("config file error: %+v", err)
 		return
 	}
 	logrus.Printf("Configuration: %+v", Args)
-	v.WatchConfig()
+	viper.WatchConfig()
 }
 
 func setDefaults() {
 	Args.RunMode = LOCAL
 	Args.Concurrency = 16
+	Args.LogLevel = "info"
+	Args.CpuUsageThreshold = 40
 }
