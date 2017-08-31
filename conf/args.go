@@ -41,7 +41,24 @@ func init() {
 		return
 	}
 	logrus.Printf("Configuration: %+v", Args)
-	viper.WatchConfig()
+	switch Args.LogLevel {
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+	case "info":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "warning":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
+	case "fatal":
+		logrus.SetLevel(logrus.FatalLevel)
+	case "panic":
+		logrus.SetLevel(logrus.PanicLevel)
+	}
+	//viper.WatchConfig()
+	//viper.OnConfigChange(func(e fsnotify.Event) {
+	//	fmt.Println("Config file changed:", e.Name)
+	//})
 }
 
 func setDefaults() {

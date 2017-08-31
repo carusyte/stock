@@ -4,14 +4,13 @@ import (
 	"time"
 	"github.com/carusyte/stock/score"
 	"log"
-	logr "github.com/sirupsen/logrus"
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/util"
 )
 
 func main() {
-	logr.SetLevel(logr.DebugLevel)
+	//logr.SetLevel(logr.DebugLevel)
 	//getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
@@ -23,7 +22,7 @@ func main() {
 }
 
 func pruneKdjFd(resume bool) {
-	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS,resume)
+	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS, resume)
 }
 
 func renewKdjStats(resume bool) {

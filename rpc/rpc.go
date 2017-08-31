@@ -113,6 +113,8 @@ func AvailableRpcServers(filter bool) (c int, healthy float64) {
 				} else {
 					srvs = srvs[:i]
 				}
+			}else{
+				i++
 			}
 		}
 	}
