@@ -19,6 +19,7 @@ import (
 	"sort"
 	"github.com/satori/go.uuid"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/rpc"
 )
 
 // Medium to Long term model.
@@ -116,7 +117,7 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	case conf.LOCAL:
 		pl = int(float64(runtime.NumCPU()) * 0.7)
 	case conf.SMART:
-		rs, h := util.AvailableRpcServers(true)
+		rs, h := rpc.AvailableRpcServers(true)
 		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
 			pl = int(float64(conf.Args.Concurrency) * h)
@@ -159,7 +160,7 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
 	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
-	e := util.RpcCall("DataSync.SyncKdjFd", fdMap, &suc, 3)
+	e := rpc.RpcCall("DataSync.SyncKdjFd", fdMap, &suc, 3)
 	util.CheckErr(e, "failed to sync kdj feat dat")
 	if suc {
 		logr.Debugf("%d KDJ feature data has been sent to remote rpc server. time: %.2f", count, time.Since(st).Seconds())
@@ -310,7 +311,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 
 func kdjScoresSmart(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
 	buys, sells []float64, e error) {
-	ars, _ := util.AvailableRpcServers(false)
+	ars, _ := rpc.AvailableRpcServers(false)
 	if ars == 0 {
 		logr.Debugf("no available rpc servers, use local power")
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
@@ -366,7 +367,7 @@ func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
 	req := &rm.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
 	var rep *rm.KdjScoreRep
-	e := util.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
+	e := rpc.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, e
