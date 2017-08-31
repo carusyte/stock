@@ -8,7 +8,21 @@ import (
 	"math"
 	"github.com/mjanda/go-dtw"
 	"log"
+	"github.com/shirou/gopsutil/cpu"
 )
+
+func TestCpu(t *testing.T) {
+	for x := 0; x < 10; x++ {
+		s, e := cpu.Percent(0,false)
+		if e != nil {
+			panic(e)
+		}
+		for _, i := range s {
+			log.Printf("%+v", i)
+		}
+		time.Sleep(time.Second * 2)
+	}
+}
 
 func TestChannel(t *testing.T) {
 	rc := make(chan int, 5)

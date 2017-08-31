@@ -5,9 +5,8 @@ import (
 )
 
 func TestWordCount(t *testing.T) {
-	svrAddr := "115.159.237.46:45321"
 	service := "GTest.WordCount"
 	var rep bool
-	e := RpcCall(svrAddr, service, "", &rep)
+	e := RpcCall(service, "", &rep, 3)
 	CheckErr(e, "failed word count")
 }

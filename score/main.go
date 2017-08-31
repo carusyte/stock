@@ -108,7 +108,7 @@ func (r *Result) Sort() (rr *Result) {
 	return
 }
 
-func (r *Result) Shrink(num int) *Result{
+func (r *Result) Shrink(num int) *Result {
 	if 0 <= num && num < len(r.items) {
 		r.items = r.items[:num]
 	}

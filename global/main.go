@@ -2,7 +2,6 @@ package global
 
 import (
 	"github.com/carusyte/stock/db"
-	"github.com/carusyte/stock/util"
 	"github.com/gchaincl/dotsql"
 	"gopkg.in/gorp.v2"
 	"io"
@@ -10,29 +9,21 @@ import (
 	"os"
 )
 
-const LOGFILE = "stock.log"
-const MAX_CONCURRENCY = 16
-const JOB_CAPACITY = 512
-const RUN_MODE = RPC_SERVICE
-
-// will make some of the requests via proxy, 0.6 = 3/5
-const PART_PROXY = 0
-const PROXY_ADDR = "127.0.0.1:1080"
-
 var (
 	Dbmap *gorp.DbMap
 	Dot   *dotsql.DotSql
+
+	//RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
 )
 
-type RunMode string
+const (
+	// will make some of the requests via proxy, 0.6 = 3/5
+	PART_PROXY = 0
+	PROXY_ADDR = "127.0.0.1:1080"
 
-const(
-	LOCAL RunMode= "local"
-	RPC_SERVICE RunMode= "rpc"
-	DISTRIBUTED RunMode= "distributed"
-
-	RPC_SERVER_ADDRESS = "115.159.237.46:45321"
-	//RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
+	LOGFILE         = "stock.log"
+	MAX_CONCURRENCY = 16
+	JOB_CAPACITY    = 512
 )
 
 func init() {
@@ -41,17 +32,19 @@ func init() {
 		os.Remove(LOGFILE)
 	}
 	logFile, e := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
-	util.CheckErr(e, "failed to open log file")
+	if e != nil {
+		log.Panicln("failed to open log file", e)
+	}
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
 	Dbmap = db.Get(true, false)
-	util.PART_PROXY = PART_PROXY
-	util.PROXY_ADDR = PROXY_ADDR
 	sqlp := "../sql/sql.txt"
 	if _, e = os.Stat(sqlp); e != nil {
 		pwd, _ := os.Getwd()
 		sqlp = pwd + "/sql/sql.txt"
 	}
 	Dot, e = dotsql.LoadFromFile(sqlp)
-	util.CheckErr(e, "failed to init dotsql")
+	if e != nil {
+		log.Panicln("failed to init dotsql", e)
+	}
 }

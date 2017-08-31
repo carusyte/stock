@@ -15,8 +15,8 @@ import (
 
 const RETRY int = 3
 
-var PART_PROXY float64
-var PROXY_ADDR string
+var PART_PROXY float64 = 0
+var PROXY_ADDR string = ""
 
 func HttpGetResp(url string) (res *http.Response, e error) {
 	return HttpGetRespUsingHeaders(url, nil)
@@ -41,7 +41,7 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 		// setup a http client
 		httpTransport := &http.Transport{}
 		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
-			Transport:                 httpTransport}
+			Transport: httpTransport}
 		// set our socks5 as the dialer
 		httpTransport.Dial = dialer.Dial
 	} else {
@@ -64,8 +64,8 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 		}
 		req.Header.Set("Pragma", "no-cache")
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) AppleWebKit/537.36 (KHTML, " +
-			"like Gecko) "+"Chrome/60.0.3112.90 Safari/537.36")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) AppleWebKit/537.36 (KHTML, "+
+			"like Gecko) "+ "Chrome/60.0.3112.90 Safari/537.36")
 		if headers != nil && len(headers) > 0 {
 			for k := range headers {
 				req.Header.Set(k, headers[k])

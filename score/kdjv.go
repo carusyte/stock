@@ -2,13 +2,14 @@ package score
 
 import (
 	"github.com/carusyte/stock/model"
+	rm "github.com/carusyte/rima/model"
 	"math"
 	"github.com/carusyte/stock/getd"
 	"fmt"
 	"github.com/carusyte/stock/util"
 	"time"
 	"reflect"
-	"errors"
+	"github.com/pkg/errors"
 	logr "github.com/sirupsen/logrus"
 	"github.com/montanaflynn/stats"
 	"log"
@@ -16,9 +17,8 @@ import (
 	"runtime"
 	"strings"
 	"sort"
-	"github.com/carusyte/stock/global"
-	"github.com/carusyte/rima/rsec"
 	"github.com/satori/go.uuid"
+	"github.com/carusyte/stock/conf"
 )
 
 // Medium to Long term model.
@@ -111,12 +111,26 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
+	var pl int
+	switch conf.Args.RunMode {
+	case conf.LOCAL:
+		pl = int(float64(runtime.NumCPU()) * 0.7)
+	case conf.SMART:
+		rs, h := util.AvailableRpcServers(true)
+		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
+		if rs > 0 {
+			pl = int(float64(conf.Args.Concurrency) * h)
+		} else {
+			pl = int(float64(runtime.NumCPU()) * 0.7)
+		}
+	default:
+		pl = conf.Args.Concurrency
+	}
+	logr.Debugf("Parallel Level: %d", pl)
 	//TODO 200 sec each stock, needs enhancement, needs stop-continue
 	logr.Debugf("#Stocks: %d", len(stks))
-	cpu := int(float64(runtime.NumCPU()) * 0.7)
-	logr.Debugf("Parallel Level: %d", cpu)
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, cpu)
+	chstk := make(chan *model.Stock, pl)
 	chkps := make(chan *model.KDJVStat, JOB_CAPACITY)
 	wgr := new(sync.WaitGroup)
 	wgr.Add(1)
@@ -145,7 +159,7 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
 	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
-	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "DataSync.SyncKdjFd", fdMap, &suc)
+	e := util.RpcCall("DataSync.SyncKdjFd", fdMap, &suc, 3)
 	util.CheckErr(e, "failed to sync kdj feat dat")
 	if suc {
 		logr.Debugf("%d KDJ feature data has been sent to remote rpc server. time: %.2f", count, time.Since(st).Seconds())
@@ -216,31 +230,19 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	kps.Todt = klhist[len(klhist)-1].Date
 	kps.Udate, kps.Utime = util.TimeStr()
 	var buys, sells []float64
-	if global.RUN_MODE == global.RPC_SERVICE {
-		st := time.Now()
-		logr.Debugf("%s connecting rpc server for kdj score calculation...", s.Code)
-		buys, e = fetchKdjScores(getKdjBuySeries(s.Code, klhist, expvr, mxrt, mxhold))
-		if e != nil {
-			return
-		}
-		dur := time.Since(st).Seconds()
-		logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
-		st = time.Now()
-		sells, e = fetchKdjScores(getKdjSellSeries(s.Code, klhist, expvr, mxrt, mxhold))
-		if e != nil {
-			return
-		}
-		dur = time.Since(st).Seconds()
-		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
-	} else {
-		st := time.Now()
-		buys = getKdjBuyScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
-		dur := time.Since(st).Seconds()
-		logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", s.Code, len(buys), dur, dur/float64(len(buys)))
-		st = time.Now()
-		sells = getKdjSellScores(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
-		dur = time.Since(st).Seconds()
-		logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", s.Code, len(sells), dur, dur/float64(len(sells)))
+	switch conf.Args.RunMode {
+	case conf.REMOTE:
+		buys, sells, e = kdjScoresRemote(s.Code, klhist, expvr, mxrt, mxhold)
+	case conf.LOCAL:
+		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+	case conf.SMART:
+		buys, sells, e = kdjScoresSmart(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+	default:
+		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+	}
+	if e != nil {
+		logr.Warn(e)
+		return
 	}
 	sort.Float64s(buys)
 	sort.Float64s(sells)
@@ -306,20 +308,79 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	chkps <- kps
 }
 
-func fetchKdjScores(s []*rsec.KdjSeries) ([]float64, error) {
-	req := &rsec.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
-	var rep *rsec.KdjScoreRep
-	e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.ScoreKdj", req, &rep)
+func kdjScoresSmart(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
+	buys, sells []float64, e error) {
+	ars, _ := util.AvailableRpcServers(false)
+	if ars == 0 {
+		logr.Debugf("no available rpc servers, use local power")
+		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
+		return
+	}
+	cpu, e := util.CpuUsage()
+	if e != nil {
+		logr.Warn("failed to get cpu usage", e)
+	} else {
+		logr.Debugf("CPU usage: %.2f%%", cpu)
+	}
+	if cpu < conf.Args.CpuUsageThreshold && e == nil {
+		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
+	} else {
+		buys, sells, e = kdjScoresRemote(code, klhist, expvr, mxrt, mxhold)
+	}
+	return
+}
+
+func kdjScoresLocal(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
+	buys, sells []float64, e error) {
+	st := time.Now()
+	buys = getKdjBuyScores(code, klhist, expvr, mxrt, mxhold, useRaw)
+	dur := time.Since(st).Seconds()
+	logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
+	st = time.Now()
+	sells = getKdjSellScores(code, klhist, expvr, mxrt, mxhold, useRaw)
+	dur = time.Since(st).Seconds()
+	logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
+	return
+}
+
+func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (
+	buys, sells []float64, e error) {
+	st := time.Now()
+	logr.Debugf("%s connecting rpc server for kdj score calculation...", code)
+	buys, e = fetchKdjScores(getKdjBuySeries(code, klhist, expvr, mxrt, mxhold))
+	if e != nil {
+		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj buy scores.", code)
+	}
+	dur := time.Since(st).Seconds()
+	logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
+	st = time.Now()
+	sells, e = fetchKdjScores(getKdjSellSeries(code, klhist, expvr, mxrt, mxhold))
+	if e != nil {
+		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj sell scores.", code)
+	}
+	dur = time.Since(st).Seconds()
+	logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
+	return
+}
+
+func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
+	req := &rm.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
+	var rep *rm.KdjScoreRep
+	e := util.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, e
+	} else if len(rep.Scores) != len(rep.RowIds) {
+		return nil, errors.New("len of Scores does not match len of RowIds")
+	} else if len(rep.Scores) != len(s) {
+		return nil, errors.New("len of Scores does not match len of KdjSeries")
 	}
 	return rep.Scores, nil
 }
 
 // collect kdjv buy samples
 func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
-	mxhold int) (s []*rsec.KdjSeries) {
+	mxhold int) (s []*rm.KdjSeries) {
 	for i := 1; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
@@ -354,7 +415,7 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		mark := (hc - sc) / math.Abs(sc) * 100
 		if mark >= expvr {
-			ks := new(rsec.KdjSeries)
+			ks := new(rm.KdjSeries)
 			s = append(s, ks)
 			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
 			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
@@ -369,7 +430,7 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 
 // collect kdjv sell samples
 func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
-	mxhold int) (s []*rsec.KdjSeries) {
+	mxhold int) (s []*rm.KdjSeries) {
 	for i := 1; i < len(klhist)-1; i++ {
 		kl := klhist[i]
 		sc := kl.Close
@@ -404,7 +465,7 @@ func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		mark := (lc - sc) / math.Abs(sc) * 100
 		if mark <= -expvr {
-			ks := new(rsec.KdjSeries)
+			ks := new(rm.KdjSeries)
 			s = append(s, ks)
 			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
 			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
