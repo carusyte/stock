@@ -319,19 +319,21 @@ func kdjScoresSmart(code string, klhist []*model.Quote, expvr, mxrt float64, mxh
 	buys, sells []float64, e error) {
 	ars, _ := rpc.AvailableRpcServers(false)
 	if ars == 0 {
-		logr.Debugf("no available rpc servers, use local power")
+		logr.Debugf("%s: no available rpc servers, use local power", code)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 		return
 	}
 	cpu, e := util.CpuUsage()
 	if e != nil {
-		logr.Warn("failed to get cpu usage", e)
+		logr.Warnf("%s failed to get cpu usage: %+v", code, e)
 	} else {
-		logr.Debugf("CPU usage: %.2f%%", cpu)
+		logr.Debugf("%s detected CPU usage: %.2f%%", code, cpu)
 	}
 	if cpu < conf.Args.CpuUsageThreshold && e == nil {
+		logr.Debugf("%s under cpu usage threshold, use local power", code)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	} else {
+		logr.Debugf("%s above cpu usage, using remote service", code)
 		buys, sells, e = kdjScoresRemote(code, klhist, expvr, mxrt, mxhold)
 	}
 	return

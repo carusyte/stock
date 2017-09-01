@@ -44,6 +44,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 		}
 		if e != nil {
 			if "sql: no rows in result set" != e.Error() {
+				logr.Warnf("%s, %s, %s, %d: %s", code, tab, retro, e.Error())
 				return
 			} else {
 				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
@@ -60,35 +61,45 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 		}
 		if e != nil {
 			if "sql: no rows in result set" != e.Error() {
+				logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
 				return
 			} else {
 				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 			}
 		}
-		if indcs[len(indcs)-1].Date == toDate {
+		//FIXME fix len(indcs) == 0 issue, when complete data is unavailable
+		if len(indcs) > 0 && indcs[len(indcs)-1].Date == toDate {
 			return
 		}
-		var oqs []*model.Quote
-		switch tab {
-		case model.INDICATOR_DAY:
-			return
-		case model.INDICATOR_WEEK:
-			sql = "select * from kline_w where code = ? and date < ? order by klid"
-		case model.INDICATOR_MONTH:
-			sql = "select * from kline_m where code = ? and date < ? order by klid"
-		}
-		_, e = dbmap.Select(&oqs, sql, code, toDate)
-		if e != nil {
-			if "sql: no rows in result set" != e.Error() {
+		if len(indcs) > 1 {
+			switch tab {
+			case model.INDICATOR_DAY:
 				return
-			} else {
-				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
+			case model.INDICATOR_WEEK:
+				sql = "select * from kline_w where code = ? and date < ? order by klid"
+			case model.INDICATOR_MONTH:
+				sql = "select * from kline_m where code = ? and date < ? order by klid"
 			}
+			var oqs []*model.Quote
+			_, e = dbmap.Select(&oqs, sql, code, toDate)
+			if e != nil {
+				if "sql: no rows in result set" != e.Error() {
+					logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, e.Error())
+					return
+				} else {
+					log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
+				}
+			}
+			qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
+			nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
+			nidcs := indc.DeftKDJ(append(oqs, nq))
+			return append(indcs, nidcs[len(nidcs)-1])
+		} else {
+			qsdy := GetKlBtwn(code, model.KLINE_DAY, "", toDate+"]", false)
+			nq := ToOne(qsdy[1:], qsdy[0].Close, -1)
+			nidcs := indc.DeftKDJ([]*model.Quote{nq})
+			return nidcs
 		}
-		qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
-		nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
-		nidcs := indc.DeftKDJ(append(oqs, nq))
-		return append(indcs, nidcs[len(nidcs)-1])
 	}
 	return
 }

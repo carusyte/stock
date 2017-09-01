@@ -65,23 +65,32 @@ func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*mod
 }
 
 func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist []*model.Quote) {
-	op1 := ">"
-	op2 := "<"
-	if strings.HasPrefix(dt1, "[") {
-		op1 += "="
-		dt1 = dt1[1:]
+	var (
+		dt1cond, dt2cond string
+	)
+	if dt1 != "" {
+		op := ">"
+		if strings.HasPrefix(dt1, "[") {
+			op += "="
+			dt1 = dt1[1:]
+		}
+		dt1cond = fmt.Sprintf("and date %s '%s'", op, dt1)
 	}
-	if strings.HasSuffix(dt2, "]") {
-		op2 += "="
-		dt2 = dt2[:len(dt2)-1]
+	if dt2 != "" {
+		op := "<"
+		if strings.HasSuffix(dt2, "]") {
+			op += "="
+			dt2 = dt2[:len(dt2)-1]
+		}
+		dt2cond = fmt.Sprintf("and date %s '%s'", op, dt2)
 	}
 	d := ""
 	if desc {
 		d = "desc"
 	}
-	sql := fmt.Sprintf("select * from %s where code = ? and date %s ? and date %s ? order by klid %s",
-		tab, op1, op2, d)
-	_, e := dbmap.Select(&hist, sql, code, dt1, dt2)
+	sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
+		tab, dt1cond, dt2cond, d)
+	_, e := dbmap.Select(&hist, sql, code)
 	util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
 	return
 }
