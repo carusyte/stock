@@ -18,7 +18,7 @@ func main() {
 	//BLUE
 	//blue()
 	//kdjOnly()
-	renewKdjStats(false)
+	renewKdjStats(true)
 }
 
 func pruneKdjFd(resume bool) {

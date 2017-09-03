@@ -15,9 +15,9 @@ func TestKdjv_SyncRemoteKdjFd(t *testing.T) {
 }
 
 func TestKdjV_RenewStats(t *testing.T) {
-	//new(KdjV).RenewStats([]string{"600104"})
-	kdjv := new(KdjV)
-	kdjv.RenewStats(false)
+	new(KdjV).RenewStats(false, "000836")
+	//kdjv := new(KdjV)
+	//kdjv.RenewStats(false)
 	//kdjv.RenewStats(false)
 }
 

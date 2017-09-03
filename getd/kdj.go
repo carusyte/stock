@@ -67,7 +67,6 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 			}
 		}
-		//FIXME fix len(indcs) == 0 issue, when complete data is unavailable
 		if len(indcs) > 0 && indcs[len(indcs)-1].Date == toDate {
 			return
 		}

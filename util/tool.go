@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"github.com/pkg/errors"
+	"sort"
 )
 
 func Reverse(s []interface{}) {
@@ -197,4 +198,61 @@ func DaysSince(then string) (float64, error) {
 	} else {
 		return time.Since(t).Hours() / 24.0, nil
 	}
+}
+
+func DiffStrings(str1 []string, str2 []string) (equal bool, dif1, dif2 []string) {
+	s1 := make([]string, len(str1))
+	s2 := make([]string, len(str2))
+	copy(s1, str1)
+	copy(s2, str2)
+	sort.Strings(s1)
+	sort.Strings(s2)
+	equal = true
+	i1, i2 := 0, 0
+	for ; i1 < len(s1) && i2 < len(s2); i1, i2 = i1+1, i2+1 {
+		if s1[i1] != s2[i2] {
+			equal = false
+			if i1+1 == len(s1) {
+				dif2 = append(dif2, s2[i2])
+				if i2+1 == len(s2) {
+					dif1 = append(dif1, s1[i1])
+				} else {
+					idx := sort.SearchStrings(s2[i2+1:], s1[i1])
+					if idx+i2+1 < len(s2) && s2[idx+i2+1] == s1[i1] {
+						// if found in the remainder of s2
+						dif2 = append(dif2, s2[i2+1:idx+i2+1]...)
+						i2 += idx + 1
+					} else {
+						// not found in the remainder of s2
+						dif1 = append(dif1, s1[i1])
+					}
+				}
+			} else {
+				idx := sort.SearchStrings(s1[i1+1:], s2[i2])
+				if idx+i1+1 < len(s1) && s1[idx+i1+1] == s2[i2] {
+					// if found in the remainder of s1
+					dif1 = append(dif1, s1[i1:idx+i1+1]...)
+					i1 += idx + 1
+				} else {
+					dif2 = append(dif2, s2[i2])
+					if i2+1 == len(s2) {
+						dif1 = append(dif1, s1[i1])
+					} else {
+						idx = sort.SearchStrings(s2[i2+1:], s1[i1])
+						if idx+i2+1 >= len(s2) || s2[idx+i2+1] != s1[i1] {
+							// not found in the remainder of s2
+							dif1 = append(dif1, s1[i1])
+						}
+					}
+				}
+			}
+		}
+	}
+	if i1 < len(s1) {
+		dif1 = append(dif1, s1[i1:]...)
+	}
+	if i2 < len(s2) {
+		dif2 = append(dif2, s2[i2:]...)
+	}
+	return
 }

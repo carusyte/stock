@@ -106,13 +106,16 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 }
 
 func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
-	var stks []*model.Stock
+	var (
+		stks    []*model.Stock
+		pl      int
+		wg, wgr sync.WaitGroup
+	)
 	if stock == nil || len(stock) == 0 {
 		stks = getd.StocksDb()
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
-	var pl int
 	switch conf.Args.RunMode {
 	case conf.LOCAL:
 		pl = int(float64(runtime.NumCPU()) * 0.7)
@@ -129,27 +132,27 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	}
 	logr.Debugf("Parallel Level: %d", pl)
 	logr.Debugf("#Stocks: %d", len(stks))
-	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, pl)
 	chkps := make(chan *model.KDJVStat, JOB_CAPACITY)
-	wgr := new(sync.WaitGroup)
 	wgr.Add(1)
-	go func() {
+	go func(wgr *sync.WaitGroup) {
 		defer wgr.Done()
 		c := 0
-		for range chkps {
+		for kps := range chkps {
 			c++
+			saveKps(kps)
 			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
 		}
-	}()
-	for _, s := range stks {
+	}(&wgr)
+	for i, s := range stks {
 		wg.Add(1)
 		chstk <- s
 		go renewKdjStats(s, useRaw, &wg, chstk, chkps)
-		if len(chstk) < pl {
+		if i < pl {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
+	//FIXME process pauses at some point
 	close(chstk)
 	wg.Wait()
 	close(chkps)
@@ -310,7 +313,6 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	} else {
 		kps.Dod = 100
 	}
-	saveKps(kps)
 	logr.Debugf("%s kdjv DOD: %.2f, time: %.2f", s.Code, kps.Dod, time.Since(start).Seconds())
 	chkps <- kps
 }
@@ -326,15 +328,18 @@ func kdjScoresSmart(code string, klhist []*model.Quote, expvr, mxrt float64, mxh
 	cpu, e := util.CpuUsage()
 	if e != nil {
 		logr.Warnf("%s failed to get cpu usage: %+v", code, e)
-	} else {
-		logr.Debugf("%s detected CPU usage: %.2f%%", code, cpu)
 	}
 	if cpu < conf.Args.CpuUsageThreshold && e == nil {
-		logr.Debugf("%s under cpu usage threshold, use local power", code)
+		logr.Debugf("%s current %%cpu: %.2f use local power", code, cpu)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	} else {
-		logr.Debugf("%s above cpu usage, using remote service", code)
+		logr.Debugf("%s current %%cpu: %.2f using remote service", code, cpu)
 		buys, sells, e = kdjScoresRemote(code, klhist, expvr, mxrt, mxhold)
+		if e != nil {
+			//try one more time with local power
+			logr.Warnf("remote processing failed, retry with local power\n%+v", e)
+			buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
+		}
 	}
 	return
 }
@@ -383,6 +388,11 @@ func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
 		return nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
 			len(rep.Scores), len(rep.RowIds))
 	} else if len(rep.Scores) != len(s) {
+		rowids := make([]string,len(s))
+		for i:=0;i<len(s);i++{
+			rowids[i]=s[i].RowId
+		}
+		same, dRowIds := util.DiffStrs(rep.RowIds, rowids)
 		return nil, errors.Errorf("len of Scores[%d] does not match len of KdjSeries[%d]",
 			len(rep.Scores), len(s))
 	}

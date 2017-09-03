@@ -22,6 +22,7 @@ type Arguments struct {
 	Concurrency       int `mapstructure:"concurrency"`
 	CpuUsageThreshold float64 `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string `mapstructure:"log_level"`
+	//TODO logrus log to file
 }
 
 func init() {
