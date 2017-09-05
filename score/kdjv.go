@@ -119,7 +119,7 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	switch conf.Args.RunMode {
 	case conf.LOCAL:
 		pl = int(float64(runtime.NumCPU()) * 0.7)
-	case conf.SMART:
+	case conf.AUTO:
 		rs, h := rpc.AvailableRpcServers(true)
 		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
@@ -140,7 +140,9 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 		c := 0
 		for kps := range chkps {
 			c++
-			saveKps(kps)
+			if kps != nil {
+				saveKps(kps)
+			}
 			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
 		}
 	}(&wgr)
@@ -152,7 +154,6 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
-	//FIXME process pauses at some point
 	close(chstk)
 	wg.Wait()
 	close(chkps)
@@ -233,6 +234,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	klhist := getd.GetKlineDb(s.Code, model.KLINE_DAY, retro, false)
 	if len(klhist) < retro {
 		log.Printf("%s insufficient data to collect kdjv stats: %d", s.Code, len(klhist))
+		chkps <- nil
 		return
 	}
 	kps.Code = s.Code
@@ -245,8 +247,8 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 		buys, sells, e = kdjScoresRemote(s.Code, klhist, expvr, mxrt, mxhold)
 	case conf.LOCAL:
 		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
-	case conf.SMART:
-		buys, sells, e = kdjScoresSmart(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+	case conf.AUTO:
+		buys, sells, e = kdjScoresAuto(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 	default:
 		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
 	}
@@ -317,7 +319,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	chkps <- kps
 }
 
-func kdjScoresSmart(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
+func kdjScoresAuto(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
 	buys, sells []float64, e error) {
 	ars, _ := rpc.AvailableRpcServers(false)
 	if ars == 0 {
@@ -387,14 +389,16 @@ func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
 	} else if len(rep.Scores) != len(rep.RowIds) {
 		return nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
 			len(rep.Scores), len(rep.RowIds))
-	} else if len(rep.Scores) != len(s) {
-		rowids := make([]string,len(s))
-		for i:=0;i<len(s);i++{
-			rowids[i]=s[i].RowId
+	} else {
+		rowids := make([]string, len(s))
+		for i := 0; i < len(s); i++ {
+			rowids[i] = s[i].RowId
 		}
-		same, dRowIds := util.DiffStrs(rep.RowIds, rowids)
-		return nil, errors.Errorf("len of Scores[%d] does not match len of KdjSeries[%d]",
-			len(rep.Scores), len(s))
+		equal, rrid, srid := util.DiffStrings(rep.RowIds, rowids)
+		if !equal {
+			return nil, errors.Errorf("Scores[%d] does not match KdjSeries[%d]:%+v, %+v",
+				len(rep.Scores), len(s), rrid, srid)
+		}
 	}
 	return rep.Scores, nil
 }
@@ -626,15 +630,14 @@ func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
 	ip.Score = wgtKdjScore(kdjv, histmo, histwk, histdy)
 	item.Score += ip.Score
 
-	stat := new(model.KDJVStat)
-	_, e := dbmap.Select(&stat, "select * from kdjv_stats where code = ?", item.Code)
+	var stat *model.KDJVStat
+	e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
 	if e != nil {
 		if "sql: no rows in result set" != e.Error() {
-		} else {
 			log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 		}
 	} else {
-		kdjv.Sfl = stat.Bh
+		kdjv.Sfl = stat.Sh
 		kdjv.Bmean = stat.Bmean
 		kdjv.Smean = stat.Smean
 		kdjv.Dod = stat.Dod

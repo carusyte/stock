@@ -12,6 +12,8 @@ import (
 	"github.com/montanaflynn/stats"
 	"github.com/carusyte/stock/indc"
 	"strings"
+	"log"
+	"github.com/sirupsen/logrus"
 )
 
 // Medium to Long term model.
@@ -92,7 +94,13 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		lp := &HiD{}
 		e := dbmap.SelectOne(&lp, "select close as price, date as price_date from kline_d where code = ? order by "+
 			"klid desc limit 1", ih.Code)
-		util.CheckErr(e, "failed to query kline_d for lastest price: "+ih.Code)
+		if e != nil {
+			if "sql: no rows in result set" != e.Error() {
+				log.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
+			} else {
+				logrus.Warnf("%s lack of kline_d data", item.Code)
+			}
+		}
 		ih.Price = lp.Price
 		ih.PriceDate = lp.PriceDate
 
@@ -364,8 +372,8 @@ func (h *HiD) Id() string {
 
 func (h *HiD) Fields() []string {
 	return []string{"Year", "Divi", "DYR", "DYR GR", "DYR AVG", "DPR",
-					"DPR AVG", "DYR:DPR", "Shares Allot",
-					"Shares Cvt", "Price", "Price Date", "REG DT", "XDXR DT"}
+		"DPR AVG", "DYR:DPR", "Shares Allot",
+		"Shares Cvt", "Price", "Price Date", "REG DT", "XDXR DT"}
 }
 
 func (h *HiD) GetFieldStr(name string) string {

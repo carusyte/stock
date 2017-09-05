@@ -13,7 +13,7 @@ const (
 	LOCAL       RunMode = "local"
 	REMOTE      RunMode = "remote"
 	DISTRIBUTED RunMode = "distributed"
-	SMART       RunMode = "smart"
+	AUTO        RunMode = "auto"
 )
 
 type Arguments struct {

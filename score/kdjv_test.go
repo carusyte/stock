@@ -2,8 +2,8 @@ package score
 
 import (
 	"testing"
-	"github.com/sirupsen/logrus"
 	"log"
+	"fmt"
 )
 
 func TestKdjv_SyncRemoteKdjFd(t *testing.T) {
@@ -21,6 +21,7 @@ func TestKdjV_RenewStats(t *testing.T) {
 	//kdjv.RenewStats(false)
 }
 
-func init() {
-	logrus.SetLevel(logrus.DebugLevel)
+func TestKdjV_Get(t *testing.T) {
+	r := new(KdjV).Get([]string{"000836"}, -1, false)
+	fmt.Println(r)
 }
