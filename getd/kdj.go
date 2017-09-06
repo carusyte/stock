@@ -21,6 +21,8 @@ var (
 	lock                                     = sync.RWMutex{}
 )
 
+// Find kdj history up to 'toDate', limited to 'retro' rows. If retro <= 0, no limit is set.
+// If toDate is an empty string, no bound is set on date.
 func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs []*model.Indicator) {
 	defer func() {
 		if r := recover(); r != nil {

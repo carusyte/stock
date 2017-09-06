@@ -11,7 +11,7 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	//getData()
+	getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
 	holistic()
@@ -60,7 +60,7 @@ func holistic() {
 	r1.Weight = 0.5
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.5
-	r1r2 := score.Combine(r1, r2).Sort().Shrink(100)
+	r1r2 := score.Combine(r1, r2).Sort().Shrink(300)
 	r1r2.Weight = 0
 	r3 := new(score.KdjV).Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1

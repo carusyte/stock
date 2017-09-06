@@ -58,3 +58,8 @@ func TestAnalyzeKdjCC(t *testing.T) {
 func TestCalcDay(t *testing.T) {
 	//calcDay("600104", 3)
 }
+
+func TestEpoch(t *testing.T) {
+	epoch := time.Now().UnixNano() / int64(time.Millisecond)
+	fmt.Println(epoch)
+}

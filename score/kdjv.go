@@ -81,18 +81,20 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 		stks = getd.StocksDbByCode(stock...)
 	}
 	//TODO refactor to use rima
-	pl := int(float64(runtime.NumCPU()) * 0.7)
+	pl := getParallelLevel()
 	logr.Debugf("Parallel Level: %d", pl)
 	var wg sync.WaitGroup
-	chitm := make(chan *Item, pl)
-	for _, s := range stks {
+	chitm := make(chan *Item, len(stks))
+	for i := 0; i < pl; i++ {
 		wg.Add(1)
+		go scoreKdjRoutine(&wg, chitm)
+	}
+	for _, s := range stks {
 		item := new(Item)
 		r.AddItem(item)
 		item.Code = s.Code
 		item.Name = s.Name
 		chitm <- item
-		go scoreKdjAsyn(item, &wg, chitm)
 	}
 	close(chitm)
 	wg.Wait()
@@ -367,14 +369,14 @@ func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 	buys, sells []float64, e error) {
 	st := time.Now()
 	logr.Debugf("%s connecting rpc server for kdj score calculation...", code)
-	buys, e = fetchKdjScores(getKdjBuySeries(code, klhist, expvr, mxrt, mxhold))
+	_, buys, _, e = fetchKdjScores(getKdjBuySeries(code, klhist, expvr, mxrt, mxhold))
 	if e != nil {
 		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj buy scores.", code)
 	}
 	dur := time.Since(st).Seconds()
 	logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
 	st = time.Now()
-	sells, e = fetchKdjScores(getKdjSellSeries(code, klhist, expvr, mxrt, mxhold))
+	_, sells, _, e = fetchKdjScores(getKdjSellSeries(code, klhist, expvr, mxrt, mxhold))
 	if e != nil {
 		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj sell scores.", code)
 	}
@@ -383,15 +385,15 @@ func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 	return
 }
 
-func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
+func fetchKdjScores(s []*rm.KdjSeries) (rowIds []string, scores []float64, details []map[string]interface{}, e error) {
 	req := &rm.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
 	var rep *rm.KdjScoreRep
-	e := rpc.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
+	e = rpc.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
-		return nil, e
+		return nil, nil, nil, e
 	} else if len(rep.Scores) != len(rep.RowIds) {
-		return nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
+		return nil, nil, nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
 			len(rep.Scores), len(rep.RowIds))
 	} else {
 		rowids := make([]string, len(s))
@@ -400,11 +402,11 @@ func fetchKdjScores(s []*rm.KdjSeries) ([]float64, error) {
 		}
 		equal, rrid, srid := util.DiffStrings(rep.RowIds, rowids)
 		if !equal {
-			return nil, errors.Errorf("Scores[%d] does not match KdjSeries[%d]:%+v, %+v",
+			return nil, nil, nil, errors.Errorf("Scores[%d] does not match KdjSeries[%d]:%+v, %+v",
 				len(rep.Scores), len(s), rrid, srid)
 		}
 	}
-	return rep.Scores, nil
+	return rep.RowIds, rep.Scores, rep.Detail, nil
 }
 
 // collect kdjv buy samples
@@ -609,11 +611,123 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 	return s
 }
 
-func scoreKdjAsyn(item *Item, wg *sync.WaitGroup, chitm chan *Item) {
-	defer func() {
-		wg.Done()
-		<-chitm
-	}()
+func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item) {
+	defer wg.Done()
+
+	const BSIZE = 32
+	iBuf := make([]*Item, 0, BSIZE)
+	for item := range chitm {
+		ars, _ := rpc.AvailableRpcServers(false)
+		if ars == 0 {
+			logr.Debugf("%s: no available rpc servers, use local power", item.Code)
+			scoreKdjLocal(item)
+			continue
+		}
+		cpu, e := util.CpuUsage()
+		if e != nil {
+			logr.Warnf("%s failed to get cpu usage: %+v", item.Code, e)
+		}
+		if cpu < conf.Args.CpuUsageThreshold && e == nil {
+			logr.Debugf("%s current %%cpu: %.2f use local power", item.Code, cpu)
+			scoreKdjLocal(item)
+		} else {
+			logr.Debugf("%s current %%cpu: %.2f using remote service", item.Code, cpu)
+			iBuf = append(iBuf, item)
+			if len(iBuf) < BSIZE {
+				iBuf = append(iBuf, item)
+			} else {
+				// buffer is full, fire to remote server
+				e = scoreKdjRemote(iBuf)
+				if e != nil {
+					// fall back to local power
+					logr.Warnf("remote processing failed, retry with local power\n%+v", e)
+					for _, bitm := range iBuf {
+						scoreKdjLocal(bitm)
+					}
+				}
+				iBuf = nil
+			}
+		}
+	}
+	// process remaining items in iBuf
+	if len(iBuf) > 0 {
+		e := scoreKdjRemote(iBuf)
+		if e != nil {
+			// fall back to local power
+			logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
+			for _, bitm := range iBuf {
+				scoreKdjLocal(bitm)
+			}
+		}
+		iBuf = nil
+	}
+
+	return
+}
+
+func scoreKdjRemote(items []*Item) (e error) {
+	start := time.Now()
+	itmMap := make(map[string]*Item)
+	var pid string
+	ks := make([]*rm.KdjSeries, len(items))
+	for i, item := range items {
+		kdjv := new(KdjV)
+		pid = kdjv.Id()
+		kdjv.Code = item.Code
+		kdjv.Name = item.Name
+		item.Profiles = make(map[string]*Profile)
+		ip := new(Profile)
+		item.Profiles[pid] = ip
+		ip.FieldHolder = kdjv
+
+		k := new(rm.KdjSeries)
+		k.RowId = fmt.Sprintf("%s:%s", item.Code, uuid.NewV1())
+		k.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
+		k.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
+		k.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
+		ks[i] = k
+		kdjv.Len = fmt.Sprintf("%d/%d/%d", len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
+
+		var stat *model.KDJVStat
+		e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
+		if e != nil {
+			if "sql: no rows in result set" != e.Error() {
+				log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
+			}
+		} else {
+			kdjv.Sfl = stat.Sh
+			kdjv.Bmean = stat.Bmean
+			kdjv.Smean = stat.Smean
+			kdjv.Dod = stat.Dod
+		}
+
+		itmMap[k.RowId] = item
+	}
+	ids, ss, dets, e := fetchKdjScores(ks)
+	if e != nil {
+		return errors.Wrapf(e, "%d failed to calculate kdj scores", len(items))
+	}
+	for i, id := range ids {
+		ipf := itmMap[id].Profiles[pid]
+		itmMap[id].Score += ss[i]
+		ipf.Score = ss[i]
+		//get hdr pdr etc from remote service
+		kdjv := ipf.FieldHolder.(*KdjV)
+		d := dets[i]
+		kdjv.CCDY = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
+			d["D.bhdr"], d["D.bpdr"], d["D.bmpd"], d["D.bdi"],d["D.shdr"], d["D.spdr"], d["D.smpd"], d["D.sdi"])
+		kdjv.CCWK = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
+			d["W.bhdr"], d["W.bpdr"], d["W.bmpd"], d["W.bdi"],d["W.shdr"], d["W.spdr"], d["W.smpd"], d["W.sdi"])
+		kdjv.CCMO = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
+			d["M.bhdr"], d["M.bpdr"], d["M.bmpd"], d["M.bdi"],d["M.shdr"], d["M.spdr"], d["M.smpd"], d["M.sdi"])
+	}
+	tt := time.Since(start).Seconds()
+	logr.Debugf("%d kdj scores calculated using rpc service, time: %.2f, %.2f/stk",
+		len(items), tt, tt/float64(len(items)))
+	return nil
+}
+
+func scoreKdjLocal(item *Item) {
 	start := time.Now()
 	kdjv := new(KdjV)
 	kdjv.Code = item.Code

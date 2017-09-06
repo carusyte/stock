@@ -296,7 +296,7 @@ func tryDailyKlines(code string, mode string, klt model.DBTab, incr bool, ldate 
 	*ldate = ""
 	*lklid = -1
 	if incr {
-		ldy := getLatestKl(code, klt, 3)
+		ldy := getLatestKl(code, klt, 3+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -417,7 +417,7 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestKl(code, klt, 3)
+		latest := getLatestKl(code, klt, 3+1) //plus one offset for pre-close, varate calculation
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
@@ -622,16 +622,13 @@ DATES:
 
 func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 	e := dbmap.SelectOne(&q, fmt.Sprintf("select code, date, klid from %s where code = ? order by klid desc "+
-		"limit 1 offset ?", klt), code, offset+1) //plus one offset for pre-close, varate calculation
+		"limit 1 offset ?", klt), code, offset)
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return nil
 		} else {
 			log.Panicln("failed to run sql", e)
 		}
-		return nil
-	} else {
-		return
 	}
 	return
 }
