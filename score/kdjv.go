@@ -80,12 +80,11 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
-	//TODO need to speed up the evaluation process, now cost nearly 13 mins all stock
-	// use goroutines to see if performance can be better
-	cpu := int(float64(runtime.NumCPU()) * 0.7)
-	logr.Debugf("Parallel Level: %d", cpu)
+	//TODO refactor to use rima
+	pl := int(float64(runtime.NumCPU()) * 0.7)
+	logr.Debugf("Parallel Level: %d", pl)
 	var wg sync.WaitGroup
-	chitm := make(chan *Item, cpu)
+	chitm := make(chan *Item, pl)
 	for _, s := range stks {
 		wg.Add(1)
 		item := new(Item)
@@ -116,20 +115,7 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
-	switch conf.Args.RunMode {
-	case conf.LOCAL:
-		pl = int(float64(runtime.NumCPU()) * 0.7)
-	case conf.AUTO:
-		rs, h := rpc.AvailableRpcServers(true)
-		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
-		if rs > 0 {
-			pl = int(float64(conf.Args.Concurrency) * h)
-		} else {
-			pl = int(float64(runtime.NumCPU()) * 0.7)
-		}
-	default:
-		pl = conf.Args.Concurrency
-	}
+	pl = getParallelLevel()
 	logr.Debugf("Parallel Level: %d", pl)
 	logr.Debugf("#Stocks: %d", len(stks))
 	chstk := make(chan *model.Stock, pl)
@@ -158,6 +144,24 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 	wg.Wait()
 	close(chkps)
 	wgr.Wait()
+}
+
+func getParallelLevel() (pl int) {
+	switch conf.Args.RunMode {
+	case conf.LOCAL:
+		pl = int(float64(runtime.NumCPU()) * 0.7)
+	case conf.AUTO:
+		rs, h := rpc.AvailableRpcServers(true)
+		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
+		if rs > 0 {
+			pl = int(float64(conf.Args.Concurrency) * h)
+		} else {
+			pl = int(float64(runtime.NumCPU()) * 0.7)
+		}
+	default:
+		pl = conf.Args.Concurrency
+	}
+	return
 }
 
 func (k *KdjV) SyncKdjFeatDat() bool {

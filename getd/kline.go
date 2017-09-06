@@ -417,7 +417,7 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestKl(code, klt, 2)
+		latest := getLatestKl(code, klt, 3)
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
@@ -464,6 +464,22 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 		klmap[ktoday.Date] = ktoday
 		dkeys = append(dkeys, ktoday.Date)
 		if len(kls) > 0 {
+			// if ktoday and kls[-1] in the same week, remove kls[-1]
+			tToday, e := time.Parse("2006-01-02", ktoday.Date)
+			if e != nil {
+				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
+				continue
+			}
+			yToday, wToday := tToday.ISOWeek()
+			tLast, e := time.Parse("2006-01-02", kls[len(kls)-1].Date)
+			if e != nil {
+				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
+				continue
+			}
+			yLast, wLast := tLast.ISOWeek()
+			if yToday == yLast && wToday == wLast {
+				kls = kls[:len(kls)-1]
+			}
 			for _, k := range kls {
 				if _, exists := klmap[k.Date]; !exists {
 					klmap[k.Date] = k

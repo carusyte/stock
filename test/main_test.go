@@ -13,7 +13,7 @@ import (
 
 func TestCpu(t *testing.T) {
 	for x := 0; x < 10; x++ {
-		s, e := cpu.Percent(0,false)
+		s, e := cpu.Percent(0, false)
 		if e != nil {
 			panic(e)
 		}
@@ -64,4 +64,13 @@ func TestDTW(t *testing.T) {
 	dtw.ComputeOptimalPathWithWindow(a, c, 5) // 5 = window size
 	path := dtw.RetrieveOptimalPath()
 	log.Printf("Optimal Path: %+v", path)
+}
+
+func TestISOWeek(t *testing.T) {
+	tToday, _ := time.Parse("2006-01-02", "2017-09-04")
+	y, w := tToday.ISOWeek()
+	fmt.Println(y, w)
+	tToday, _ = time.Parse("2006-01-02", "2017-09-05")
+	y, w = tToday.ISOWeek()
+	fmt.Println(y, w)
 }

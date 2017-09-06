@@ -17,8 +17,19 @@ func main() {
 	holistic()
 	//BLUE
 	//blue()
+	//blueKdjv()
 	//kdjOnly()
 	//renewKdjStats(true)
+}
+
+func blueKdjv() {
+	start := time.Now()
+	r2 := new(score.BlueChip).Geta().Sort().Shrink(200)
+	r2.Weight = 0
+	r3 := new(score.KdjV).Get(r2.Stocks(), -1, false)
+	r3.Weight = 1
+	log.Printf("\n%+v", score.Combine(r2, r3).Sort())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func pruneKdjFd(resume bool) {
@@ -49,7 +60,7 @@ func holistic() {
 	r1.Weight = 0.5
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.5
-	r1r2 := score.Combine(r1, r2).Sort().Shrink(50)
+	r1r2 := score.Combine(r1, r2).Sort().Shrink(100)
 	r1r2.Weight = 0
 	r3 := new(score.KdjV).Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1

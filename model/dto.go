@@ -586,9 +586,9 @@ type Klast struct {
 	//Rt         string `json:"rt"`
 	Num int `json:"num"`
 	//Total      int `json:"total"`
-	Start string `json:"start"`
+	Start string                 `json:"start"`
 	Year  map[string]interface{} `json:"year"`
-	Name  string `json:"name"`
+	Name  string                 `json:"name"`
 	Khist
 	//IssuePrice float32 `json:"issuePrice"`
 }
@@ -677,7 +677,7 @@ type IndcFeatRaw struct {
 	Cytp    string
 	Bysl    string
 	SmpDate string `db:"smp_date"`
-	SmpNum  int `db:"smp_num"`
+	SmpNum  int    `db:"smp_num"`
 	Fid     string
 	Mark    float64
 	Tspan   int
@@ -776,4 +776,18 @@ type KDJVStat struct {
 	Code, Frmdt, Todt, Udate, Utime             string
 	Dod, Sl, Sh, Bl, Bh, Sor, Bor, Smean, Bmean float64
 	Scnt, Bcnt                                  int
+}
+
+type XQJson struct {
+	Stock struct {
+		Symbol string
+	}
+	Success string
+	Chartlist []struct {
+		Volume                                                                                int64
+		Open, High, Low, Close, Chg, Percent, Turnrate, Ma5, Ma10, Ma20, Ma30, Dif, Dea, Macd float64
+		LotVolume                                                                             int64 `json:"lot_volume"`
+		Timestamp                                                                             int64
+		Time                                                                                  string
+	}
 }
