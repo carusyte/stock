@@ -242,7 +242,7 @@ func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quot
 		//skip the first record which is for varate calculation
 		kldy = kldy[1:]
 	}
-	binsert(kldy, string(klt))
+	binsert(kldy, string(klt), lklid)
 	return kldy, true
 }
 
@@ -296,7 +296,7 @@ func tryDailyKlines(code string, mode string, klt model.DBTab, incr bool, ldate 
 	*ldate = ""
 	*lklid = -1
 	if incr {
-		ldy := getLatestKl(code, klt, 3+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -417,7 +417,7 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestKl(code, klt, 3+1) //plus one offset for pre-close, varate calculation
+		latest := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
@@ -500,7 +500,7 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 			//skip the first record which is for varate calculation
 			quotes = quotes[1:]
 		}
-		binsert(quotes, string(klt))
+		binsert(quotes, string(klt), lklid)
 	}
 	return quotes, true
 }
@@ -528,7 +528,7 @@ func supplementMisc(klines []*model.Quote, start int) {
 	}
 }
 
-func binsert(quotes []*model.Quote, table string) (c int) {
+func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) > 0 {
 		valueStrings := make([]string, 0, len(quotes))
 		valueArgs := make([]interface{}, 0, len(quotes)*13)
@@ -550,16 +550,34 @@ func binsert(quotes []*model.Quote, table string) (c int) {
 			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
 		}
+
+		tran, e := dbmap.Begin()
+		util.CheckErr(e, "failed to start transaction")
+		if lklid > 0 {
+			lklid++
+			_, e = tran.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+			if e != nil {
+				log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
+				tran.Rollback()
+				panic(code)
+			}
+		}
+
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
 			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
 			"(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
-		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
+		_, e = tran.Exec(stmt, valueArgs...)
+		if e != nil {
+			log.Printf("%s failed to bulk insert %s", code, table)
+			tran.Rollback()
+			panic(code)
+		} else {
 			c = len(quotes)
 		}
+		tran.Commit()
 	}
 	return
 }

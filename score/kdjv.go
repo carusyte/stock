@@ -614,30 +614,18 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item) {
 	defer wg.Done()
 
-	const BSIZE = 32
+	const BSIZE = 64
 	iBuf := make([]*Item, 0, BSIZE)
 	for item := range chitm {
 		ars, _ := rpc.AvailableRpcServers(false)
 		if ars == 0 {
 			logr.Debugf("%s: no available rpc servers, use local power", item.Code)
 			scoreKdjLocal(item)
-			continue
-		}
-		cpu, e := util.CpuUsage()
-		if e != nil {
-			logr.Warnf("%s failed to get cpu usage: %+v", item.Code, e)
-		}
-		if cpu < conf.Args.CpuUsageThreshold && e == nil {
-			logr.Debugf("%s current %%cpu: %.2f use local power", item.Code, cpu)
-			scoreKdjLocal(item)
 		} else {
-			logr.Debugf("%s current %%cpu: %.2f using remote service", item.Code, cpu)
 			iBuf = append(iBuf, item)
-			if len(iBuf) < BSIZE {
-				iBuf = append(iBuf, item)
-			} else {
+			if len(iBuf) >= BSIZE {
 				// buffer is full, fire to remote server
-				e = scoreKdjRemote(iBuf)
+				e := scoreKdjRemote(iBuf)
 				if e != nil {
 					// fall back to local power
 					logr.Warnf("remote processing failed, retry with local power\n%+v", e)
@@ -661,7 +649,6 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item) {
 		}
 		iBuf = nil
 	}
-
 	return
 }
 
@@ -715,11 +702,11 @@ func scoreKdjRemote(items []*Item) (e error) {
 		kdjv := ipf.FieldHolder.(*KdjV)
 		d := dets[i]
 		kdjv.CCDY = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
-			d["D.bhdr"], d["D.bpdr"], d["D.bmpd"], d["D.bdi"],d["D.shdr"], d["D.spdr"], d["D.smpd"], d["D.sdi"])
+			d["D.bhdr"], d["D.bpdr"], d["D.bmpd"], d["D.bdi"], d["D.shdr"], d["D.spdr"], d["D.smpd"], d["D.sdi"])
 		kdjv.CCWK = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
-			d["W.bhdr"], d["W.bpdr"], d["W.bmpd"], d["W.bdi"],d["W.shdr"], d["W.spdr"], d["W.smpd"], d["W.sdi"])
+			d["W.bhdr"], d["W.bpdr"], d["W.bmpd"], d["W.bdi"], d["W.shdr"], d["W.spdr"], d["W.smpd"], d["W.sdi"])
 		kdjv.CCMO = fmt.Sprintf("%.2f/%.2f/%.2f/%.2f\n%.2f/%.2f/%.2f/%.2f\n",
-			d["M.bhdr"], d["M.bpdr"], d["M.bmpd"], d["M.bdi"],d["M.shdr"], d["M.spdr"], d["M.smpd"], d["M.sdi"])
+			d["M.bhdr"], d["M.bpdr"], d["M.bmpd"], d["M.bdi"], d["M.shdr"], d["M.spdr"], d["M.smpd"], d["M.sdi"])
 	}
 	tt := time.Since(start).Seconds()
 	logr.Debugf("%d kdj scores calculated using rpc service, time: %.2f, %.2f/stk",
