@@ -160,9 +160,9 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		case model.KLINE_60M:
 			_, suc = getMinuteKlines(stk.Code, t)
 		case model.KLINE_DAY:
-			_, suc = getDailyKlines(stk.Code, t, xdxr == nil)
+			_, suc = getDailyKlines(stk, t, xdxr == nil)
 		case model.KLINE_DAY_NR:
-			_, suc = getDailyKlines(stk.Code, t, true)
+			_, suc = getDailyKlines(stk, t, true)
 		case model.KLINE_WEEK, model.KLINE_MONTH:
 			_, suc = getLongKlines(stk.Code, t, xdxr == nil)
 		default:
@@ -199,12 +199,13 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 	panic("implement me ")
 }
 
-func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
+func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
 	RETRIES := 10
 	var (
 		ldate string
 		lklid int
 		mode  string
+		code  string = stk.Code
 	)
 	//mode:
 	// 00-no reinstatement
@@ -220,7 +221,7 @@ func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quot
 	}
 
 	for rt := 0; rt < RETRIES; rt++ {
-		kls, suc, retry := tryDailyKlines(code, mode, klt, incr, &ldate, &lklid)
+		kls, suc, retry := tryDailyKlines(stk, mode, klt, incr, &ldate, &lklid)
 		if suc {
 			kldy = kls
 			break
@@ -246,8 +247,9 @@ func getDailyKlines(code string, klt model.DBTab, incr bool) (kldy []*model.Quot
 	return kldy, true
 }
 
-func tryDailyKlines(code string, mode string, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {
+func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {
 	var (
+		code   string = stk.Code
 		klast  model.Klast
 		ktoday model.Ktoday
 		body   []byte
@@ -274,6 +276,11 @@ func tryDailyKlines(code string, mode string, klt model.DBTab, incr bool, ldate 
 		oldest = ktoday.Date
 	} else {
 		log.Printf("kline today skipped: %s", url_today)
+	}
+
+	// If it is an IPO, return immediately
+	if stk.TimeToMarket.Valid && time.Now().Format("2006-01-02") == stk.TimeToMarket.String {
+		return append(kldy, &ktoday.Quote), true, false
 	}
 
 	//get last kline data

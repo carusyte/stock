@@ -80,7 +80,6 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	} else {
 		stks = getd.StocksDbByCode(stock...)
 	}
-	//TODO refactor to use rima
 	pl := 2
 	switch conf.Args.RunMode {
 	case conf.LOCAL:
@@ -89,7 +88,7 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 		rs, h := rpc.AvailableRpcServers(true)
 		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
-			pl = rs * 2
+			pl = rs
 		} else {
 			pl = int(float64(runtime.NumCPU()) * 0.7)
 		}
@@ -101,7 +100,7 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	chitm := make(chan *Item, len(stks))
 	for i := 0; i < pl; i++ {
 		wg.Add(1)
-		go scoreKdjRoutine(&wg, chitm, pl, len(stks))
+		go scoreKdjRoutine(&wg, chitm, len(stks))
 	}
 	for _, s := range stks {
 		item := new(Item)
@@ -625,18 +624,19 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 	return s
 }
 
-func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, parallel, total int) {
+func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, total int) {
 	defer wg.Done()
-
-	//calculate buffer size based on parallel and total
-	bufSize := total / parallel
-	iBuf := make([]*Item, 0, bufSize)
-	for item := range chitm {
-		ars, _ := rpc.AvailableRpcServers(false)
-		if ars == 0 {
-			logr.Debugf("%s: no available rpc servers, use local power", item.Code)
+	ars, _ := rpc.AvailableRpcServers(false)
+	if ars == 0 {
+		logr.Warn("no available rpc servers, use local power")
+		for item := range chitm {
 			scoreKdjLocal(item)
-		} else {
+		}
+	} else {
+		//calculate buffer size based on available rpc servers and total
+		bufSize := int(math.Ceil(float64(total) / float64(ars)))
+		iBuf := make([]*Item, 0, bufSize)
+		for item := range chitm {
 			iBuf = append(iBuf, item)
 			if len(iBuf) >= bufSize {
 				// buffer is full, fire to remote server
@@ -651,18 +651,18 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, parallel, total int) 
 				iBuf = nil
 			}
 		}
-	}
-	// process remaining items in iBuf
-	if len(iBuf) > 0 {
-		e := scoreKdjRemote(iBuf)
-		if e != nil {
-			// fall back to local power
-			logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
-			for _, bitm := range iBuf {
-				scoreKdjLocal(bitm)
+		// process remaining items in iBuf
+		if len(iBuf) > 0 {
+			e := scoreKdjRemote(iBuf)
+			if e != nil {
+				// fall back to local power
+				logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
+				for _, bitm := range iBuf {
+					scoreKdjLocal(bitm)
+				}
 			}
+			iBuf = nil
 		}
-		iBuf = nil
 	}
 	return
 }
@@ -735,6 +735,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 
 func scoreKdjLocal(item *Item) {
 	start := time.Now()
+	logr.Debugf("calculating %s...", item.Code)
 	kdjv := new(KdjV)
 	kdjv.Code = item.Code
 	kdjv.Name = item.Name
