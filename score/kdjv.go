@@ -81,13 +81,27 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 		stks = getd.StocksDbByCode(stock...)
 	}
 	//TODO refactor to use rima
-	pl := getParallelLevel()
+	pl := 2
+	switch conf.Args.RunMode {
+	case conf.LOCAL:
+		pl = int(float64(runtime.NumCPU()) * 0.7)
+	case conf.AUTO:
+		rs, h := rpc.AvailableRpcServers(true)
+		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
+		if rs > 0 {
+			pl = rs * 2
+		} else {
+			pl = int(float64(runtime.NumCPU()) * 0.7)
+		}
+	default:
+		pl = conf.Args.Concurrency
+	}
 	logr.Debugf("Parallel Level: %d", pl)
 	var wg sync.WaitGroup
 	chitm := make(chan *Item, len(stks))
 	for i := 0; i < pl; i++ {
 		wg.Add(1)
-		go scoreKdjRoutine(&wg, chitm)
+		go scoreKdjRoutine(&wg, chitm, pl, len(stks))
 	}
 	for _, s := range stks {
 		item := new(Item)
@@ -611,11 +625,12 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 	return s
 }
 
-func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item) {
+func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, parallel, total int) {
 	defer wg.Done()
 
-	const BSIZE = 64
-	iBuf := make([]*Item, 0, BSIZE)
+	//calculate buffer size based on parallel and total
+	bufSize := total / parallel
+	iBuf := make([]*Item, 0, bufSize)
 	for item := range chitm {
 		ars, _ := rpc.AvailableRpcServers(false)
 		if ars == 0 {
@@ -623,7 +638,7 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item) {
 			scoreKdjLocal(item)
 		} else {
 			iBuf = append(iBuf, item)
-			if len(iBuf) >= BSIZE {
+			if len(iBuf) >= bufSize {
 				// buffer is full, fire to remote server
 				e := scoreKdjRemote(iBuf)
 				if e != nil {
@@ -672,9 +687,13 @@ func scoreKdjRemote(items []*Item) (e error) {
 		k.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
 		k.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
 		k.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
-		ks[i] = k
 		kdjv.Len = fmt.Sprintf("%d/%d/%d", len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
-
+		if len(k.KdjDy) == 0 || len(k.KdjWk) == 0 || len(k.KdjMo) == 0 {
+			logr.Warnf("%s len(%d,%d,%d) disqualified for kdjv score calculation", item.Code,
+				len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
+			continue;
+		}
+		ks[i] = k
 		var stat *model.KDJVStat
 		e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
 		if e != nil {
@@ -687,9 +706,9 @@ func scoreKdjRemote(items []*Item) (e error) {
 			kdjv.Smean = stat.Smean
 			kdjv.Dod = stat.Dod
 		}
-
 		itmMap[k.RowId] = item
 	}
+	logr.Debugf("ready to call rpc service, input size: %d", len(ks))
 	ids, ss, dets, e := fetchKdjScores(ks)
 	if e != nil {
 		return errors.Wrapf(e, "%d failed to calculate kdj scores", len(items))

@@ -14,11 +14,11 @@ func main() {
 	//getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
-	holistic()
+	//holistic()
 	//BLUE
 	//blue()
 	//blueKdjv()
-	//kdjOnly()
+	kdjOnly()
 	//renewKdjStats(true)
 }
 

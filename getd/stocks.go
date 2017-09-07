@@ -48,7 +48,7 @@ func GetStockInfo() (allstk *model.Stocks) {
 	allstk = getFromExchanges()
 	log.Printf("total stocks: %d", allstk.Size())
 
-	save(allstk.List)
+	overwrite(allstk.List)
 
 	return
 }
@@ -139,12 +139,16 @@ func getSSE() *model.Stocks {
 	return list
 }
 
-//update to database
-func save(allstk []*model.Stock) {
+//overwrite to database
+func overwrite(allstk []*model.Stock) {
 	if len(allstk) > 0 {
+		tran, e := dbmap.Begin()
+		util.CheckErr(e, "failed to begin new transaction")
+
+		codes := make([]string, len(allstk))
 		valueStrings := make([]string, 0, len(allstk))
 		valueArgs := make([]interface{}, 0, len(allstk)*17)
-		for _, stk := range allstk {
+		for i, stk := range allstk {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
@@ -163,7 +167,15 @@ func save(allstk []*model.Stock) {
 			valueArgs = append(valueArgs, stk.TimeToMarket)
 			valueArgs = append(valueArgs, stk.UDate)
 			valueArgs = append(valueArgs, stk.UTime)
+			codes[i] = stk.Code
 		}
+
+		_, e = tran.Exec("delete from basics where code not in (%s)", util.Join(codes, ",", true))
+		if e != nil {
+			tran.Rollback()
+			log.Panicf("failed to clean basics %d", len(allstk))
+		}
+
 		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,price,varate,var,accer,xrate,volratio,ampl,"+
 			"turnover,outstanding,totals,circmarval,timeToMarket,udate,utime) VALUES %s on duplicate key update "+
 			"name=values(name),market=values(market),"+
@@ -172,9 +184,13 @@ func save(allstk []*model.Stock) {
 			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+
 			"(timeToMarket),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, "failed to bulk update basics")
-		log.Printf("%d stocks info updated to basics", len(allstk))
+		_, e = tran.Exec(stmt, valueArgs...)
+		if e != nil {
+			tran.Rollback()
+			log.Panicf("failed to bulk update basics %d\n%+v", len(allstk), e)
+		}
+		tran.Commit()
+		log.Printf("%d stocks info overwrite to basics", len(allstk))
 	}
 }
 

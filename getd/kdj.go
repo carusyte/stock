@@ -512,8 +512,6 @@ func purgeKdjFeatDat(code string) {
 }
 
 func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds []*model.KDJfdRaw) {
-	tran, e := dbmap.Begin()
-	util.CheckErr(e, "failed to begin new transaction")
 	if len(feats) > 0 && len(kfds) > 0 {
 		valueStrings := make([]string, 0, len(feats))
 		valueArgs := make([]interface{}, 0, len(feats)*13)
@@ -540,6 +538,9 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 			"udate,utime) VALUES %s on duplicate key update smp_num=values(smp_num),mark=values(mark),tspan=values"+
 			"(tspan),mpt=values(mpt),remarks=values(remarks),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
+
+		tran, e := dbmap.Begin()
+		util.CheckErr(e, "failed to begin new transaction")
 		_, err := tran.Exec(stmt, valueArgs...)
 		if err != nil {
 			log.Printf("%s failed to bulk insert indc_feat_raw", code)
@@ -653,8 +654,6 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 }
 
 func saveKdjFd(fdvs []*model.KDJfdView) {
-	tran, e := dbmap.Begin()
-	util.CheckErr(e, "failed to begin new transaction")
 	if len(fdvs) > 0 {
 		valueStrings := make([]string, 0, len(fdvs))
 		valueArgs := make([]interface{}, 0, len(fdvs)*10)
@@ -676,6 +675,8 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 			"udate,utime) VALUES %s on duplicate key update fid=values(fid),fd_num=values(fd_num),weight=values"+
 			"(weight),remarks=values(remarks),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
+		tran, e := dbmap.Begin()
+		util.CheckErr(e, "failed to begin new transaction")
 		_, err := tran.Exec(stmt, valueArgs...)
 		if err != nil {
 			tran.Rollback()
