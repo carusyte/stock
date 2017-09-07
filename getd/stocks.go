@@ -170,10 +170,10 @@ func overwrite(allstk []*model.Stock) {
 			codes[i] = stk.Code
 		}
 
-		_, e = tran.Exec("delete from basics where code not in (%s)", util.Join(codes, ",", true))
+		_, e = tran.Exec(fmt.Sprintf("delete from basics where code not in (%s)", util.Join(codes, ",", true)))
 		if e != nil {
 			tran.Rollback()
-			log.Panicf("failed to clean basics %d", len(allstk))
+			log.Panicf("failed to clean basics %d\n%+v", len(allstk), e)
 		}
 
 		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,price,varate,var,accer,xrate,volratio,ampl,"+

@@ -14,6 +14,7 @@ const JOB_CAPACITY = global.JOB_CAPACITY
 const MAX_CONCURRENCY = global.MAX_CONCURRENCY
 
 //TODO TRY 30/60 min ENE
+//TODO Add KdjSt, assess score based on KdjV and KdjV stats
 var (
 	dbmap = global.Dbmap
 	dot   = global.Dot
