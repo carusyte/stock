@@ -33,7 +33,7 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < int(float64(runtime.NumCPU()) * 0.7); i++ {
+	for i := 0; i < int(float64(runtime.NumCPU())*0.7); i++ {
 		wg.Add(1)
 		go doCalcIndices(chstk, &wg, chrstk)
 	}
@@ -198,14 +198,33 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			valueArgs = append(valueArgs, i.Utime)
 			code = i.Code
 		}
-		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,udate,utime) VALUES %s on "+
+		tran, e := dbmap.Begin()
+		if e != nil {
+			log.Panicf("%s failed to start transaction\n%+v", code, e)
+		}
+		sklid := 0
+		if len(indc) > 5 {
+			sklid = indc[len(indc)-5].Klid
+		} else {
+			sklid = indc[0].Klid
+		}
+		stmt := fmt.Sprintf("delete from %s where code = ? and klid >= ?", table)
+		_, e = tran.Exec(stmt, code, sklid)
+		if e != nil {
+			tran.Rollback()
+			log.Panicf("%s failed to delete stale %s data", code, table)
+		}
+		stmt = fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,udate,utime) VALUES %s on "+
 			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 			"(kdj_j),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
-		if !util.CheckErr(err, code+" failed to bulk insert "+table) {
-			c = len(indc)
+		_, e = tran.Exec(stmt, valueArgs...)
+		if e != nil {
+			tran.Rollback()
+			log.Panicf("%s failed to overwrite %s", code, table)
 		}
+		c = len(indc)
+		tran.Commit()
 	}
 	return
 }

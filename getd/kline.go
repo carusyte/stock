@@ -472,7 +472,7 @@ func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*mode
 				} else {
 					y1, w1 := ttm.ISOWeek()
 					y2, w2 := ttd.ISOWeek()
-					if y1 == y2, w1 == w2 {
+					if y1 == y2 && w1 == w2 {
 						log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
 						break
 					}
@@ -597,7 +597,6 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 				panic(code)
 			}
 		}
-
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
@@ -606,12 +605,10 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			table, strings.Join(valueStrings, ","))
 		_, e = tran.Exec(stmt, valueArgs...)
 		if e != nil {
-			log.Printf("%s failed to bulk insert %s", code, table)
 			tran.Rollback()
-			panic(code)
-		} else {
-			c = len(quotes)
+			log.Panicf("%s failed to bulk insert %s", code, table)
 		}
+		c = len(quotes)
 		tran.Commit()
 	}
 	return
