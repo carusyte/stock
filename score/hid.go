@@ -62,7 +62,6 @@ func (h *HiD) Geta() (r *Result) {
 }
 
 func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
-	//TODO deal with the no-xdxr more fairly
 	r = &Result{}
 	r.PfIds = append(r.PfIds, h.Id())
 	var hids []*HiD

@@ -131,7 +131,7 @@ func tryGetIndex(code string, tab model.DBTab) (suc, rt bool) {
 }
 
 func saveIndex(xqj *model.XQJson, sklid int, table string) {
-	//TODO implement
+	//TODO implement index crawling
 	if xqj != nil && len(xqj.Chartlist) > 0 {
 		valueStrings := make([]string, 0, len(xqj.Chartlist))
 		valueArgs := make([]interface{}, 0, len(xqj.Chartlist)*13)

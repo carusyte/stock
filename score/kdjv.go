@@ -319,7 +319,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 		dor := math.Abs(kps.Bor - kps.Sor)
 		dod := 0.
 		x := 0.
-		//TODO assess dod more fairly
+		//TODO assess dod more fairly, based on standard deviation?
 		if kps.Bor >= kps.Sor {
 			x = kps.Bor
 		} else {

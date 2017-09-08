@@ -164,7 +164,7 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		case model.KLINE_DAY_NR:
 			_, suc = getDailyKlines(stk, t, true)
 		case model.KLINE_WEEK, model.KLINE_MONTH:
-			_, suc = getLongKlines(stk.Code, t, xdxr == nil)
+			_, suc = getLongKlines(stk, t, xdxr == nil)
 		default:
 			log.Panicf("unhandled kltype: %s", t)
 		}
@@ -279,7 +279,13 @@ func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, l
 	}
 
 	// If it is an IPO, return immediately
-	if stk.TimeToMarket.Valid && time.Now().Format("2006-01-02") == stk.TimeToMarket.String {
+	_, e = time.Parse("2006-01-02", ktoday.Date)
+	if e != nil {
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		return kldy, false, true
+	}
+	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return append(kldy, &ktoday.Quote), true, false
 	}
 
@@ -406,9 +412,10 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 	return &ktoday.Quote, true, false
 }
 
-func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
+func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
 	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
 	var (
+		code  = stk.Code
 		typ   string
 		dkeys []string                = make([]string, 0, 16)         // date as keys to sort
 		klmap map[string]*model.Quote = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
@@ -449,6 +456,29 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 				return
 			}
 		}
+		klmap[ktoday.Date] = ktoday
+		dkeys = append(dkeys, ktoday.Date)
+		// If in IPO week, skip the rest chores
+		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
+			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+			if e != nil {
+				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+					code, stk.TimeToMarket.String, e)
+			} else {
+				ttd, e := time.Parse("2006-01-02", ktoday.Date)
+				if e != nil {
+					log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+						code, ktoday.Date, e)
+				} else {
+					y1, w1 := ttm.ISOWeek()
+					y2, w2 := ttd.ISOWeek()
+					if y1 == y2, w1 == w2 {
+						log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+						break
+					}
+				}
+			}
+		}
 		body, e := util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("can't get %s for %s. please try again later.", klt, code)
@@ -468,8 +498,6 @@ func getLongKlines(code string, klt model.DBTab, incr bool) (quotes []*model.Quo
 			}
 		}
 		kls, _ := parseKlines(code, khist.Data, ldate, "")
-		klmap[ktoday.Date] = ktoday
-		dkeys = append(dkeys, ktoday.Date)
 		if len(kls) > 0 {
 			// if ktoday and kls[-1] in the same week, remove kls[-1]
 			tToday, e := time.Parse("2006-01-02", ktoday.Date)
