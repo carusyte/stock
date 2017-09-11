@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"github.com/pkg/errors"
 	"math"
+	"time"
+	"gopkg.in/gorp.v2"
 )
 
 type DBTab string
@@ -790,4 +792,46 @@ type XQJson struct {
 		Timestamp                                                                             int64
 		Time                                                                                  string
 	}
+}
+
+func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
+	//TODO implement index persistence for Xueqiu
+	if xqj != nil && len(xqj.Chartlist) > 0 {
+		valueStrings := make([]string, 0, len(xqj.Chartlist))
+		valueArgs := make([]interface{}, 0, len(xqj.Chartlist)*13)
+		var code string
+		klid := sklid
+		for _, q := range xqj.Chartlist {
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), ?, ?)")
+			valueArgs = append(valueArgs, xqj.Stock)
+			valueArgs = append(valueArgs,
+				time.Unix(q.Timestamp/int64(time.Microsecond), 0).Format("2006-01-02"))
+			valueArgs = append(valueArgs, klid)
+			valueArgs = append(valueArgs, q.Open)
+			valueArgs = append(valueArgs, q.High)
+			valueArgs = append(valueArgs, q.Close)
+			valueArgs = append(valueArgs, q.Low)
+			valueArgs = append(valueArgs, q.Volume)
+			//valueArgs = append(valueArgs, q.Amount)
+			//valueArgs = append(valueArgs, q.Xrate)
+			//valueArgs = append(valueArgs, q.Varate)
+			//valueArgs = append(valueArgs, q.Udate)
+			//valueArgs = append(valueArgs, q.Utime)
+			//code = q.Code
+			klid++
+		}
+		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
+			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"open=values(open),high=values(high),close=values(close),low=values(low),"+
+			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
+			"(udate),utime=values(utime)",
+			table, strings.Join(valueStrings, ","))
+		_, err := dbmap.Exec(stmt, valueArgs...)
+		util.CheckErr(err, code+" failed to bulk insert "+table)
+	}
+}
+
+// Index List
+type IdxLst struct {
+	Code, Name, Src string
 }

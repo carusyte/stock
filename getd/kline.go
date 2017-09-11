@@ -168,6 +168,9 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		default:
 			log.Panicf("unhandled kltype: %s", t)
 		}
+		if !suc {
+			break
+		}
 	}
 	if suc {
 		outstks <- stk
@@ -200,7 +203,7 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 }
 
 func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
-	RETRIES := 10
+	RETRIES := 20
 	var (
 		ldate string
 		lklid int
@@ -228,7 +231,8 @@ func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model
 		} else {
 			if retry && rt+1 < RETRIES {
 				log.Printf("%s retrying to get %s [%d]", code, klt, rt+1)
-				ms := time.Duration(500 + rt*500)
+				sleep := int64(math.Min(float64(500+rt*500), 5000))
+				ms := time.Duration(sleep)
 				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
@@ -499,21 +503,25 @@ func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*mode
 		}
 		kls, _ := parseKlines(code, khist.Data, ldate, "")
 		if len(kls) > 0 {
-			// if ktoday and kls[-1] in the same week, remove kls[-1]
+			// if ktoday and kls[0] in the same week, remove kls[0]
 			tToday, e := time.Parse("2006-01-02", ktoday.Date)
 			if e != nil {
 				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue
 			}
 			yToday, wToday := tToday.ISOWeek()
-			tLast, e := time.Parse("2006-01-02", kls[len(kls)-1].Date)
+			tHead, e := time.Parse("2006-01-02", kls[0].Date)
 			if e != nil {
 				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue
 			}
-			yLast, wLast := tLast.ISOWeek()
+			yLast, wLast := tHead.ISOWeek()
 			if yToday == yLast && wToday == wLast {
-				kls = kls[:len(kls)-1]
+				kls = kls[1:]
+			}
+			// if cytp is month, and ktoday and kls[0] in the same month, remove kls[0]
+			if len(kls) > 0 && klt == model.KLINE_MONTH && kls[0].Date[:8] == ktoday.Date[:8] {
+				kls = kls[1:]
 			}
 			for _, k := range kls {
 				if _, exists := klmap[k.Date]; !exists {
@@ -532,7 +540,7 @@ func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*mode
 		}
 		supplementMisc(quotes, lklid)
 		if ldate != "" {
-			//skip the first record which is for varate calculation
+			// skip the first record which is for varate calculation
 			quotes = quotes[1:]
 		}
 		binsert(quotes, string(klt), lklid)

@@ -60,7 +60,7 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mod
 	defer wg.Done()
 	for stock := range chstk {
 		code := stock.Code
-		var offd, offw, offm int64 = 3, 2, 2
+		var offd, offw, offm int64 = 10, 5, 5
 		lx := latestUFRXdxr(code)
 		if lx != nil {
 			offd, offw, offm = -1, -1, -1
@@ -179,7 +179,7 @@ func calcDay(stk *model.Stock, offset int64) {
 func binsIndc(indc []*model.Indicator, table string) (c int) {
 	if len(indc) > 0 {
 		valueStrings := make([]string, 0, len(indc))
-		valueArgs := make([]interface{}, 0, len(indc)*6)
+		valueArgs := make([]interface{}, 0, len(indc)*8)
 		var code string
 		for _, i := range indc {
 			d, t := util.TimeStr()
@@ -198,33 +198,24 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			valueArgs = append(valueArgs, i.Utime)
 			code = i.Code
 		}
-		tran, e := dbmap.Begin()
-		if e != nil {
-			log.Panicf("%s failed to start transaction\n%+v", code, e)
-		}
-		sklid := 0
+		sklid := indc[0].Klid
 		if len(indc) > 5 {
 			sklid = indc[len(indc)-5].Klid
-		} else {
-			sklid = indc[0].Klid
 		}
 		stmt := fmt.Sprintf("delete from %s where code = ? and klid >= ?", table)
-		_, e = tran.Exec(stmt, code, sklid)
+		_, e := dbmap.Exec(stmt, code, sklid)
 		if e != nil {
-			tran.Rollback()
-			log.Panicf("%s failed to delete stale %s data", code, table)
+			log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
 		}
 		stmt = fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,udate,utime) VALUES %s on "+
 			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 			"(kdj_j),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		_, e = tran.Exec(stmt, valueArgs...)
+		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
-			tran.Rollback()
-			log.Panicf("%s failed to overwrite %s", code, table)
+			log.Panicf("%s failed to overwrite %s\n%+v", code, table, e)
 		}
 		c = len(indc)
-		tran.Commit()
 	}
 	return
 }

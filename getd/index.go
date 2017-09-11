@@ -10,18 +10,21 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
 	"time"
-	"strings"
 )
 
 func GetIndices() {
 	var (
-		codes   []string
+		idxlst  []*model.IdxLst
 		wg, wgr sync.WaitGroup
 	)
-	_, e := dbmap.Select(&codes, `select code from idxlst`)
+	_, e := dbmap.Select(&idxlst, `select * from idxlst`)
 	util.CheckErr(e, "failed to query idxlst")
-	log.Printf("# Indices: %d", len(codes))
-	chs := make(chan string, conf.Args.Concurrency)
+	log.Printf("# Indices: %d", len(idxlst))
+	codes := make([]string, len(idxlst))
+	for i, idx := range idxlst {
+		codes[i] = idx.Code
+	}
+	chidx := make(chan *model.IdxLst, conf.Args.Concurrency)
 	rchs := make(chan string, conf.Args.Concurrency)
 	wgr.Add(1)
 	go func() {
@@ -30,8 +33,8 @@ func GetIndices() {
 		for rc := range rchs {
 			if rc != "" {
 				rcodes = append(rcodes, rc)
-				p := float64(len(rcodes)) / float64(len(codes))
-				log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(codes), p)
+				p := float64(len(rcodes)) / float64(len(idxlst))
+				log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 			}
 		}
 		eq, fs, _ := util.DiffStrings(codes, rcodes)
@@ -39,21 +42,21 @@ func GetIndices() {
 			log.Printf("Failed indices: %+v", fs)
 		}
 	}()
-	for _, c := range codes {
+	for _, idx := range idxlst {
 		wg.Add(1)
-		chs <- c
-		go doGetIndex(c, 3, &wg, chs, rchs)
+		chidx <- idx
+		go doGetIndex(idx, 3, &wg, chidx, rchs)
 	}
 	wg.Wait()
-	close(chs)
+	close(chidx)
 	close(rchs)
 	wgr.Wait()
 }
 
-func doGetIndex(code string, retry int, wg *sync.WaitGroup, chs chan string, rchs chan string) {
+func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *model.IdxLst, rchs chan string) {
 	defer func() {
 		wg.Done()
-		<-chs
+		<-chidx
 	}()
 	ts := []model.DBTab{
 		model.KLINE_DAY,
@@ -61,32 +64,44 @@ func doGetIndex(code string, retry int, wg *sync.WaitGroup, chs chan string, rch
 		model.KLINE_MONTH,
 	}
 	for _, t := range ts {
-		e := getIndexFor(code, retry, t)
+		e := getIndexFor(idx, retry, t)
 		if e != nil {
 			rchs <- ""
 			log.Println(e)
 			return
 		}
 	}
-	rchs <- code
+	rchs <- idx.Code
 }
 
-func getIndexFor(code string, retry int, tab model.DBTab) error {
+func getIndexFor(idx *model.IdxLst, retry int, tab model.DBTab) error {
 	for i := 0; i < retry; i++ {
-		suc, rt := tryGetIndex(code, tab)
+		suc, rt := tryGetIndex(idx, tab)
 		if suc {
 			return nil
 		} else if rt {
-			log.Printf("%s[%s] retrying: %d", code, tab, i+1)
+			log.Printf("%s[%s] retrying: %d", idx.Code, tab, i+1)
 		} else {
-			return errors.Errorf("Failed to get %s[%s]", code, tab)
+			return errors.Errorf("Failed to get %s[%s]", idx.Code, tab)
 		}
 	}
-	return errors.Errorf("Failed to get %s[%s]", code, tab)
+	return errors.Errorf("Failed to get %s[%s]", idx.Code, tab)
 }
 
-func tryGetIndex(code string, tab model.DBTab) (suc, rt bool) {
+func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
+	//TODO fetch index data according to various src url
+	code := idx.Code
 	log.Printf("Fetching index %s", code)
+	switch idx.Src {
+	case "https://xueqiu.com":
+		return idxFromXq(code, tab)
+	default:
+		log.Panicf("%s unknown index src: %s", code, idx.Src)
+	}
+	panic(fmt.Sprintf("%s unknown index src: %s", code, idx.Src))
+}
+
+func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 	var (
 		bg, per string
 		sklid   int
@@ -126,42 +141,7 @@ func tryGetIndex(code string, tab model.DBTab) (suc, rt bool) {
 		log.Printf("target server failed: %s\n%+v\n%+v", url, xqj, e)
 		return false, true
 	}
-	saveIndex(xqj, sklid, string(tab))
+	xqj.Save(dbmap, sklid, string(tab))
+	//saveIndex(xqj, sklid, string(tab))
 	return true, false
-}
-
-func saveIndex(xqj *model.XQJson, sklid int, table string) {
-	//TODO implement index crawling
-	if xqj != nil && len(xqj.Chartlist) > 0 {
-		valueStrings := make([]string, 0, len(xqj.Chartlist))
-		valueArgs := make([]interface{}, 0, len(xqj.Chartlist)*13)
-		var code string
-		for _, q := range xqj.Chartlist {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), ?, ?)")
-			valueArgs = append(valueArgs, xqj.Stock)
-			valueArgs = append(valueArgs,
-				time.Unix(q.Timestamp/int64(time.Microsecond), 0).Format("2006-01-02"))
-			valueArgs = append(valueArgs, sklid)
-			valueArgs = append(valueArgs, q.Open)
-			valueArgs = append(valueArgs, q.High)
-			valueArgs = append(valueArgs, q.Close)
-			valueArgs = append(valueArgs, q.Low)
-			valueArgs = append(valueArgs, q.Volume)
-			//valueArgs = append(valueArgs, q.Amount)
-			//valueArgs = append(valueArgs, q.Xrate)
-			//valueArgs = append(valueArgs, q.Varate)
-			//valueArgs = append(valueArgs, q.Udate)
-			//valueArgs = append(valueArgs, q.Utime)
-			//code = q.Code
-			sklid++
-		}
-		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
-			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
-			"(udate),utime=values(utime)",
-			table, strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, code+" failed to bulk insert "+table)
-	}
 }
