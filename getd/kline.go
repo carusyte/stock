@@ -231,9 +231,7 @@ func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model
 		} else {
 			if retry && rt+1 < RETRIES {
 				log.Printf("%s retrying to get %s [%d]", code, klt, rt+1)
-				sleep := int64(math.Min(float64(500+rt*500), 5000))
-				ms := time.Duration(sleep)
-				time.Sleep(time.Millisecond * ms)
+				time.Sleep(time.Millisecond * 500)
 				continue
 			} else {
 				log.Printf("%s failed to get %s", code, klt)

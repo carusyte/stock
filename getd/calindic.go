@@ -82,12 +82,6 @@ func calcWeek(stk *model.Stock, offset int64) {
 	if offset >= 0 {
 		mxw, err = dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
 		util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
-		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_w where code=?", code)
-		util.CheckErr(err, "failed to query max klid in kline_w for "+code)
-		if !mxk.Valid || (mxw.Valid && mxk.Int64 < mxw.Int64) {
-			//no new kline_w data yet
-			return
-		}
 	}
 
 	var qw []*model.Quote
@@ -116,12 +110,6 @@ func calcMonth(stk *model.Stock, offset int64) {
 	if offset >= 0 {
 		mxm, err = dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
 		util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
-		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_m where code=?", code)
-		util.CheckErr(err, "failed to query max klid in kline_m for "+code)
-		if !mxk.Valid || (mxm.Valid && mxk.Int64 < mxm.Int64) {
-			//no new kline_d data yet
-			return
-		}
 	}
 
 	var qm []*model.Quote
@@ -150,12 +138,6 @@ func calcDay(stk *model.Stock, offset int64) {
 	if offset >= 0 {
 		mxd, err = dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
 		util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
-		mxk, err := dbmap.SelectNullInt("select max(klid) from kline_d where code=?", code)
-		util.CheckErr(err, "failed to query max klid in kline_d for "+code)
-		if !mxk.Valid || (mxd.Valid && mxk.Int64 < mxd.Int64) {
-			//no new kline_d data yet
-			return
-		}
 	}
 
 	var qd []*model.Quote
