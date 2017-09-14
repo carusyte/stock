@@ -89,16 +89,63 @@ func getIndexFor(idx *model.IdxLst, retry int, tab model.DBTab) error {
 }
 
 func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
-	//TODO fetch index data according to various src url
 	code := idx.Code
-	log.Printf("Fetching index %s", code)
+	log.Printf("Fetching index %s for %s", code, tab)
 	switch idx.Src {
 	case "https://xueqiu.com":
 		return idxFromXq(code, tab)
+	case "http://web.ifzq.gtimg.cn":
+		return idxFromQQ(code, tab)
 	default:
 		log.Panicf("%s unknown index src: %s", code, idx.Src)
 	}
 	panic(fmt.Sprintf("%s unknown index src: %s", code, idx.Src))
+}
+
+func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
+	var (
+		ldate, per string
+		sklid      int = 0
+	)
+	// check history from db
+	lq := getLatestKl(code, tab, 5)
+	if lq != nil {
+		sklid = lq.Klid
+		ldate = lq.Date
+	}
+	switch tab {
+	case model.KLINE_MONTH:
+		per = "month"
+	case model.KLINE_WEEK:
+		per = "week"
+	case model.KLINE_DAY:
+		per = "day"
+	default:
+		panic("Unsupported period: " + tab)
+	}
+	url := fmt.Sprintf(`http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?`+
+		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
+	d, e := util.HttpGetBytes(url)
+	if e != nil {
+		log.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
+		return false, true
+	}
+	qj := &model.QQJson{}
+	qj.Code = code
+	qj.Period = per
+	qj.Sklid = sklid
+	e = json.Unmarshal(d, qj)
+	if e != nil {
+		log.Printf("failed to parse json from %s\n%+v", url, e)
+		return false, true
+	}
+	if len(qj.Quotes) > 0 && ldate != "" && qj.Quotes[0].Date != ldate {
+		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
+		return false, true
+	}
+	qj.Save(dbmap, string(tab))
+	//saveIndex(qj, sklid, string(tab))
+	return true, false
 }
 
 func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {

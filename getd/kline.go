@@ -234,6 +234,7 @@ func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model
 				time.Sleep(time.Millisecond * 500)
 				continue
 			} else {
+				//FIXME sometimes 10jqk nginx server redirects to the same server and replies empty data no matter how many times you try
 				log.Printf("%s failed to get %s", code, klt)
 				return kldy, false
 			}

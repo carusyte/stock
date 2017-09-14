@@ -42,7 +42,7 @@ CREATE TABLE `basics` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `finance` (
-  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
   `year` varchar(10) NOT NULL COMMENT '报告年度',
   `eps` double DEFAULT NULL COMMENT '基本每股收益(元)',
   `eps_yoy` double DEFAULT NULL COMMENT '基本每股收益同比增长率',
@@ -71,6 +71,13 @@ CREATE TABLE `finance` (
   PRIMARY KEY (`code`,`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='财务信息';
 
+CREATE TABLE `idxlst` (
+  `code` varchar(8) NOT NULL COMMENT '代码',
+  `name` varchar(10) NOT NULL COMMENT '指数名称',
+  `src` varchar(60) DEFAULT NULL COMMENT '来源',
+  PRIMARY KEY (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指数列表';
+
 CREATE TABLE `indc_feat` (
   `indc` varchar(10) NOT NULL COMMENT '指标类型',
   `fid` varchar(50) NOT NULL COMMENT '特征ID(UUID)',
@@ -86,7 +93,7 @@ CREATE TABLE `indc_feat` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征数据总表';
 
 CREATE TABLE `indc_feat_raw` (
-  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
   `indc` varchar(10) NOT NULL COMMENT '指标类型',
   `fid` varchar(15) NOT NULL COMMENT '特征ID(周期+买卖+采样起始日期)',
   `cytp` varchar(5) NOT NULL COMMENT '周期类型（D:天/W:周/M:月）',
@@ -104,7 +111,7 @@ CREATE TABLE `indc_feat_raw` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征原始数据总表';
 
 CREATE TABLE `indicator_d` (
-  `Code` varchar(6) NOT NULL,
+  `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
   `Klid` int(11) NOT NULL,
   `KDJ_K` decimal(6,3) DEFAULT NULL,
@@ -116,7 +123,7 @@ CREATE TABLE `indicator_d` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `indicator_m` (
-  `Code` varchar(6) NOT NULL,
+  `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
   `Klid` int(11) NOT NULL,
   `KDJ_K` decimal(6,3) DEFAULT NULL,
@@ -128,7 +135,7 @@ CREATE TABLE `indicator_m` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `indicator_w` (
-  `Code` varchar(6) NOT NULL,
+  `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
   `Klid` int(11) NOT NULL,
   `KDJ_K` decimal(6,3) DEFAULT NULL,
@@ -151,7 +158,7 @@ CREATE TABLE `kdj_feat_dat` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征数据';
 
 CREATE TABLE `kdj_feat_dat_raw` (
-  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
   `fid` varchar(15) NOT NULL COMMENT '特征ID',
   `klid` int(11) NOT NULL COMMENT '序号',
   `K` double NOT NULL,
@@ -163,7 +170,7 @@ CREATE TABLE `kdj_feat_dat_raw` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征原始数据';
 
 CREATE TABLE `kdjv_stats` (
-  `code` varchar(6) NOT NULL COMMENT '股票代码',
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
   `dod` double DEFAULT NULL COMMENT 'Degree of Distinction',
   `sl` double DEFAULT NULL COMMENT 'Sell Low',
   `sh` double DEFAULT NULL COMMENT 'Sell High',
@@ -183,7 +190,7 @@ CREATE TABLE `kdjv_stats` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJV Scorer Performance Statistics';
 
 CREATE TABLE `kline_60m` (
-  `code` varchar(6) NOT NULL,
+  `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
   `time` varchar(8) NOT NULL,
   `klid` int(11) NOT NULL,
@@ -205,7 +212,7 @@ CREATE TABLE `kline_60m` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60分钟K线（前复权）';
 
 CREATE TABLE `kline_d` (
-  `code` varchar(6) NOT NULL,
+  `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
   `klid` int(11) NOT NULL,
   `open` double DEFAULT NULL,
@@ -222,7 +229,7 @@ CREATE TABLE `kline_d` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（前复权）';
 
 CREATE TABLE `kline_d_n` (
-  `code` varchar(6) NOT NULL,
+  `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
   `klid` int(11) NOT NULL,
   `open` double DEFAULT NULL,
@@ -240,7 +247,7 @@ CREATE TABLE `kline_d_n` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（不复权）';
 
 CREATE TABLE `kline_m` (
-  `Code` varchar(6) NOT NULL,
+  `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
   `Klid` int(11) NOT NULL,
   `Open` double DEFAULT NULL,
@@ -257,7 +264,7 @@ CREATE TABLE `kline_m` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `kline_w` (
-  `Code` varchar(6) NOT NULL,
+  `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
   `Klid` int(11) NOT NULL,
   `Open` double DEFAULT NULL,
@@ -321,6 +328,3 @@ CREATE TABLE `xdxr` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-
-

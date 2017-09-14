@@ -796,7 +796,7 @@ type XQJson struct {
 
 func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 	//TODO implement index persistence for Xueqiu
-	if xqj != nil && len(xqj.Chartlist) > 0 {
+	if len(xqj.Chartlist) > 0 {
 		valueStrings := make([]string, 0, len(xqj.Chartlist))
 		valueArgs := make([]interface{}, 0, len(xqj.Chartlist)*13)
 		var code string
@@ -828,6 +828,110 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 			table, strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+" failed to bulk insert "+table)
+	}
+}
+
+// Set Code and Period before unmarshalling json data
+type QQJson struct {
+	Code, Period string
+	Sklid        int
+	Quotes       []*Quote
+}
+
+func (qj *QQJson) UnmarshalJSON(b []byte) error {
+	var (
+		f      interface{}
+		m      map[string]interface{}
+		retcde float64
+		msg    string
+		ok     bool
+		e      error
+	)
+	e = json.Unmarshal(b, &f)
+	if e != nil {
+		return errors.Wrapf(e, "%s %s failed to unmarshal json data", qj.Code, qj.Period)
+	}
+	if m, ok = f.(map[string]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure: %+v", f)
+	}
+	retcde = m["code"].(float64)
+	msg = m["msg"].(string)
+	if retcde != 0 {
+		return errors.Errorf("server failed with code %d, msg: %s", retcde, msg)
+	}
+	if cdat, exists := m["data"].(map[string]interface{})[qj.Code]; !exists {
+		return errors.Errorf("unrecognized data structure: %+v", f)
+	} else {
+		if pdat, exists := cdat.(map[string]interface{})[qj.Period]; !exists {
+			return errors.Errorf("unrecognized data structure: %+v", f)
+		} else {
+			ps := pdat.([]interface{})
+			qj.Quotes = make([]*Quote, len(ps))
+			code := qj.Code[2:]
+			klid := qj.Sklid
+			dt, tm := util.TimeStr()
+			for i, pd := range ps {
+				pa := pd.([]interface{})
+				q := new(Quote)
+				q.Code = code
+				q.Date = pa[0].(string)
+				q.Klid = klid
+				q.Open, e = strconv.ParseFloat(pa[1].(string), 64)
+				if e != nil {
+					return errors.Wrapf(e, "failed to parse OPEN value at index %d", i)
+				}
+				q.Close, e = strconv.ParseFloat(pa[2].(string), 64)
+				if e != nil {
+					return errors.Wrapf(e, "failed to parse CLOSE value at index %d", i)
+				}
+				q.High, e = strconv.ParseFloat(pa[3].(string), 64)
+				if e != nil {
+					return errors.Wrapf(e, "failed to parse HIGH value at index %d", i)
+				}
+				q.Low, e = strconv.ParseFloat(pa[4].(string), 64)
+				if e != nil {
+					return errors.Wrapf(e, "failed to parse LOW value at index %d", i)
+				}
+				q.Volume, e = strconv.ParseFloat(pa[2].(string), 64)
+				if e != nil {
+					return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
+				}
+				q.Udate.Valid = true
+				q.Utime.Valid = true
+				q.Udate.String = dt
+				q.Utime.String = tm
+				klid++
+				qj.Quotes[i] = q
+			}
+		}
+	}
+	return nil
+}
+
+func (qj *QQJson) Save(dbmap *gorp.DbMap, table string) {
+	if len(qj.Quotes) > 0 {
+		valueStrings := make([]string, 0, len(qj.Quotes))
+		valueArgs := make([]interface{}, 0, len(qj.Quotes)*10)
+		for _, q := range qj.Quotes {
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueArgs = append(valueArgs, q.Code)
+			valueArgs = append(valueArgs, q.Date)
+			valueArgs = append(valueArgs, q.Klid)
+			valueArgs = append(valueArgs, q.Open)
+			valueArgs = append(valueArgs, q.High)
+			valueArgs = append(valueArgs, q.Close)
+			valueArgs = append(valueArgs, q.Low)
+			valueArgs = append(valueArgs, q.Volume)
+			valueArgs = append(valueArgs, q.Udate)
+			valueArgs = append(valueArgs, q.Utime)
+		}
+		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
+			"volume,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"open=values(open),high=values(high),close=values(close),low=values(low),"+
+			"volume=values(volume),udate=values(udate),utime=values(utime)",
+			table, strings.Join(valueStrings, ","))
+		_, err := dbmap.Exec(stmt, valueArgs...)
+		util.CheckErr(err, qj.Code+" failed to bulk insert "+table)
 	}
 }
 
