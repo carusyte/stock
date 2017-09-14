@@ -867,13 +867,12 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 		} else {
 			ps := pdat.([]interface{})
 			qj.Quotes = make([]*Quote, len(ps))
-			code := qj.Code[2:]
 			klid := qj.Sklid
 			dt, tm := util.TimeStr()
 			for i, pd := range ps {
 				pa := pd.([]interface{})
 				q := new(Quote)
-				q.Code = code
+				q.Code = qj.Code
 				q.Date = pa[0].(string)
 				q.Klid = klid
 				q.Open, e = strconv.ParseFloat(pa[1].(string), 64)
