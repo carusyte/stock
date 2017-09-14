@@ -12,17 +12,18 @@ import (
 	"time"
 )
 
-func GetIndices() {
+func GetIndices() (idxlst, suclst []*model.IdxLst) {
 	var (
-		idxlst  []*model.IdxLst
 		wg, wgr sync.WaitGroup
 	)
 	_, e := dbmap.Select(&idxlst, `select * from idxlst`)
 	util.CheckErr(e, "failed to query idxlst")
 	log.Printf("# Indices: %d", len(idxlst))
 	codes := make([]string, len(idxlst))
+	idxMap := make(map[string]*model.IdxLst)
 	for i, idx := range idxlst {
 		codes[i] = idx.Code
+		idxMap[idx.Code] = idx
 	}
 	chidx := make(chan *model.IdxLst, conf.Args.Concurrency)
 	rchs := make(chan string, conf.Args.Concurrency)
@@ -33,13 +34,17 @@ func GetIndices() {
 		for rc := range rchs {
 			if rc != "" {
 				rcodes = append(rcodes, rc)
-				p := float64(len(rcodes)) / float64(len(idxlst))
+				p := float64(len(rcodes)) / float64(len(idxlst)) * 100
 				log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 			}
 		}
+		log.Printf("Finished index data collecting")
 		eq, fs, _ := util.DiffStrings(codes, rcodes)
 		if !eq {
 			log.Printf("Failed indices: %+v", fs)
+			for _, sc := range rcodes {
+				suclst = append(suclst, idxMap[sc])
+			}
 		}
 	}()
 	for _, idx := range idxlst {
@@ -51,6 +56,7 @@ func GetIndices() {
 	close(chidx)
 	close(rchs)
 	wgr.Wait()
+	return
 }
 
 func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *model.IdxLst, rchs chan string) {

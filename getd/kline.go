@@ -17,7 +17,7 @@ import (
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks) {
-	//TODO find a way to get minute level klines and SH, SZ market index
+	//TODO find a way to get minute level klines
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)

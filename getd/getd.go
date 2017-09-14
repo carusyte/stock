@@ -31,10 +31,21 @@ func Get() {
 	stks = GetKlines(stks, model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH)
 	stop("GET_KLINES", stgkl)
 
+	stidx := time.Now()
+	allIdx, sucIdx := GetIndices()
+	stop("GET_INDICES", stidx)
+	for _, idx := range allIdx {
+		allstks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
+	}
+
 	updb := time.Now()
 	stks = updBasics(stks)
 	stop("UPD_BASICS", updb)
 
+	// Add indices pending to be calculated
+	for _, idx := range sucIdx{
+		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
+	}
 	stci := time.Now()
 	stks = CalcIndics(stks)
 	stop("CALC_INDICS", stci)
@@ -54,8 +65,8 @@ func stop(code string, start time.Time) {
 		code, ss, end, dur)
 }
 
+//update xpriced flag in xdxr to mark that all price related data has been reinstated
 func finMark(stks *model.Stocks) *model.Stocks {
-	//update xpriced flag in xdxr to mark that all price related data has been reinstated
 	sql, e := dot.Raw("UPD_XPRICE")
 	util.CheckErr(e, "failed to get UPD_XPRICE sql")
 	sql = fmt.Sprintf(sql, util.Join(stks.Codes, ",", true))
