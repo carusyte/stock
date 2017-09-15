@@ -13,6 +13,7 @@ import (
 	"math"
 	"sort"
 	"time"
+	"database/sql"
 )
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
@@ -127,12 +128,21 @@ func ToOne(qs []*model.Quote, preClose float64, preKlid int) *model.Quote {
 			if q.High > oq.High {
 				oq.High = q.High
 			}
-			oq.Volume += q.Volume
+			if q.Volume.Valid {
+
+			}
+			if q.Volume.Valid {
+				oq.Volume.Valid = true
+				oq.Volume.Float64 += q.Volume.Float64
+			}
 			if q.Xrate.Valid {
 				oq.Xrate.Valid = true
+				oq.Xrate.Float64 += q.Xrate.Float64
 			}
-			oq.Xrate.Float64 += q.Xrate.Float64
-			oq.Amount += q.Amount
+			if q.Amount.Valid {
+				oq.Amount.Valid = true
+				oq.Amount.Float64 += q.Amount.Float64
+			}
 		}
 		// no handling of oq.Time yet
 	}
@@ -662,9 +672,9 @@ DATES:
 			case 4:
 				kl.Close = util.Str2F64(e)
 			case 5:
-				kl.Volume = util.Str2F64(e)
+				kl.Volume = sql.NullFloat64{util.Str2F64(e), true}
 			case 6:
-				kl.Amount = util.Str2F64(e)
+				kl.Amount = sql.NullFloat64{util.Str2F64(e), true}
 			case 7:
 				kl.Xrate = util.Str2Fnull(e)
 			default:

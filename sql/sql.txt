@@ -415,7 +415,13 @@ ORDER BY f.cytp, f.bysl, f.smp_num, k.fid, f.fd_num desc, k.seq
 SELECT
     b.code
 FROM
-    basics b
+    ((SELECT
+        code
+    FROM
+        basics) UNION (SELECT
+        code
+    FROM
+        idxlst)) b
 WHERE
     NOT EXISTS( SELECT
             ks.code

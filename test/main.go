@@ -7,6 +7,7 @@ import (
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/util"
+	"fmt"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 
 func blueKdjv() {
 	start := time.Now()
-	r2 := new(score.BlueChip).Geta().Sort().Shrink(200)
+	r2 := new(score.BlueChip).Geta().Sort().Shrink(1000)
 	r2.Weight = 0
 	r3 := new(score.KdjV).Get(r2.Stocks(), -1, false)
 	r3.Weight = 1
@@ -56,14 +57,25 @@ func blue() {
 
 func holistic() {
 	start := time.Now()
+	kdjv := new(score.KdjV)
+	idxlst, e := getd.GetIdxLst()
+	if e != nil {
+		panic(e)
+	}
+	idxc := make([]string, len(idxlst))
+	for i, idx := range idxlst {
+		idxc[i] = idx.Code
+	}
 	r1 := new(score.HiD).Geta()
 	r1.Weight = 0.5
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.5
 	r1r2 := score.Combine(r1, r2).Sort().Shrink(300)
 	r1r2.Weight = 0
-	r3 := new(score.KdjV).Get(r1r2.Stocks(), -1, false)
+	r3 := kdjv.Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1
+	log.Printf("\n%+v", kdjv.Get(idxc, -1, false))
+	fmt.Println()
 	log.Printf("\n%+v", score.Combine(r1r2, r3).Sort())
 	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }

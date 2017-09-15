@@ -94,10 +94,10 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		e := dbmap.SelectOne(&lp, "select close as price, date as price_date from kline_d where code = ? order by "+
 			"klid desc limit 1", ih.Code)
 		if e != nil {
-			if "sql: no rows in result set" != e.Error() {
-				log.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
-			} else {
+			if "sql: no rows in result set" == e.Error() {
 				logrus.Warnf("%s lack of kline_d data", item.Code)
+			} else {
+				log.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
 			}
 		}
 		ih.Price = lp.Price

@@ -45,7 +45,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			_, e = dbmap.Select(&indcs, sql, code)
 		}
 		if e != nil {
-			if "sql: no rows in result set" != e.Error() {
+			if "sql: no rows in result set" == e.Error() {
 				logr.Warnf("%s, %s, %s, %d: %s", code, tab, retro, e.Error())
 				return
 			} else {
@@ -62,7 +62,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			_, e = dbmap.Select(&indcs, sql, code, toDate)
 		}
 		if e != nil {
-			if "sql: no rows in result set" != e.Error() {
+			if "sql: no rows in result set" == e.Error() {
 				logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
 				return
 			} else {
@@ -84,7 +84,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			var oqs []*model.Quote
 			_, e = dbmap.Select(&oqs, sql, code, toDate)
 			if e != nil {
-				if "sql: no rows in result set" != e.Error() {
+				if "sql: no rows in result set" == e.Error() {
 					logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, e.Error())
 					return
 				} else {
@@ -106,7 +106,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 }
 
 func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
-	//TODO tag cross ?
+	//TODO tag cross?
 	var itab, ktab model.DBTab
 	switch cytp {
 	case model.DAY:
@@ -333,7 +333,7 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT_RAW sql")
 	rows, e := dbmap.Query(sql, string(cytp)+bysl+"%", cytp, bysl, num)
 	if e != nil {
-		if "sql: no rows in result set" != e.Error() {
+		if "sql: no rows in result set" == e.Error() {
 			fdvs := make([]*model.KDJfdrView, 0)
 			kdjFdrMap[mk] = fdvs
 			return fdvs
@@ -433,7 +433,7 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 	util.CheckErr(e, "failed to get KDJ_FEAT_DAT_ALL sql")
 	rows, e := dbmap.Query(sql)
 	if e != nil {
-		if "sql: no rows in result set" != e.Error() {
+		if "sql: no rows in result set" == e.Error() {
 			return kdjFdMap, 0
 		} else {
 			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
@@ -579,7 +579,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 
 // Merge similar kdj feature data based on
 func PruneKdjFeatDat(prec float64, pass int, resume bool) {
-	//FIXME calculate mean more fairly
+	//FIXME calculate mean more fairly, support auto/remote mode
 	st := time.Now()
 	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d, resume: %t", prec, pass, resume)
 	var fdks []*fdKey

@@ -489,8 +489,8 @@ type Quote struct {
 	High   float64
 	Close  float64
 	Low    float64
-	Volume float64
-	Amount float64
+	Volume sql.NullFloat64
+	Amount sql.NullFloat64
 	Xrate  sql.NullFloat64
 	Varate sql.NullFloat64
 	Ma5    sql.NullFloat64
@@ -559,7 +559,8 @@ func (k *K60MinList) UnmarshalJSON(b []byte) error {
 		for k := range im {
 			switch k {
 			case "volume":
-				q.Volume = im[k].(float64)
+				q.Volume.Valid = true
+				q.Volume.Float64 = im[k].(float64)
 			case "open":
 				q.Open = im[k].(float64)
 			case "high":
@@ -661,8 +662,8 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 			kt.High = util.Str2F64(qm["8"].(string))
 			kt.Low = util.Str2F64(qm["9"].(string))
 			kt.Close = util.Str2F64(qm["11"].(string))
-			kt.Volume = qm["13"].(float64)
-			kt.Amount = util.Str2F64(qm["19"].(string))
+			kt.Volume = sql.NullFloat64{qm["13"].(float64), true}
+			kt.Amount = sql.NullFloat64{util.Str2F64(qm["19"].(string)), true}
 			kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
 		} else {
 			e = errors.Errorf("failed to parse Ktoday json: %s", string(b))
@@ -795,7 +796,6 @@ type XQJson struct {
 }
 
 func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
-	//TODO implement index persistence for Xueqiu
 	if len(xqj.Chartlist) > 0 {
 		valueStrings := make([]string, 0, len(xqj.Chartlist))
 		valueArgs := make([]interface{}, 0, len(xqj.Chartlist)*13)
@@ -891,7 +891,8 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 				if e != nil {
 					return errors.Wrapf(e, "failed to parse LOW value at index %d", i)
 				}
-				q.Volume, e = strconv.ParseFloat(pa[2].(string), 64)
+				q.Volume.Valid = true
+				q.Volume.Float64, e = strconv.ParseFloat(pa[2].(string), 64)
 				if e != nil {
 					return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
 				}

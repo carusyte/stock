@@ -71,14 +71,40 @@ func (k *KdjV) GetFieldStr(name string) string {
 	}
 }
 
-func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
+// The codes slice may contain either stock codes or index codes. If not specified, both will be handled.
+func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
 	r.PfIds = append(r.PfIds, k.Id())
-	var stks []*model.Stock
-	if stock == nil || len(stock) == 0 {
+	var (
+		stks   []*model.Stock
+		idxlst []*model.IdxLst
+		items  []*Item
+		e      error
+	)
+	if codes == nil || len(codes) == 0 {
 		stks = getd.StocksDb()
+		idxlst, e = getd.GetIdxLst()
+		if e != nil {
+			panic(e)
+		}
 	} else {
-		stks = getd.StocksDbByCode(stock...)
+		stks = getd.StocksDbByCode(codes...)
+		idxlst, e = getd.GetIdxLst(codes...)
+		if e != nil {
+			panic(e)
+		}
+	}
+	for _, s := range stks {
+		item := new(Item)
+		item.Code = s.Code
+		item.Name = s.Name
+		items = append(items, item)
+	}
+	for _, idx := range idxlst {
+		item := new(Item)
+		item.Code = idx.Code
+		item.Name = idx.Name
+		items = append(items, item)
 	}
 	pl := 2
 	switch conf.Args.RunMode {
@@ -97,17 +123,14 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	}
 	logr.Debugf("Parallel Level: %d", pl)
 	var wg sync.WaitGroup
-	chitm := make(chan *Item, len(stks))
+	chitm := make(chan *Item, len(items))
 	for i := 0; i < pl; i++ {
 		wg.Add(1)
-		go scoreKdjRoutine(&wg, chitm, len(stks))
+		go scoreKdjRoutine(&wg, chitm, len(items))
 	}
-	for _, s := range stks {
-		item := new(Item)
-		r.AddItem(item)
-		item.Code = s.Code
-		item.Name = s.Name
-		chitm <- item
+	for _, itm := range items {
+		r.AddItem(itm)
+		chitm <- itm
 	}
 	close(chitm)
 	wg.Wait()
@@ -119,21 +142,38 @@ func (k *KdjV) Get(stock []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
-func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
+func (k *KdjV) RenewStats(useRaw bool, code ... string) {
 	var (
+		codes   []string
 		stks    []*model.Stock
+		idxlst  []*model.IdxLst
 		pl      int
 		wg, wgr sync.WaitGroup
+		e       error
 	)
-	if stock == nil || len(stock) == 0 {
+	if code == nil || len(code) == 0 {
 		stks = getd.StocksDb()
+		idxlst, e = getd.GetIdxLst()
+		if e != nil {
+			panic(e)
+		}
 	} else {
-		stks = getd.StocksDbByCode(stock...)
+		stks = getd.StocksDbByCode(code...)
+		idxlst, e = getd.GetIdxLst(code...)
+		if e != nil {
+			panic(e)
+		}
+	}
+	for _, s := range stks {
+		codes = append(codes, s.Code)
+	}
+	for _, idx := range idxlst {
+		codes = append(codes, idx.Code)
 	}
 	pl = getParallelLevel()
 	logr.Debugf("Parallel Level: %d", pl)
-	logr.Debugf("#Stocks: %d", len(stks))
-	chstk := make(chan *model.Stock, pl)
+	logr.Debugf("#Stocks: %d", len(codes))
+	chcde := make(chan string, pl)
 	chkps := make(chan *model.KDJVStat, JOB_CAPACITY)
 	wgr.Add(1)
 	go func(wgr *sync.WaitGroup) {
@@ -144,18 +184,19 @@ func (k *KdjV) RenewStats(useRaw bool, stock ... string) {
 			if kps != nil {
 				saveKps(kps)
 			}
-			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%", c, len(stks), 100*float64(c)/float64(len(stks)))
+			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%",
+				c, len(codes), 100*float64(c)/float64(len(codes)))
 		}
 	}(&wgr)
-	for i, s := range stks {
+	for i, c := range codes {
 		wg.Add(1)
-		chstk <- s
-		go renewKdjStats(s, useRaw, &wg, chstk, chkps)
+		chcde <- c
+		go renewKdjStats(c, useRaw, &wg, chcde, chkps)
 		if i < pl {
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
-	close(chstk)
+	close(chcde)
 	wg.Wait()
 	close(chkps)
 	wgr.Wait()
@@ -237,11 +278,11 @@ func saveKps(kps ... *model.KDJVStat) {
 }
 
 // collect kdjv stats and save to database
-func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *model.Stock,
+func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan string,
 	chkps chan *model.KDJVStat) {
 	defer func() {
 		wg.Done()
-		<-chstk
+		<-chcde
 	}()
 	start := time.Now()
 	var e error
@@ -250,26 +291,26 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	mxhold := 3
 	retro := 600
 	kps := new(model.KDJVStat)
-	klhist := getd.GetKlineDb(s.Code, model.KLINE_DAY, retro, false)
+	klhist := getd.GetKlineDb(code, model.KLINE_DAY, retro, false)
 	if len(klhist) < retro {
-		log.Printf("%s insufficient data to collect kdjv stats: %d", s.Code, len(klhist))
+		log.Printf("%s insufficient data to collect kdjv stats: %d", code, len(klhist))
 		chkps <- nil
 		return
 	}
-	kps.Code = s.Code
+	kps.Code = code
 	kps.Frmdt = klhist[0].Date
 	kps.Todt = klhist[len(klhist)-1].Date
 	kps.Udate, kps.Utime = util.TimeStr()
 	var buys, sells []float64
 	switch conf.Args.RunMode {
 	case conf.REMOTE:
-		buys, sells, e = kdjScoresRemote(s.Code, klhist, expvr, mxrt, mxhold)
+		buys, sells, e = kdjScoresRemote(code, klhist, expvr, mxrt, mxhold)
 	case conf.LOCAL:
-		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	case conf.AUTO:
-		buys, sells, e = kdjScoresAuto(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		buys, sells, e = kdjScoresAuto(code, klhist, expvr, mxrt, mxhold, useRaw)
 	default:
-		buys, sells, e = kdjScoresLocal(s.Code, klhist, expvr, mxrt, mxhold, useRaw)
+		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	}
 	if e != nil {
 		logr.Warn(e)
@@ -278,23 +319,23 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	sort.Float64s(buys)
 	sort.Float64s(sells)
 	kps.Bl, e = stats.Round(buys[0], 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round BL %f", s.Code, buys[0]))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BL %f", code, buys[0]))
 	kps.Sl, e = stats.Round(sells[0], 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round SL %f", s.Code, sells[0]))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SL %f", code, sells[0]))
 	kps.Bh, e = stats.Round(buys[len(buys)-1], 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round BH %f", s.Code, buys[len(buys)-1]))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BH %f", code, buys[len(buys)-1]))
 	kps.Sh, e = stats.Round(sells[len(sells)-1], 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round SH %f", s.Code, sells[len(sells)-1]))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SH %f", code, sells[len(sells)-1]))
 	kps.Bcnt = len(buys)
 	kps.Scnt = len(sells)
 	kps.Bmean, e = stats.Mean(buys)
-	util.CheckErr(e, s.Code+" failed to calculate mean for buy scores")
+	util.CheckErr(e, code+" failed to calculate mean for buy scores")
 	kps.Bmean, e = stats.Round(kps.Bmean, 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round BMean %f", s.Code, kps.Bmean))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round BMean %f", code, kps.Bmean))
 	kps.Smean, e = stats.Mean(sells)
-	util.CheckErr(e, s.Code+" failed to calculate mean for sell scores")
+	util.CheckErr(e, code+" failed to calculate mean for sell scores")
 	kps.Smean, e = stats.Round(kps.Smean, 2)
-	util.CheckErr(e, fmt.Sprintf("%s failed to round SMean %f", s.Code, kps.Smean))
+	util.CheckErr(e, fmt.Sprintf("%s failed to round SMean %f", code, kps.Smean))
 	if kps.Sh >= kps.Bl {
 		soc, boc := 0, 0
 		for _, b := range buys {
@@ -313,9 +354,9 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 			}
 		}
 		kps.Bor, e = stats.Round(float64(boc)/float64(kps.Bcnt), 2)
-		util.CheckErr(e, fmt.Sprintf("%s failed to round BOR %f", s.Code, kps.Bor))
+		util.CheckErr(e, fmt.Sprintf("%s failed to round BOR %f", code, kps.Bor))
 		kps.Sor, e = stats.Round(float64(soc)/float64(kps.Scnt), 2)
-		util.CheckErr(e, fmt.Sprintf("%s failed to round SOR %f", s.Code, kps.Sor))
+		util.CheckErr(e, fmt.Sprintf("%s failed to round SOR %f", code, kps.Sor))
 		dor := math.Abs(kps.Bor - kps.Sor)
 		dod := 0.
 		x := 0.
@@ -334,7 +375,7 @@ func renewKdjStats(s *model.Stock, useRaw bool, wg *sync.WaitGroup, chstk chan *
 	} else {
 		kps.Dod = 100
 	}
-	logr.Debugf("%s kdjv DOD: %.2f, time: %.2f", s.Code, kps.Dod, time.Since(start).Seconds())
+	logr.Debugf("%s kdjv DOD: %.2f, time: %.2f", code, kps.Dod, time.Since(start).Seconds())
 	chkps <- kps
 }
 

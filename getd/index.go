@@ -10,7 +10,26 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
 	"time"
+	"github.com/sirupsen/logrus"
 )
+
+func GetIdxLst(code ... string) (idxlst []*model.IdxLst, e error) {
+	sql := "select * from idxlst order by code"
+	if len(code) > 0 {
+		sql = fmt.Sprintf("select * from idxlst where code in (%s) order by code", util.Join(code,
+			",", true))
+	}
+	_, e = dbmap.Select(&idxlst, sql)
+	if e != nil {
+		if "sql: no rows in result set" == e.Error() {
+			logrus.Warnf("no data in idxlst table")
+			return idxlst, nil
+		} else {
+			return idxlst, errors.Wrapf(e, "failed to query idxlst, sql: %s, \n%+v", sql, e)
+		}
+	}
+	return
+}
 
 func GetIndices() (idxlst, suclst []*model.IdxLst) {
 	var (
@@ -38,13 +57,13 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 				log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 			}
 		}
+		for _, sc := range rcodes {
+			suclst = append(suclst, idxMap[sc])
+		}
 		log.Printf("Finished index data collecting")
 		eq, fs, _ := util.DiffStrings(codes, rcodes)
 		if !eq {
 			log.Printf("Failed indices: %+v", fs)
-			for _, sc := range rcodes {
-				suclst = append(suclst, idxMap[sc])
-			}
 		}
 	}()
 	for _, idx := range idxlst {
