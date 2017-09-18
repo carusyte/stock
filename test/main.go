@@ -12,15 +12,41 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	getData()
+	//getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
-	holistic()
+	//holistic()
 	//BLUE
 	//blue()
 	//blueKdjv()
+	hidBlueKdjSt()
 	//kdjOnly()
 	//renewKdjStats(true)
+}
+
+func hidBlueKdjSt() {
+	start := time.Now()
+	kdjst := new(score.KdjSt)
+	idxlst, e := getd.GetIdxLst()
+	if e != nil {
+		panic(e)
+	}
+	idxc := make([]string, len(idxlst))
+	for i, idx := range idxlst {
+		idxc[i] = idx.Code
+	}
+	r1 := new(score.HiD).Geta()
+	r1.Weight = 0.5
+	r2 := new(score.BlueChip).Geta()
+	r2.Weight = 0.5
+	r1r2 := score.Combine(r1, r2).Sort().Shrink(300)
+	r1r2.Weight = 0
+	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
+	r3.Weight = 1
+	log.Printf("\n%+v", kdjst.Get(idxc, -1, false))
+	fmt.Println()
+	log.Printf("\n%+v", score.Combine(r1r2, r3).Sort())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func blueKdjv() {

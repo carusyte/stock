@@ -579,7 +579,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 
 // Merge similar kdj feature data based on
 func PruneKdjFeatDat(prec float64, pass int, resume bool) {
-	//FIXME calculate mean more fairly, support auto/remote mode
+	//FIXME calculate mean more fairly, lower hist size requirement, support auto/remote mode
 	st := time.Now()
 	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d, resume: %t", prec, pass, resume)
 	var fdks []*fdKey
