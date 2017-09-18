@@ -28,7 +28,10 @@ type KdjV struct {
 	Code  string
 	Name  string
 	Dod   float64 // Degree of Distinction in stats
-	Sfl   float64 // Safe Line in stats
+	Sl    float64
+	Sh    float64 // Safe Line in stats
+	Bl    float64
+	Bh    float64
 	Bmean float64 // Buy Score Mean in stats
 	Smean float64 // Sell Score Mean in stats
 	Len   string
@@ -48,7 +51,7 @@ func (k *KdjV) GetFieldStr(name string) string {
 	case "DOD":
 		return fmt.Sprintf("%.2f", k.Dod)
 	case "SFL":
-		return fmt.Sprintf("%.2f", k.Sfl)
+		return fmt.Sprintf("%.2f", k.Sh)
 	case "BMEAN":
 		return fmt.Sprintf("%.2f", k.Bmean)
 	case "SMEAN":
@@ -742,7 +745,10 @@ func scoreKdjRemote(items []*Item) (e error) {
 				log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 			}
 		} else {
-			kdjv.Sfl = stat.Sh
+			kdjv.Sl = stat.Sl
+			kdjv.Sh = stat.Sh
+			kdjv.Bl = stat.Bl
+			kdjv.Bh = stat.Bh
 			kdjv.Bmean = stat.Bmean
 			kdjv.Smean = stat.Smean
 			kdjv.Dod = stat.Dod
@@ -803,7 +809,7 @@ func scoreKdjLocal(item *Item) {
 			log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 		}
 	} else {
-		kdjv.Sfl = stat.Sh
+		kdjv.Sh = stat.Sh
 		kdjv.Bmean = stat.Bmean
 		kdjv.Smean = stat.Smean
 		kdjv.Dod = stat.Dod

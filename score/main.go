@@ -13,7 +13,6 @@ import (
 const JOB_CAPACITY = global.JOB_CAPACITY
 
 //TODO TRY 30/60 min ENE
-//TODO Add KdjSt, assess score based on KdjV and KdjV stats
 var (
 	dbmap = global.Dbmap
 	dot   = global.Dot
@@ -64,7 +63,7 @@ func (i *Item) String() string {
 }
 
 type Result struct {
-	items []*Item
+	Items []*Item
 	//Code - Item map
 	itMap map[string]*Item
 	PfIds []string
@@ -76,21 +75,21 @@ type Result struct {
 }
 
 func (r *Result) Stocks() []string {
-	s := make([]string, len(r.items))
+	s := make([]string, len(r.Items))
 	for i := range s {
-		s[i] = r.items[i].Code
+		s[i] = r.Items[i].Code
 	}
 	return s
 }
 
 func (r *Result) AddItem(items ... *Item) {
-	if r.items == nil {
-		r.items = make([]*Item, len(items))
+	if r.Items == nil {
+		r.Items = make([]*Item, len(items))
 		for i := range items {
-			r.items[i] = items[i]
+			r.Items[i] = items[i]
 		}
 	} else {
-		r.items = append(r.items, items...)
+		r.Items = append(r.Items, items...)
 	}
 	if r.itMap == nil {
 		r.itMap = make(map[string]*Item)
@@ -102,15 +101,15 @@ func (r *Result) AddItem(items ... *Item) {
 
 func (r *Result) Sort() (rr *Result) {
 	rr = r
-	sort.Slice(r.items, func(i, j int) bool {
-		return r.items[i].Score > r.items[j].Score
+	sort.Slice(r.Items, func(i, j int) bool {
+		return r.Items[i].Score > r.Items[j].Score
 	})
 	return
 }
 
 func (r *Result) Shrink(num int) *Result {
-	if 0 <= num && num < len(r.items) {
-		r.items = r.items[:num]
+	if 0 <= num && num < len(r.Items) {
+		r.Items = r.Items[:num]
 	}
 	return r
 }
@@ -123,7 +122,7 @@ func (r *Result) SetFields(id string, fields ...string) {
 }
 
 func (r *Result) String() string {
-	if len(r.items) == 0 {
+	if len(r.Items) == 0 {
 		return ""
 	}
 
@@ -153,8 +152,8 @@ func (r *Result) String() string {
 	hd = append(hd, "Comments")
 
 	table.SetHeader(hd);
-	data := make([][]string, len(r.items))
-	for i, itm := range r.items {
+	data := make([][]string, len(r.Items))
+	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
 		data[i][0] = fmt.Sprintf("%d", i+1)
 		data[i][1] = itm.Code
@@ -211,12 +210,12 @@ func Combine(rs ... *Result) (fr *Result) {
 			}
 		}
 		if i == 0 {
-			fr.AddItem(r.items...)
-			for _, it := range fr.items {
+			fr.AddItem(r.Items...)
+			for _, it := range fr.Items {
 				it.Score *= r.Weight
 			}
 		} else {
-			for _, it := range r.items {
+			for _, it := range r.Items {
 				if mi, ok := fr.itMap[it.Code]; ok {
 					mi.Score += it.Score * r.Weight
 					for k := range it.Profiles {
