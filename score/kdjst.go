@@ -49,7 +49,7 @@ var (
 
 func (k *KdjSt) Get(stock []string, limit int, ranked bool) (r *Result) {
 	r = new(Result)
-
+	r.PfIds = append(r.PfIds, k.Id())
 	vr := kdjv.Get(stock, -1, false)
 	for _, vri := range vr.Items {
 		v := vri.Profiles[kdjv.Id()].FieldHolder.(*KdjV)
@@ -105,6 +105,7 @@ func kdjstScore(kst *KdjSt) (s float64) {
 			return 100
 		}
 		mod := 2.0/5.0*math.Pow(10.0/3.0*mr, math.E) + 0.6 // mod == 1 when mr == 0.3; mod == 0.6 when mr -> +0
+		mod = math.Min(1, mod)
 		if kst.Kdjv > kst.Bmean {
 			x := kst.Kdjv - kst.Bmean
 			h := high - kst.Bmean
@@ -116,6 +117,7 @@ func kdjstScore(kst *KdjSt) (s float64) {
 		}
 		s *= mod
 	}
+	s = math.Min(100, s)
 	return
 }
 

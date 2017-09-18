@@ -22,6 +22,11 @@ func main() {
 	hidBlueKdjSt()
 	//kdjOnly()
 	//renewKdjStats(true)
+	// test()
+}
+
+func test(){
+	fmt.Println(new(score.KdjSt).Get([]string{"600828"}, -1, false))
 }
 
 func hidBlueKdjSt() {
