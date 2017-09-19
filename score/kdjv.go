@@ -505,9 +505,19 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		if mark >= expvr {
 			ks := new(rm.KdjSeries)
 			s = append(s, ks)
-			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
-			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
-			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			fnd := false
+			ks.KdjDy, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			ks.KdjWk, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			ks.KdjMo, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			if !fnd {
+				continue
+			}
 			ks.RowId = fmt.Sprintf("BUY-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.NewV1())
 		}
 		i += tspan
@@ -555,9 +565,19 @@ func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		if mark <= -expvr {
 			ks := new(rm.KdjSeries)
 			s = append(s, ks)
-			ks.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
-			ks.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
-			ks.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			fnd := false
+			ks.KdjMo, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			ks.KdjWk, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			ks.KdjDy, fnd = getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			if !fnd {
+				continue
+			}
 			ks.RowId = fmt.Sprintf("SELL-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.NewV1())
 		}
 		i += tspan
@@ -603,9 +623,18 @@ func getKdjBuyScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		mark := (hc - sc) / math.Abs(sc) * 100
 		if mark >= expvr {
-			histmo := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
-			histwk := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
-			histdy := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			histmo, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			histwk, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			histdy, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			if !fnd {
+				continue
+			}
 			if useRawData {
 				s = append(s, wgtKdjScoreRaw(nil, histmo, histwk, histdy))
 			} else {
@@ -654,9 +683,18 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		mark := (lc - sc) / math.Abs(sc) * 100
 		if mark <= -expvr {
-			histmo := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
-			histwk := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
-			histdy := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			histmo, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_MONTH, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			histwk, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_WEEK, 100, kl.Date))
+			if !fnd {
+				continue
+			}
+			histdy, fnd := getd.ToLstJDCross(getd.GetKdjHist(code, model.INDICATOR_DAY, 100, kl.Date))
+			if !fnd {
+				continue
+			}
 			if useRawData {
 				s = append(s, wgtKdjScoreRaw(nil, histmo, histwk, histdy))
 			} else {
@@ -715,8 +753,8 @@ func scoreKdjRemote(items []*Item) (e error) {
 	start := time.Now()
 	itmMap := make(map[string]*Item)
 	var pid string
-	ks := make([]*rm.KdjSeries, len(items))
-	for i, item := range items {
+	ks := make([]*rm.KdjSeries, 0, 16)
+	for _, item := range items {
 		kdjv := new(KdjV)
 		pid = kdjv.Id()
 		kdjv.Code = item.Code
@@ -728,16 +766,17 @@ func scoreKdjRemote(items []*Item) (e error) {
 
 		k := new(rm.KdjSeries)
 		k.RowId = fmt.Sprintf("%s:%s", item.Code, uuid.NewV1())
-		k.KdjDy = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
-		k.KdjWk = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
-		k.KdjMo = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
+		fdy, fwk, fmo := false, false, false
+		k.KdjDy, fdy = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
+		k.KdjWk, fwk = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
+		k.KdjMo, fmo = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
 		kdjv.Len = fmt.Sprintf("%d/%d/%d", len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
-		if len(k.KdjDy) == 0 || len(k.KdjWk) == 0 || len(k.KdjMo) == 0 {
+		if len(k.KdjDy) == 0 || len(k.KdjWk) == 0 || len(k.KdjMo) == 0 || !fdy || !fwk || !fmo {
 			logr.Warnf("%s len(%d,%d,%d) disqualified for kdjv score calculation", item.Code,
 				len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
 			continue
 		}
-		ks[i] = k
+		ks = append(ks, k)
 		var stat *model.KDJVStat
 		e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
 		if e != nil {
@@ -791,9 +830,18 @@ func scoreKdjLocal(item *Item) {
 	item.Profiles[kdjv.Id()] = ip
 	ip.FieldHolder = kdjv
 
-	histmo := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
-	histwk := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
-	histdy := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
+	histmo, fnd := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
+	if !fnd {
+		return
+	}
+	histwk, fnd := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))
+	if !fnd {
+		return
+	}
+	histdy, fnd := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
+	if !fnd {
+		return
+	}
 	kdjv.Len = fmt.Sprintf("%d/%d/%d", len(histdy), len(histwk), len(histmo))
 
 	//warn if...

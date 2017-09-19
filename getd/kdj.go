@@ -147,10 +147,9 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 	saveIndcFt(code, cytp, indf, kfds)
 }
 
-// sample KDJ sell point features, usually skip the first buy sample under IPO halo
+// sample KDJ sell point features
 func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*model.Quote,
 	expvr float64, mxrt float64, mxhold int) (indf []*model.IndcFeatRaw, kfds []*model.KDJfdRaw) {
-	skip := true
 	dt, tm := util.TimeStr()
 	kfds = make([]*model.KDJfdRaw, 0, 16)
 	indf = make([]*model.IndcFeatRaw, 0, 16)
@@ -188,38 +187,35 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 		}
 		mark := (lc - sc) / math.Abs(sc) * 100
 		if mark <= -expvr {
-			if skip {
-				skip = false
-			} else {
-				//sample backward and find the last J, D cross point
-				samp := len(ToLstJDCross(hist[:i+1]))
-				if samp >= conf.Args.Kdjv.SampleSizeMin {
-					kft := new(model.IndcFeatRaw)
-					kft.Code = code
-					kft.Udate = dt
-					kft.Utime = tm
-					kft.Bysl = "SL"
-					kft.Cytp = string(cytp)
-					kft.Indc = "KDJ"
-					kft.Mark = mark
-					kft.SmpDate = hist[i-samp+1].Date
-					kft.SmpNum = samp
-					kft.Tspan = tspan
-					kft.Mpt = mark / float64(tspan)
-					fid := kft.GenFid()
-					indf = append(indf, kft)
-					for j := i - samp + 1; j <= i; j++ {
-						kfd := new(model.KDJfdRaw)
-						kfd.Fid = fid
-						kfd.Code = code
-						kfd.K = hist[j].KDJ_K
-						kfd.D = hist[j].KDJ_D
-						kfd.J = hist[j].KDJ_J
-						kfd.Klid = hist[j].Klid
-						kfd.Udate = dt
-						kfd.Utime = tm
-						kfds = append(kfds, kfd)
-					}
+			//sample backward and find the last J, D cross point
+			cross, fnd := ToLstJDCross(hist[:i+1])
+			if fnd {
+				samp := len(cross)
+				kft := new(model.IndcFeatRaw)
+				kft.Code = code
+				kft.Udate = dt
+				kft.Utime = tm
+				kft.Bysl = "SL"
+				kft.Cytp = string(cytp)
+				kft.Indc = "KDJ"
+				kft.Mark = mark
+				kft.SmpDate = hist[i-samp+1].Date
+				kft.SmpNum = samp
+				kft.Tspan = tspan
+				kft.Mpt = mark / float64(tspan)
+				fid := kft.GenFid()
+				indf = append(indf, kft)
+				for j := i - samp + 1; j <= i; j++ {
+					kfd := new(model.KDJfdRaw)
+					kfd.Fid = fid
+					kfd.Code = code
+					kfd.K = hist[j].KDJ_K
+					kfd.D = hist[j].KDJ_D
+					kfd.J = hist[j].KDJ_J
+					kfd.Klid = hist[j].Klid
+					kfd.Udate = dt
+					kfd.Utime = tm
+					kfds = append(kfds, kfd)
 				}
 			}
 		}
@@ -273,8 +269,9 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 				skip = false
 			} else {
 				//sample backward and find the last J, D cross point
-				samp := len(ToLstJDCross(hist[:i+1]))
-				if samp >= conf.Args.Kdjv.SampleSizeMin {
+				cross, fnd := ToLstJDCross(hist[:i+1])
+				if fnd {
+					samp := len(cross)
 					kft := new(model.IndcFeatRaw)
 					kft.Code = code
 					kft.Udate = dt
@@ -309,9 +306,9 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 	return
 }
 
-//ToLstJDCross extract elements starting from the latest J and D cross.
-// Minimum element is defined by 'Kdjv.sample_size_min' at config file.
-func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
+//ToLstJDCross extract elements starting from the latest J and D cross or
+// minimum element. Minimum is defined by 'Kdjv.sample_size_min' at config file.
+func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator, found bool) {
 	c := 1
 	for i := len(kdjs) - 1; i > 0; i-- {
 		j := kdjs[i].KDJ_J
@@ -320,7 +317,8 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 			if c < conf.Args.Kdjv.SampleSizeMin {
 				c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 			}
-			return kdjs[len(kdjs)-c:]
+			cross = kdjs[len(kdjs)-c:]
+			return cross, len(cross) >= conf.Args.Kdjv.SampleSizeMin
 		}
 		pj := kdjs[i-1].KDJ_J
 		pd := kdjs[i-1].KDJ_D
@@ -329,7 +327,8 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 			if c < conf.Args.Kdjv.SampleSizeMin {
 				c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 			}
-			return kdjs[len(kdjs)-c:]
+			cross = kdjs[len(kdjs)-c:]
+			return cross, len(cross) >= conf.Args.Kdjv.SampleSizeMin
 		}
 		if (j < d && pj < pd) || (j > d && pj > pd) {
 			continue
@@ -337,9 +336,10 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 		if c < conf.Args.Kdjv.SampleSizeMin {
 			c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 		}
-		return kdjs[len(kdjs)-c:]
+		cross = kdjs[len(kdjs)-c:]
+		return cross, len(cross) >= conf.Args.Kdjv.SampleSizeMin
 	}
-	return kdjs
+	return kdjs, false
 }
 
 //GetKdjFeatDatRaw get kdj raw feature data from cache, or database if not found.
