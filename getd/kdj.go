@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -22,7 +23,7 @@ var (
 	lock                                     = sync.RWMutex{}
 )
 
-// Find kdj history up to 'toDate', limited to 'retro' rows. If retro <= 0, no limit is set.
+//GetKdjHist Find kdj history up to 'toDate', limited to 'retro' rows. If retro <= 0, no limit is set.
 // If toDate is an empty string, no bound is set on date.
 func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs []*model.Indicator) {
 	defer func() {
@@ -106,19 +107,26 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 	return
 }
 
+//SmpKdjFeat sample kdj features
 func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 	//TODO tag cross?
-	var itab, ktab model.DBTab
+	var (
+		itab, ktab model.DBTab
+		minSize    int
+	)
 	switch cytp {
 	case model.DAY:
 		itab = model.INDICATOR_DAY
 		ktab = model.KLINE_DAY
+		minSize = 200
 	case model.WEEK:
 		itab = model.INDICATOR_WEEK
 		ktab = model.KLINE_WEEK
+		minSize = 30
 	case model.MONTH:
 		itab = model.INDICATOR_MONTH
 		ktab = model.KLINE_MONTH
+		minSize = 15
 	default:
 		log.Panicf("not supported cycle type: %+v", cytp)
 	}
@@ -128,8 +136,8 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 		log.Panicf("%s %s and %s does not match: %d:%d", code, itab, ktab, len(hist),
 			len(klhist))
 	}
-	if len(hist) < 3 {
-		log.Printf("%s %s insufficient data for sampling", code, cytp)
+	if len(hist) < minSize {
+		log.Printf("%s %s insufficient data for sampling: %d", code, cytp, len(hist))
 		return
 	}
 	indf, kfds := smpKdjBY(code, cytp, hist, klhist, expvr, mxrt, mxhold)
@@ -139,9 +147,10 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 	saveIndcFt(code, cytp, indf, kfds)
 }
 
-// sample KDJ sell point features
+// sample KDJ sell point features, usually skip the first buy sample under IPO halo
 func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*model.Quote,
 	expvr float64, mxrt float64, mxhold int) (indf []*model.IndcFeatRaw, kfds []*model.KDJfdRaw) {
+	skip := true
 	dt, tm := util.TimeStr()
 	kfds = make([]*model.KDJfdRaw, 0, 16)
 	indf = make([]*model.IndcFeatRaw, 0, 16)
@@ -179,33 +188,39 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 		}
 		mark := (lc - sc) / math.Abs(sc) * 100
 		if mark <= -expvr {
-			//sample backward and find the last J, D cross point
-			samp := len(ToLstJDCross(hist[:i+1]))
-			kft := new(model.IndcFeatRaw)
-			kft.Code = code
-			kft.Udate = dt
-			kft.Utime = tm
-			kft.Bysl = "SL"
-			kft.Cytp = string(cytp)
-			kft.Indc = "KDJ"
-			kft.Mark = mark
-			kft.SmpDate = hist[i-samp+1].Date
-			kft.SmpNum = samp
-			kft.Tspan = tspan
-			kft.Mpt = mark / float64(tspan)
-			fid := kft.GenFid()
-			indf = append(indf, kft)
-			for j := i - samp + 1; j <= i; j++ {
-				kfd := new(model.KDJfdRaw)
-				kfd.Fid = fid
-				kfd.Code = code
-				kfd.K = hist[j].KDJ_K
-				kfd.D = hist[j].KDJ_D
-				kfd.J = hist[j].KDJ_J
-				kfd.Klid = hist[j].Klid
-				kfd.Udate = dt
-				kfd.Utime = tm
-				kfds = append(kfds, kfd)
+			if skip {
+				skip = false
+			} else {
+				//sample backward and find the last J, D cross point
+				samp := len(ToLstJDCross(hist[:i+1]))
+				if samp >= conf.Args.Kdjv.SampleSizeMin {
+					kft := new(model.IndcFeatRaw)
+					kft.Code = code
+					kft.Udate = dt
+					kft.Utime = tm
+					kft.Bysl = "SL"
+					kft.Cytp = string(cytp)
+					kft.Indc = "KDJ"
+					kft.Mark = mark
+					kft.SmpDate = hist[i-samp+1].Date
+					kft.SmpNum = samp
+					kft.Tspan = tspan
+					kft.Mpt = mark / float64(tspan)
+					fid := kft.GenFid()
+					indf = append(indf, kft)
+					for j := i - samp + 1; j <= i; j++ {
+						kfd := new(model.KDJfdRaw)
+						kfd.Fid = fid
+						kfd.Code = code
+						kfd.K = hist[j].KDJ_K
+						kfd.D = hist[j].KDJ_D
+						kfd.J = hist[j].KDJ_J
+						kfd.Klid = hist[j].Klid
+						kfd.Udate = dt
+						kfd.Utime = tm
+						kfds = append(kfds, kfd)
+					}
+				}
 			}
 		}
 		i += tspan
@@ -213,9 +228,10 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 	return
 }
 
-//sample KDJ buy point features
+//sample KDJ buy point features, usually skip the first buy sample under IPO halo
 func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*model.Quote,
 	expvr, mxrt float64, mxhold int) (indf []*model.IndcFeatRaw, kfds []*model.KDJfdRaw) {
+	skip := true
 	dt, tm := util.TimeStr()
 	kfds = make([]*model.KDJfdRaw, 0, 16)
 	indf = make([]*model.IndcFeatRaw, 0, 16)
@@ -253,33 +269,39 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 		}
 		mark := (hc - sc) / math.Abs(sc) * 100
 		if mark >= expvr {
-			//sample backward and find the last J, D cross point
-			samp := len(ToLstJDCross(hist[:i+1]))
-			kft := new(model.IndcFeatRaw)
-			kft.Code = code
-			kft.Udate = dt
-			kft.Utime = tm
-			kft.Bysl = "BY"
-			kft.Cytp = string(cytp)
-			kft.Indc = "KDJ"
-			kft.Mark = mark
-			kft.SmpDate = hist[i-samp+1].Date
-			kft.SmpNum = samp
-			kft.Tspan = tspan
-			kft.Mpt = mark / float64(tspan)
-			fid := kft.GenFid()
-			indf = append(indf, kft)
-			for j := i - samp + 1; j <= i; j++ {
-				kfd := new(model.KDJfdRaw)
-				kfd.Fid = fid
-				kfd.Code = code
-				kfd.K = hist[j].KDJ_K
-				kfd.D = hist[j].KDJ_D
-				kfd.J = hist[j].KDJ_J
-				kfd.Klid = hist[j].Klid
-				kfd.Udate = dt
-				kfd.Utime = tm
-				kfds = append(kfds, kfd)
+			if skip {
+				skip = false
+			} else {
+				//sample backward and find the last J, D cross point
+				samp := len(ToLstJDCross(hist[:i+1]))
+				if samp >= conf.Args.Kdjv.SampleSizeMin {
+					kft := new(model.IndcFeatRaw)
+					kft.Code = code
+					kft.Udate = dt
+					kft.Utime = tm
+					kft.Bysl = "BY"
+					kft.Cytp = string(cytp)
+					kft.Indc = "KDJ"
+					kft.Mark = mark
+					kft.SmpDate = hist[i-samp+1].Date
+					kft.SmpNum = samp
+					kft.Tspan = tspan
+					kft.Mpt = mark / float64(tspan)
+					fid := kft.GenFid()
+					indf = append(indf, kft)
+					for j := i - samp + 1; j <= i; j++ {
+						kfd := new(model.KDJfdRaw)
+						kfd.Fid = fid
+						kfd.Code = code
+						kfd.K = hist[j].KDJ_K
+						kfd.D = hist[j].KDJ_D
+						kfd.J = hist[j].KDJ_J
+						kfd.Klid = hist[j].Klid
+						kfd.Udate = dt
+						kfd.Utime = tm
+						kfds = append(kfds, kfd)
+					}
+				}
 			}
 		}
 		i += tspan
@@ -287,14 +309,16 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 	return
 }
 
+//ToLstJDCross extract elements starting from the latest J and D cross.
+// Minimum element is defined by 'Kdjv.sample_size_min' at config file.
 func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 	c := 1
 	for i := len(kdjs) - 1; i > 0; i-- {
 		j := kdjs[i].KDJ_J
 		d := kdjs[i].KDJ_D
 		if j == d {
-			if c < 3 {
-				c = int(math.Min(3.0, float64(len(kdjs))))
+			if c < conf.Args.Kdjv.SampleSizeMin {
+				c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 			}
 			return kdjs[len(kdjs)-c:]
 		}
@@ -302,22 +326,23 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 		pd := kdjs[i-1].KDJ_D
 		c++
 		if pj == pd {
-			if c < 3 {
-				c = int(math.Min(3.0, float64(len(kdjs))))
+			if c < conf.Args.Kdjv.SampleSizeMin {
+				c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 			}
 			return kdjs[len(kdjs)-c:]
 		}
 		if (j < d && pj < pd) || (j > d && pj > pd) {
 			continue
 		}
-		if c < 3 {
-			c = int(math.Min(3.0, float64(len(kdjs))))
+		if c < conf.Args.Kdjv.SampleSizeMin {
+			c = int(math.Min(float64(conf.Args.Kdjv.SampleSizeMin), float64(len(kdjs))))
 		}
 		return kdjs[len(kdjs)-c:]
 	}
 	return kdjs
 }
 
+//GetKdjFeatDatRaw get kdj raw feature data from cache, or database if not found.
 func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	bysl := "BY"
 	if !buy {
@@ -578,7 +603,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 	}
 }
 
-// Merge similar kdj feature data based on devia
+//PruneKdjFeatDat Merge similar kdj feature data based on devia
 func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	//FIXME calculate mean more fairly, lower hist size requirement, support auto/remote mode
 	st := time.Now()
@@ -597,9 +622,9 @@ func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return
-		} else {
-			log.Panicln("failed to query indc_feat_dat_raw", e)
 		}
+		log.Panicln("failed to query indc_feat_dat_raw", e)
+
 	}
 	if !resume {
 		_, e = dbmap.Exec("truncate table indc_feat")
@@ -621,6 +646,7 @@ func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	}
 	close(chfdk)
 	wg.Wait()
+	//FIXME this count is incorrect if run in resume mode
 	sumaf, e := dbmap.SelectInt("select count(*) from indc_feat")
 	util.CheckErr(e, "failed to count indc_feat")
 	prate := float64(sumbf-int(sumaf)) / float64(sumbf) * 100
@@ -633,7 +659,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 	for fdk := range chfdk {
 		st := time.Now()
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
-		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(fdk.SmpNum-2),
+		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(fdk.SmpNum-2),
 			1+1./(math.Sqrt2*math.Pi)))
 		logr.Debugf("pruning: %s-%s-%d size: %d, nprec: %.3f", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
@@ -717,54 +743,35 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
 	for i := 0; i < len(fdvs)-1; i++ {
 		f1 := fdvs[i]
-		pend := make([]*model.KDJfdView, 1, 16)
-		pend[0] = f1
 		for j := i + 1; j < len(fdvs); {
 			f2 := fdvs[j]
 			d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
 			if d >= prec {
-				pend = append(pend, f2)
 				if j < len(fdvs)-1 {
 					fdvs = append(fdvs[:j], fdvs[j+1:]...)
 				} else {
 					fdvs = fdvs[:j]
 				}
+				mergeKdjFd(f1, f2)
 			} else {
 				j++
 			}
 		}
-		if len(pend) < 2 {
-			continue
-		}
 		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
-		nk := make([]float64, len(f1.K))
-		nd := make([]float64, len(f1.D))
-		nj := make([]float64, len(f1.J))
-		for j := 0; j < f1.SmpNum; j++ {
-			sk := 0.
-			sd := 0.
-			sj := 0.
-			for _, f := range pend {
-				sk += f.K[j]
-				sd += f.D[j]
-				sj += f.J[j]
-			}
-			deno := float64(len(pend))
-			nk[j] = sk / deno
-			nd[j] = sd / deno
-			nj[j] = sj / deno
-		}
-		f1.K = nk
-		f1.D = nd
-		f1.J = nj
-		for _, pf := range pend {
-			if f1 == pf {
-				continue
-			}
-			f1.FdNum += pf.FdNum
-		}
 	}
 	return fdvs
+}
+
+func mergeKdjFd(to, fr *model.KDJfdView) {
+	tofn := float64(to.FdNum)
+	frfn := float64(fr.FdNum)
+	deno := tofn + frfn
+	for i := 0; i < to.SmpNum; i++ {
+		to.K[i] = (to.K[i]*tofn + fr.K[i]*frfn) / deno
+		to.D[i] = (to.D[i]*tofn + fr.D[i]*frfn) / deno
+		to.J[i] = (to.J[i]*tofn + fr.J[i]*frfn) / deno
+	}
+	to.FdNum += fr.FdNum
 }
 
 func convert2Fdvs(key *fdKey, fdrvs []*model.KDJfdrView) []*model.KDJfdView {

@@ -22,15 +22,16 @@ const (
 	AUTO RunMode = "auto"
 )
 
+//Arguments arguments struct type
 type Arguments struct {
 	//RPCServers rpc server address strings
 	RPCServers        []string `mapstructure:"rpc_servers"`
 	RunMode           RunMode  `mapstructure:"run_mode"`
 	Concurrency       int      `mapstructure:"concurrency"`
-	CpuUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
+	CPUUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string   `mapstructure:"log_level"`
 	Kdjv              struct {
-		SampleSizeMin string `mapstructure:"log_level"`
+		SampleSizeMin int `mapstructure:"sample_size_min"`
 	}
 	//TODO logrus log to file
 }
@@ -76,5 +77,6 @@ func setDefaults() {
 	Args.RunMode = LOCAL
 	Args.Concurrency = 16
 	Args.LogLevel = "info"
-	Args.CpuUsageThreshold = 40
+	Args.CPUUsageThreshold = 40
+	Args.Kdjv.SampleSizeMin = 5
 }

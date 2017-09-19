@@ -394,7 +394,7 @@ func kdjScoresAuto(code string, klhist []*model.Quote, expvr, mxrt float64, mxho
 	if e != nil {
 		logr.Warnf("%s failed to get cpu usage: %+v", code, e)
 	}
-	if cpu < conf.Args.CpuUsageThreshold && e == nil {
+	if cpu < conf.Args.CPUUsageThreshold && e == nil {
 		logr.Debugf("%s current %%cpu: %.2f use local power", code, cpu)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	} else {
