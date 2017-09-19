@@ -2,17 +2,18 @@ package getd
 
 import (
 	"fmt"
-	"strings"
-	"github.com/carusyte/stock/model"
-	"math"
 	"log"
-	"github.com/carusyte/stock/util"
-	logr "github.com/sirupsen/logrus"
-	"time"
-	"sync"
-	"github.com/carusyte/stock/indc"
-	"github.com/satori/go.uuid"
+	"math"
 	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/carusyte/stock/indc"
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
+	"github.com/satori/go.uuid"
+	logr "github.com/sirupsen/logrus"
 )
 
 var (
@@ -182,8 +183,8 @@ func smpKdjSL(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			samp := len(ToLstJDCross(hist[:i+1]))
 			kft := new(model.IndcFeatRaw)
 			kft.Code = code
-			kft.Udate = dt;
-			kft.Utime = tm;
+			kft.Udate = dt
+			kft.Utime = tm
 			kft.Bysl = "SL"
 			kft.Cytp = string(cytp)
 			kft.Indc = "KDJ"
@@ -256,8 +257,8 @@ func smpKdjBY(code string, cytp model.CYTP, hist []*model.Indicator, klhist []*m
 			samp := len(ToLstJDCross(hist[:i+1]))
 			kft := new(model.IndcFeatRaw)
 			kft.Code = code
-			kft.Udate = dt;
-			kft.Utime = tm;
+			kft.Udate = dt
+			kft.Utime = tm
 			kft.Bysl = "BY"
 			kft.Cytp = string(cytp)
 			kft.Indc = "KDJ"
@@ -314,7 +315,7 @@ func ToLstJDCross(kdjs []*model.Indicator) (cross []*model.Indicator) {
 		}
 		return kdjs[len(kdjs)-c:]
 	}
-	return kdjs;
+	return kdjs
 }
 
 func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
@@ -577,7 +578,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 	}
 }
 
-// Merge similar kdj feature data based on
+// Merge similar kdj feature data based on devia
 func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	//FIXME calculate mean more fairly, lower hist size requirement, support auto/remote mode
 	st := time.Now()
@@ -632,7 +633,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 	for fdk := range chfdk {
 		st := time.Now()
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
-		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(fdk.SmpNum-2),
+		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(fdk.SmpNum-2),
 			1+1./(math.Sqrt2*math.Pi)))
 		logr.Debugf("pruning: %s-%s-%d size: %d, nprec: %.3f", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
@@ -713,7 +714,7 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 	}
 }
 
-func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) ([]*model.KDJfdView) {
+func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
 	for i := 0; i < len(fdvs)-1; i++ {
 		f1 := fdvs[i]
 		pend := make([]*model.KDJfdView, 1, 16)

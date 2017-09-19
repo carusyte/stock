@@ -1,27 +1,37 @@
 package conf
 
 import (
-	"github.com/spf13/viper"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
+// Args Global Application Arguments
 var Args Arguments
 
+// RunMode Running mode
 type RunMode string
 
 const (
-	LOCAL       RunMode = "local"
-	REMOTE      RunMode = "remote"
+	//LOCAL run on local power
+	LOCAL RunMode = "local"
+	//REMOTE run on remote server
+	REMOTE RunMode = "remote"
+	//DISTRIBUTED run in distributed mode
 	DISTRIBUTED RunMode = "distributed"
-	AUTO        RunMode = "auto"
+	//AUTO automatically decide which mode to run on
+	AUTO RunMode = "auto"
 )
 
 type Arguments struct {
-	RpcServers        []string `mapstructure:"rpc_servers"`
-	RunMode           RunMode `mapstructure:"run_mode"`
-	Concurrency       int `mapstructure:"concurrency"`
-	CpuUsageThreshold float64 `mapstructure:"cpu_usage_threshold"`
-	LogLevel          string `mapstructure:"log_level"`
+	//RPCServers rpc server address strings
+	RPCServers        []string `mapstructure:"rpc_servers"`
+	RunMode           RunMode  `mapstructure:"run_mode"`
+	Concurrency       int      `mapstructure:"concurrency"`
+	CpuUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
+	LogLevel          string   `mapstructure:"log_level"`
+	Kdjv              struct {
+		SampleSizeMin string `mapstructure:"log_level"`
+	}
 	//TODO logrus log to file
 }
 

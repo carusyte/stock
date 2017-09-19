@@ -1,13 +1,14 @@
 package main
 
 import (
-	"time"
-	"github.com/carusyte/stock/score"
+	"fmt"
 	"log"
+	"time"
+
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
+	"github.com/carusyte/stock/score"
 	"github.com/carusyte/stock/util"
-	"fmt"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 	// test()
 }
 
-func test(){
+func test() {
 	fmt.Println(new(score.KdjSt).Get([]string{"600828"}, -1, false))
 }
 
@@ -122,7 +123,7 @@ func kdjFirst() {
 	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
-func kdjOnly(code ... string) {
+func kdjOnly(code ...string) {
 	start := time.Now()
 	r1 := new(score.KdjV).Get(code, -1, true)
 	log.Printf("\n%+v", r1)

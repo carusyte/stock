@@ -1,25 +1,26 @@
 package rpc
 
 import (
-	"net/rpc"
-	"github.com/pkg/errors"
-	logr "github.com/sirupsen/logrus"
+	"fmt"
 	"net"
-	"github.com/felixge/tcpkeepalive"
+	"net/rpc"
+	"sync"
 	"time"
+
 	"github.com/bitly/go-hostpool"
 	"github.com/carusyte/stock/conf"
-	"fmt"
-	"sync"
+	"github.com/felixge/tcpkeepalive"
+	"github.com/pkg/errors"
+	logr "github.com/sirupsen/logrus"
 )
 
 var (
-	hp hostpool.HostPool = hostpool.New(conf.Args.RpcServers)
+	hp = hostpool.New(conf.Args.RPCServers)
 	//lock                   = sync.RWMutex{}
 )
 
-// Publish data to all rpc servers
-func RpcPub(service string, request interface{}, reply interface{}, retry int) (e []error) {
+//Pub Publish data to all rpc servers
+func Pub(service string, request interface{}, reply interface{}, retry int) (e []error) {
 	var wg sync.WaitGroup
 	cherr := make(chan error)
 	for _, srv := range hp.Hosts() {
@@ -113,7 +114,7 @@ func AvailableRpcServers(filter bool) (c int, healthy float64) {
 				} else {
 					srvs = srvs[:i]
 				}
-			}else{
+			} else {
 				i++
 			}
 		}

@@ -2,9 +2,10 @@ package score
 
 import (
 	"fmt"
-	"reflect"
-	"github.com/pkg/errors"
 	"math"
+	"reflect"
+
+	"github.com/pkg/errors"
 )
 
 // Assess scores based on KdjV scores against its statistical data.
@@ -93,31 +94,29 @@ func kdjstScore(kst *KdjSt) (s float64) {
 	bsln := math.Max(kst.Bl, kst.Sl) //baseline
 	if kst.Kdjv <= bsln || kst.Bmean <= kst.Smean {
 		return 0
-	} else {
-		mr := 0.0
-		if kst.Smean == 0 && kst.Bmean > 0 {
-			mr = 0.3
-		} else {
-			mr = (kst.Bmean - kst.Smean) / kst.Smean
-		}
-		high := math.Max(kst.Bh, kst.Sh)
-		if mr >= 0.3 && kst.Kdjv >= high {
-			return 100
-		}
-		mod := 2.0/5.0*math.Pow(10.0/3.0*mr, math.E) + 0.6 // mod == 1 when mr == 0.3; mod == 0.6 when mr -> +0
-		mod = math.Min(1, mod)
-		if kst.Kdjv > kst.Bmean {
-			x := kst.Kdjv - kst.Bmean
-			h := high - kst.Bmean
-			s = 60 + 40*math.Pow(h, -1/math.E)*math.Pow(x, 1/math.E)
-		} else {
-			x := kst.Kdjv - bsln
-			h := kst.Bmean - bsln
-			s = 60 * math.Pow(x/h, math.E)
-		}
-		s *= mod
 	}
-	s = math.Min(100, s)
+	mr := 0.0
+	if kst.Smean == 0 && kst.Bmean > 0 {
+		mr = 0.3
+	} else {
+		mr = (kst.Bmean - kst.Smean) / kst.Smean
+	}
+	high := math.Max(kst.Bh, kst.Sh)
+	if mr >= 0.3 && kst.Kdjv >= high {
+		return 100
+	}
+	mod := 2.0/5.0*math.Pow(10.0/3.0*mr, math.E) + 0.6 // mod == 1 when mr == 0.3; mod == 0.6 when mr -> +0
+	mod = math.Min(1, mod)
+	if kst.Kdjv > kst.Bmean {
+		x := kst.Kdjv - kst.Bmean
+		h := high - kst.Bmean
+		s = 60 + 40*math.Pow(h, -1/math.E)*math.Pow(x, 1/math.E)
+	} else {
+		x := kst.Kdjv - bsln
+		h := kst.Bmean - bsln
+		s = 60 * math.Pow(x/h, math.E)
+	}
+	s = math.Min(100, s*mod)
 	return
 }
 

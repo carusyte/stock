@@ -1,25 +1,25 @@
 package score
 
 import (
-	"github.com/carusyte/stock/model"
-	rm "github.com/carusyte/rima/model"
-	"math"
-	"github.com/carusyte/stock/getd"
 	"fmt"
-	"github.com/carusyte/stock/util"
-	"time"
-	"reflect"
-	"github.com/pkg/errors"
-	logr "github.com/sirupsen/logrus"
-	"github.com/montanaflynn/stats"
-	"log"
-	"sync"
-	"runtime"
-	"strings"
-	"sort"
-	"github.com/satori/go.uuid"
+	rm "github.com/carusyte/rima/model"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/getd"
+	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/rpc"
+	"github.com/carusyte/stock/util"
+	"github.com/montanaflynn/stats"
+	"github.com/pkg/errors"
+	"github.com/satori/go.uuid"
+	logr "github.com/sirupsen/logrus"
+	"log"
+	"math"
+	"reflect"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
 )
 
 // Medium to Long term model.
@@ -145,7 +145,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
-func (k *KdjV) RenewStats(useRaw bool, code ... string) {
+func (k *KdjV) RenewStats(useRaw bool, code ...string) {
 	var (
 		codes   []string
 		stks    []*model.Stock
@@ -229,7 +229,7 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
 	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
-	es := rpc.RpcPub("DataSync.SyncKdjFd", fdMap, &suc, 3)
+	es := rpc.Pub("DataSync.SyncKdjFd", fdMap, &suc, 3)
 	if es != nil && len(es) > 0 {
 		logr.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
 		for _, e := range es {
@@ -243,7 +243,7 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	}
 }
 
-func saveKps(kps ... *model.KDJVStat) {
+func saveKps(kps ...*model.KDJVStat) {
 	if kps != nil && len(kps) > 0 {
 		valueStrings := make([]string, 0, len(kps))
 		valueArgs := make([]interface{}, 0, len(kps)*16)
@@ -735,7 +735,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 		if len(k.KdjDy) == 0 || len(k.KdjWk) == 0 || len(k.KdjMo) == 0 {
 			logr.Warnf("%s len(%d,%d,%d) disqualified for kdjv score calculation", item.Code,
 				len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
-			continue;
+			continue
 		}
 		ks[i] = k
 		var stat *model.KDJVStat
