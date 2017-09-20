@@ -50,7 +50,7 @@ func Pub(service string, request interface{}, reply interface{}, retry int) (e [
 	return nil
 }
 
-func RpcCall(service string, request interface{}, reply interface{}, retry int) (e error) {
+func Call(service string, request interface{}, reply interface{}, retry int) (e error) {
 	for i := 0; i < retry; i++ {
 		hpr := hp.Get()
 		serverAddress := hpr.Host()
@@ -92,7 +92,7 @@ func tryRpcCall(serverAddress, service string, request interface{}, reply interf
 
 // Returns the number of available RPC servers configured in rpc_servers in stock.toml
 // If filter is set to true, broken servers will be removed from the host pool.
-func AvailableRpcServers(filter bool) (c int, healthy float64) {
+func Available(filter bool) (c int, healthy float64) {
 	srvs := hp.Hosts()
 	if len(srvs) == 0 {
 		return 0, 0

@@ -114,7 +114,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	case conf.LOCAL:
 		pl = int(float64(runtime.NumCPU()) * 0.7)
 	case conf.AUTO:
-		rs, h := rpc.AvailableRpcServers(true)
+		rs, h := rpc.Available(true)
 		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
 			pl = rs
@@ -210,7 +210,7 @@ func getParallelLevel() (pl int) {
 	case conf.LOCAL:
 		pl = int(float64(runtime.NumCPU()) * 0.7)
 	case conf.AUTO:
-		rs, h := rpc.AvailableRpcServers(true)
+		rs, h := rpc.Available(true)
 		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
 			pl = int(float64(conf.Args.Concurrency) * h)
@@ -228,7 +228,7 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 	logr.Debug("Getting all kdj feature data...")
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
-	//e := util.RpcCall(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
+	//e := util.Call(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
 	es := rpc.Pub("DataSync.SyncKdjFd", fdMap, &suc, 3)
 	if es != nil && len(es) > 0 {
 		logr.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
@@ -384,7 +384,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 
 func kdjScoresAuto(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int, useRaw bool) (
 	buys, sells []float64, e error) {
-	ars, _ := rpc.AvailableRpcServers(false)
+	ars, _ := rpc.Available(false)
 	if ars == 0 {
 		logr.Debugf("%s: no available rpc servers, use local power", code)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
@@ -445,7 +445,7 @@ func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 func fetchKdjScores(s []*rm.KdjSeries) (rowIds []string, scores []float64, details []map[string]interface{}, e error) {
 	req := &rm.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
 	var rep *rm.KdjScoreRep
-	e = rpc.RpcCall("IndcScorer.ScoreKdj", req, &rep, 3)
+	e = rpc.Call("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
 		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, nil, nil, e
@@ -708,7 +708,7 @@ func getKdjSellScores(code string, klhist []*model.Quote, expvr, mxrt float64,
 
 func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, total int) {
 	defer wg.Done()
-	ars, _ := rpc.AvailableRpcServers(false)
+	ars, _ := rpc.Available(false)
 	if ars == 0 {
 		logr.Warn("no available rpc servers, use local power")
 		for item := range chitm {

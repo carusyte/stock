@@ -12,9 +12,11 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
+	rm "github.com/carusyte/rima/model"
 	"github.com/carusyte/stock/util"
 	"github.com/satori/go.uuid"
 	logr "github.com/sirupsen/logrus"
+	"github.com/carusyte/stock/rpc"
 )
 
 var (
@@ -661,26 +663,72 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
 		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(fdk.SmpNum-2),
 			1+1./(math.Sqrt2*math.Pi)))
-		logr.Debugf("pruning: %s-%s-%d size: %d, nprec: %.3f", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(fdrvs), nprec)
+		logr.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
-		if len(fdvs) > 2*pass {
-			for p := 0; p < pass; p++ {
-				stp := time.Now()
-				bfc := len(fdvs)
-				fdvs = passKdjFeatDatPrune(fdvs, nprec)
-				prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
-				logr.Debugf("%s-%s-%d pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
-					fdk.Cytp, fdk.Bysl, fdk.SmpNum, p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
-			}
-		}
+		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pass)
 		for _, fdv := range fdvs {
 			fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
 		}
 		saveKdjFd(fdvs)
 		prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
-		logr.Debugf("%s-%s-%d pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
-			fdk.Cytp, fdk.Bysl, fdk.SmpNum, fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
+		logr.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
+			fdk.ID(), fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
 	}
+}
+
+func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) []*model.KDJfdView {
+	var e error
+	if len(fdvs) <= 2*pass {
+		return fdvs
+	}
+	switch conf.Args.RunMode {
+	case conf.LOCAL:
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+	case conf.REMOTE:
+		fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pass)
+	case conf.AUTO:
+		if len(fdvs) <= 300 {
+			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+		} else {
+			_, h := rpc.Available(false)
+			if h > 0 {
+				fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pass)
+			} else {
+				logr.Warn("no available rpc servers, using local power")
+				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+			}
+		}
+	}
+	if e != nil {
+		logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+	}
+	return fdvs
+}
+
+func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) ([]*model.KDJfdView, error) {
+	stp := time.Now()
+	bfc := len(fdvs)
+	req := &rm.KdjPruneReq{fdk.ID(), nprec, pass, fdvs}
+	var rep *rm.KdjPruneRep
+	rpc.Call("IndcScorer.ScoreKdj", req, &rep, 3)
+	fdvs = rep.Data
+	prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
+	logr.Debugf("%s pruned(remote), before: %d, after: %d, rate: %.2f%% time: %.2f",
+		fdk.ID(), bfc, len(fdvs), prate, time.Since(stp).Seconds())
+	return fdvs, nil
+}
+
+func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) []*model.KDJfdView {
+	for p := 0; p < pass; p++ {
+		stp := time.Now()
+		bfc := len(fdvs)
+		fdvs = passKdjFeatDatPrune(fdvs, nprec)
+		prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
+		logr.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
+			fdk.ID(), p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
+	}
+	return fdvs
 }
 
 func saveKdjFd(fdvs []*model.KDJfdView) {
@@ -801,6 +849,10 @@ type fdKey struct {
 	Bysl   string
 	SmpNum int `db:"smp_num"`
 	Count  int
+}
+
+func (f *fdKey) ID() string {
+	return fmt.Sprintf("%s-%s-%d", f.Cytp, f.Bysl, f.SmpNum)
 }
 
 func CalcKdjDevi(sk, sd, sj, tk, td, tj []float64) float64 {

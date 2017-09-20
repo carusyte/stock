@@ -8,6 +8,6 @@ import (
 func TestWordCount(t *testing.T) {
 	service := "GTest.WordCount"
 	var rep bool
-	e := RpcCall(service, "", &rep, 3)
+	e := Call(service, "", &rep, 3)
 	util.CheckErr(e, "failed word count")
 }
