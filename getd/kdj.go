@@ -19,6 +19,10 @@ import (
 	"github.com/carusyte/stock/rpc"
 )
 
+const (
+	LOCAL_PRUNE_THRESHOLD = 1500
+)
+
 var (
 	kdjFdrMap map[string][]*model.KDJfdrView = make(map[string][]*model.KDJfdrView)
 	kdjFdMap  map[string][]*model.KDJfdView  = make(map[string][]*model.KDJfdView)
@@ -606,10 +610,10 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 }
 
 //PruneKdjFeatDat Merge similar kdj feature data based on devia
-func PruneKdjFeatDat(prec float64, pass int, resume bool) {
+func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 	//FIXME calculate mean more fairly, lower hist size requirement, support auto/remote mode
 	st := time.Now()
-	logr.Debugf("Pruning KDJ feature data. precision:%.3f, pass:%d, resume: %t", prec, pass, resume)
+	logr.Debugf("Pruning KDJ feature data. precision:%.3f, prune rate:%.2f, resume: %t", prec, pruneRate, resume)
 	var fdks []*fdKey
 	var e error
 	if resume {
@@ -639,7 +643,7 @@ func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 	p := int(float64(runtime.NumCPU()) * 0.7)
 	for i := 0; i < p; i++ {
 		wg.Add(1)
-		go doPruneKdjFeatDat(chfdk, &wg, prec, pass)
+		go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate)
 	}
 	sumbf := 0
 	for _, k := range fdks {
@@ -656,7 +660,7 @@ func PruneKdjFeatDat(prec float64, pass int, resume bool) {
 		sumbf, sumaf, prate, time.Since(st).Seconds())
 }
 
-func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass int) {
+func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pruneRate float64) {
 	defer wg.Done()
 	for fdk := range chfdk {
 		st := time.Now()
@@ -665,7 +669,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 			1+1./(math.Sqrt2*math.Pi)))
 		logr.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
-		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pass)
+		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pruneRate)
 		for _, fdv := range fdvs {
 			fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
 		}
@@ -676,42 +680,46 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pass
 	}
 }
 
-func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) []*model.KDJfdView {
+func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) []*model.KDJfdView {
 	var e error
-	if len(fdvs) <= 2*pass {
+	if len(fdvs) <= 100 {
 		return fdvs
 	}
 	switch conf.Args.RunMode {
 	case conf.LOCAL:
-		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
 	case conf.REMOTE:
-		fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pass)
+		fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 	case conf.AUTO:
-		if len(fdvs) <= 300 {
-			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+		if len(fdvs) <= LOCAL_PRUNE_THRESHOLD {
+			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
 		} else {
 			_, h := rpc.Available(false)
 			if h > 0 {
-				fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pass)
+				fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 			} else {
 				logr.Warn("no available rpc servers, using local power")
-				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
 			}
 		}
 	}
 	if e != nil {
 		logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
-		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pass)
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
 	}
 	return fdvs
 }
 
-func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) ([]*model.KDJfdView, error) {
+func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) ([]*model.KDJfdView, error) {
 	stp := time.Now()
 	bfc := len(fdvs)
-	req := &rm.KdjPruneReq{fdk.ID(), nprec, pass, fdvs}
+	req := &rm.KdjPruneReq{fdk.ID(), nprec, pruneRate, fdvs}
 	var rep *rm.KdjPruneRep
-	rpc.Call("IndcScorer.ScoreKdj", req, &rep, 3)
+	e := rpc.Call("IndcScorer.PruneKdj", req, &rep, 3)
+	if e != nil {
+		log.Printf("RPC service IndcScorer.PruneKdj failed\n%+v", e)
+		return fdvs, e
+	}
 	fdvs = rep.Data
 	prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
 	logr.Debugf("%s pruned(remote), before: %d, after: %d, rate: %.2f%% time: %.2f",
@@ -719,14 +727,14 @@ func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, p
 	return fdvs, nil
 }
 
-func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pass int) []*model.KDJfdView {
-	for p := 0; p < pass; p++ {
+func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) []*model.KDJfdView {
+	for prate, p := 1.0, 0; prate > pruneRate; p++ {
 		stp := time.Now()
 		bfc := len(fdvs)
 		fdvs = passKdjFeatDatPrune(fdvs, nprec)
-		prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
+		prate = float64(bfc-len(fdvs)) / float64(bfc)
 		logr.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
-			fdk.ID(), p+1, bfc, len(fdvs), prate, time.Since(stp).Seconds())
+			fdk.ID(), p+1, bfc, len(fdvs), prate*100, time.Since(stp).Seconds())
 	}
 	return fdvs
 }
@@ -791,6 +799,7 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
 	for i := 0; i < len(fdvs)-1; i++ {
 		f1 := fdvs[i]
+		pend := make([]*model.KDJfdView, 0, 16)
 		for j := i + 1; j < len(fdvs); {
 			f2 := fdvs[j]
 			d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
@@ -800,12 +809,15 @@ func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdVi
 				} else {
 					fdvs = fdvs[:j]
 				}
-				mergeKdjFd(f1, f2)
+				pend = append(pend, f2)
 			} else {
 				j++
 			}
 		}
 		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
+		for _, p := range pend {
+			mergeKdjFd(f1, p)
+		}
 	}
 	return fdvs
 }

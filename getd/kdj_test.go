@@ -208,7 +208,7 @@ func TestUUID(t *testing.T) {
 
 func TestPruneKdjFeatDat(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_FD_PRUNE_PASS, true)
+	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_PRUNE_RATE, true)
 }
 
 func TestConcurrentLoop(t *testing.T) {

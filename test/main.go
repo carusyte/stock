@@ -66,7 +66,7 @@ func blueKdjv() {
 }
 
 func pruneKdjFd(resume bool) {
-	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_FD_PRUNE_PASS, resume)
+	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_PRUNE_RATE, resume)
 }
 
 func renewKdjStats(resume bool) {

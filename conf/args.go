@@ -32,6 +32,7 @@ type Arguments struct {
 	LogLevel          string   `mapstructure:"log_level"`
 	Kdjv              struct {
 		SampleSizeMin int `mapstructure:"sample_size_min"`
+		StatsRetroSpan int `mapstructure:"stats_retro_span"`
 	}
 	//TODO logrus log to file
 }
@@ -79,4 +80,5 @@ func setDefaults() {
 	Args.LogLevel = "info"
 	Args.CPUUsageThreshold = 40
 	Args.Kdjv.SampleSizeMin = 5
+	Args.Kdjv.StatsRetroSpan = 600
 }

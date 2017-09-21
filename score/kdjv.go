@@ -292,7 +292,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 	expvr := 5.0
 	mxrt := 2.0
 	mxhold := 3
-	retro := 600
+	retro := conf.Args.Kdjv.StatsRetroSpan
 	kps := new(model.KDJVStat)
 	klhist := getd.GetKlineDb(code, model.KLINE_DAY, retro, false)
 	if len(klhist) < retro {
