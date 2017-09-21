@@ -380,6 +380,8 @@ WHERE
         WHERE
             f.cytp = r.cytp AND f.bysl = r.bysl
                 AND f.smp_num = r.smp_num)
+ORDER BY
+    count
 
 -- name: KDJ_FEAT_DAT
 SELECT

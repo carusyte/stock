@@ -611,7 +611,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 
 //PruneKdjFeatDat Merge similar kdj feature data based on devia
 func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
-	//FIXME calculate mean more fairly, lower hist size requirement, support auto/remote mode
+	//TODO  separate local and remote goroutine
 	st := time.Now()
 	logr.Debugf("Pruning KDJ feature data. precision:%.3f, prune rate:%.2f, resume: %t", prec, pruneRate, resume)
 	var fdks []*fdKey
@@ -623,7 +623,7 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 		_, e = dbmap.Select(&fdks, sql)
 	} else {
 		_, e = dbmap.Select(&fdks, "select cytp, bysl, smp_num, count(*) count from "+
-			"indc_feat_raw group by cytp, bysl, smp_num")
+			"indc_feat_raw group by cytp, bysl, smp_num order by count")
 	}
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
@@ -640,17 +640,51 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 	}
 	var wg sync.WaitGroup
 	chfdk := make(chan *fdKey, JOB_CAPACITY)
-	p := int(float64(runtime.NumCPU()) * 0.7)
-	for i := 0; i < p; i++ {
-		wg.Add(1)
-		go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate)
-	}
+	chfdks := make(chan *fdKey, JOB_CAPACITY)
 	sumbf := 0
 	for _, k := range fdks {
 		sumbf += k.Count
-		chfdk <- k
+		switch conf.Args.RunMode {
+		case conf.AUTO:
+			if k.Count > LOCAL_PRUNE_THRESHOLD {
+				chfdk <- k
+			} else {
+				chfdks <- k
+			}
+		default:
+			chfdk <- k
+		}
+	}
+	switch conf.Args.RunMode {
+	case conf.AUTO:
+		p, _ := rpc.Available(false)
+		for i := 0; i < p; i++ {
+			wg.Add(1)
+			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.REMOTE)
+		}
+		p = int(float64(runtime.NumCPU()) * 0.7)
+		for i := 0; i < p; i++ {
+			wg.Add(1)
+			go doPruneKdjFeatDat(chfdks, &wg, prec, pruneRate, conf.LOCAL)
+		}
+	case conf.REMOTE:
+		p, _ := rpc.Available(false)
+		for i := 0; i < p; i++ {
+			wg.Add(1)
+			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.REMOTE)
+		}
+	case conf.LOCAL:
+		p := int(float64(runtime.NumCPU()) * 0.7)
+		for i := 0; i < p; i++ {
+			wg.Add(1)
+			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.LOCAL)
+		}
+	case conf.DISTRIBUTED:
+		wg.Add(1)
+		go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.DISTRIBUTED)
 	}
 	close(chfdk)
+	close(chfdks)
 	wg.Wait()
 	//FIXME this count is incorrect if run in resume mode
 	sumaf, e := dbmap.SelectInt("select count(*) from indc_feat")
@@ -660,7 +694,7 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 		sumbf, sumaf, prate, time.Since(st).Seconds())
 }
 
-func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pruneRate float64) {
+func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, pruneRate float64, runMode conf.RunMode) {
 	defer wg.Done()
 	for fdk := range chfdk {
 		st := time.Now()
@@ -669,7 +703,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, prun
 			1+1./(math.Sqrt2*math.Pi)))
 		logr.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
-		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pruneRate)
+		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pruneRate, runMode)
 		for _, fdv := range fdvs {
 			fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
 		}
@@ -680,12 +714,13 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, prun
 	}
 }
 
-func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) []*model.KDJfdView {
+func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64,
+	pruneRate float64, runMode conf.RunMode) []*model.KDJfdView {
 	var e error
 	if len(fdvs) <= 100 {
 		return fdvs
 	}
-	switch conf.Args.RunMode {
+	switch runMode {
 	case conf.LOCAL:
 		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
 	case conf.REMOTE:
