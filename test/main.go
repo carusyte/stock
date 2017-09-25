@@ -14,7 +14,7 @@ import (
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
 	//getData()
-	pruneKdjFd(false)
+	pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
 	//BLUE

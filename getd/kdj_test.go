@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"github.com/montanaflynn/stats"
 	"math"
+	"github.com/carusyte/stock/conf"
 )
 
 func TestConcurrentModifySlice(t *testing.T) {
@@ -211,6 +212,24 @@ func TestPruneKdjFeatDat(t *testing.T) {
 	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_PRUNE_RATE, true)
 }
 
+func TestPruneKdjFeatDatRemote(t *testing.T) {
+	st := time.Now()
+	fdk := &fdKey{"D", "BY", 19, 587}
+	fdrvs := GetKdjFeatDatRaw(model.DAY, true, 19)
+	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(19-2),
+		1+1./(math.Sqrt2*math.Pi)))
+	logrus.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
+	fdvs := convert2Fdvs(fdk, fdrvs)
+	fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, KDJ_PRUNE_RATE, conf.REMOTE)
+	for _, fdv := range fdvs {
+		fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
+	}
+	saveKdjFd(fdvs)
+	prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
+	logrus.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
+		fdk.ID(), fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
+}
+
 func TestConcurrentLoop(t *testing.T) {
 	s := time.Now()
 	for i := 0; i < 90000; i++ {
@@ -240,21 +259,21 @@ func TestFloat2Int(t *testing.T) {
 func TestIntFloatCalculation(t *testing.T) {
 	is := make([]int, 100000)
 	fs := make([]float64, 100000)
-	for i:=0;i<len(is);i++{
+	for i := 0; i < len(is); i++ {
 		is[i] = i
 	}
-	for i:=0;i<len(fs);i++{
+	for i := 0; i < len(fs); i++ {
 		fs[i] = math.Sqrt(float64(i))
 	}
 	st := time.Now()
 	sf := .0
-	for i:=0;i<len(fs);i++{
+	for i := 0; i < len(fs); i++ {
 		sf += fs[i]
 	}
 	log.Printf("float: %d", time.Since(st).Nanoseconds())
 	st = time.Now()
 	s := 0
-	for i:=0;i<len(is);i++{
+	for i := 0; i < len(is); i++ {
 		s += is[i]
 	}
 	log.Printf("int: %d", time.Since(st).Nanoseconds())

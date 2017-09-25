@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	LOCAL_PRUNE_THRESHOLD = 1500
+	LOCAL_PRUNE_THRESHOLD = 3000
 )
 
 var (
@@ -611,7 +611,6 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 
 //PruneKdjFeatDat Merge similar kdj feature data based on devia
 func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
-	//TODO  separate local and remote goroutine
 	st := time.Now()
 	logr.Debugf("Pruning KDJ feature data. precision:%.3f, prune rate:%.2f, resume: %t", prec, pruneRate, resume)
 	var fdks []*fdKey
@@ -655,8 +654,10 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 			chfdk <- k
 		}
 	}
+	//TODO realize asynchronous remote mode
 	switch conf.Args.RunMode {
 	case conf.AUTO:
+		// maybe we can steal jobs from remote channel if local task is done?
 		p, _ := rpc.Available(false)
 		for i := 0; i < p; i++ {
 			wg.Add(1)

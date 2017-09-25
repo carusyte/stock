@@ -85,7 +85,7 @@ func tryRpcCall(serverAddress, service string, request interface{}, reply interf
 	defer client.Close()
 	err = client.Call(service, request, reply)
 	if err != nil {
-		return errors.Wrapf(err, "rpc service error: %s", service)
+		return errors.Wrapf(err, "%s rpc service error: %s", serverAddress, service)
 	}
 	return nil
 }
