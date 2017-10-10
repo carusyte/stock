@@ -717,25 +717,25 @@ func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64,
 	}
 	switch runMode {
 	case conf.LOCAL:
-		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.9)
 	case conf.REMOTE:
 		fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 	case conf.AUTO:
 		if len(fdvs) <= LOCAL_PRUNE_THRESHOLD {
-			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
+			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.8)
 		} else {
 			_, h := rpc.Available(false)
 			if h > 0 {
 				fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 			} else {
 				logr.Warn("no available rpc servers, using local power")
-				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
+				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.9)
 			}
 		}
 	}
 	if e != nil {
 		logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
-		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate)
+		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.8)
 	}
 	return fdvs
 }
@@ -757,11 +757,11 @@ func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, p
 	return fdvs, nil
 }
 
-func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) []*model.KDJfdView {
+func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec, pruneRate, cpuPower float64) []*model.KDJfdView {
 	for prate, p := 1.0, 1; prate > pruneRate; p++ {
 		stp := time.Now()
 		bfc := len(fdvs)
-		fdvs = passKdjFeatDatPrune(fdvs, nprec)
+		fdvs = passKdjFeatDatPrune(fdvs, nprec, cpuPower)
 		prate = float64(bfc-len(fdvs)) / float64(bfc)
 		logr.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
 			fdk.ID(), p, bfc, len(fdvs), prate*100, time.Since(stp).Seconds())
@@ -826,46 +826,9 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 	}
 }
 
-func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
-	//return passKdjFeatDatSingle(fdvs, prec)
-	return passKdjFeatDatPara(fdvs, prec)
-}
-
-func passKdjFeatDatSingle(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
-	off := 0
-	for i := 0; i < len(fdvs)-1; i++ {
-		f1 := fdvs[i]
-		cdd := make([]int, 0, 16)
-		pend := make([]*model.KDJfdView, 0, 16)
-		for j := i + 1; j < len(fdvs); {
-			f2 := fdvs[j]
-			d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
-			if d >= prec {
-				if j < len(fdvs)-1 {
-					fdvs = append(fdvs[:j], fdvs[j+1:]...)
-				} else {
-					fdvs = fdvs[:j]
-				}
-				pend = append(pend, f2)
-				cdd = append(cdd, j+off)
-				off++
-			} else {
-				j++
-			}
-		}
-		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
-		logr.Debugf("%d #cdd: %+v", i, cdd)
-		for _, p := range pend {
-			mergeKdjFd(f1, p)
-		}
-	}
-	return fdvs
-}
-
-func passKdjFeatDatPara(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
-	//TODO mismatched with single-threaded version
+func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec, cpuPower float64) []*model.KDJfdView {
 	var wg sync.WaitGroup
-	p := int(float64(runtime.NumCPU()) * 0.8)
+	p := int(float64(runtime.NumCPU()) * cpuPower)
 	ptags := new(sync.Map)
 	chjob := make(chan int, len(fdvs))
 	chcdd := make(chan map[int][]int, len(fdvs))
@@ -906,7 +869,7 @@ func scanKdjFD(wg *sync.WaitGroup, fdvs []*model.KDJfdView, prec float64, ptags 
 			}
 		}
 		if len(cdd) > 0 {
-			logr.Debugf("%d cdd: %+v", j, cdd)
+			logr.Debugf("%d #cdd: %d", j, len(cdd))
 		}
 		chcdd <- map[int][]int{j: cdd}
 	}
