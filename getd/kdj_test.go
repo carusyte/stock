@@ -212,19 +212,22 @@ func TestPruneKdjFeatDat(t *testing.T) {
 	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_PRUNE_RATE, true)
 }
 
-func TestPruneKdjFeatDatRemote(t *testing.T) {
+func TestPruneKdjFeatDatRunMode(t *testing.T) {
+	runMode := conf.LOCAL
+	pruneRate := KDJ_PRUNE_RATE
+	smpNum := 19
 	st := time.Now()
-	fdk := &fdKey{"D", "BY", 19, 587}
-	fdrvs := GetKdjFeatDatRaw(model.DAY, true, 19)
-	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(19-2),
+	fdk := &fdKey{"D", "BY", smpNum, 763}
+	fdrvs := GetKdjFeatDatRaw(model.DAY, true, smpNum)
+	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(smpNum-2),
 		1+1./(math.Sqrt2*math.Pi)))
 	logrus.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
-	fdvs := convert2Fdvs(fdk, fdrvs)
-	fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, KDJ_PRUNE_RATE, conf.REMOTE)
+	fdvsInput := convert2Fdvs(fdk, fdrvs)
+	fdvs := smartPruneKdjFeatDat(fdk, fdvsInput, nprec, pruneRate, runMode)
 	for _, fdv := range fdvs {
 		fdv.Weight = float64(fdv.FdNum) / float64(len(fdrvs))
 	}
-	saveKdjFd(fdvs)
+	//saveKdjFd(fdvs)
 	prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
 	logrus.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
 		fdk.ID(), fdk.Count, len(fdvs), prate, time.Since(st).Seconds())

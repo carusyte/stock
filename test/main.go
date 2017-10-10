@@ -23,7 +23,7 @@ func main() {
 	//hidBlueKdjSt()
 	//kdjOnly()
 	//renewKdjStats(true)
-	// test()
+	//test()
 }
 
 func test() {

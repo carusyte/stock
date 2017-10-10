@@ -17,6 +17,7 @@ import (
 	"github.com/satori/go.uuid"
 	logr "github.com/sirupsen/logrus"
 	"github.com/carusyte/stock/rpc"
+	"bytes"
 )
 
 const (
@@ -637,7 +638,6 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 		_, e = dbmap.Exec("truncate table kdj_feat_dat")
 		util.CheckErr(e, "failed to truncate kdj_feat_dat")
 	}
-	var wg sync.WaitGroup
 	chfdk := make(chan *fdKey, JOB_CAPACITY)
 	chfdks := make(chan *fdKey, JOB_CAPACITY)
 	sumbf := 0
@@ -654,7 +654,7 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 			chfdk <- k
 		}
 	}
-	//TODO realize asynchronous remote mode
+	var wg sync.WaitGroup
 	switch conf.Args.RunMode {
 	case conf.AUTO:
 		// maybe we can steal jobs from remote channel if local task is done?
@@ -663,11 +663,8 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 			wg.Add(1)
 			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.REMOTE)
 		}
-		p = int(float64(runtime.NumCPU()) * 0.7)
-		for i := 0; i < p; i++ {
-			wg.Add(1)
-			go doPruneKdjFeatDat(chfdks, &wg, prec, pruneRate, conf.LOCAL)
-		}
+		wg.Add(1)
+		go doPruneKdjFeatDat(chfdks, &wg, prec, pruneRate, conf.LOCAL)
 	case conf.REMOTE:
 		p, _ := rpc.Available(false)
 		for i := 0; i < p; i++ {
@@ -675,11 +672,8 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.REMOTE)
 		}
 	case conf.LOCAL:
-		p := int(float64(runtime.NumCPU()) * 0.7)
-		for i := 0; i < p; i++ {
-			wg.Add(1)
-			go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.LOCAL)
-		}
+		wg.Add(1)
+		go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.LOCAL)
 	case conf.DISTRIBUTED:
 		wg.Add(1)
 		go doPruneKdjFeatDat(chfdk, &wg, prec, pruneRate, conf.DISTRIBUTED)
@@ -764,13 +758,13 @@ func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, p
 }
 
 func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) []*model.KDJfdView {
-	for prate, p := 1.0, 0; prate > pruneRate; p++ {
+	for prate, p := 1.0, 1; prate > pruneRate; p++ {
 		stp := time.Now()
 		bfc := len(fdvs)
 		fdvs = passKdjFeatDatPrune(fdvs, nprec)
 		prate = float64(bfc-len(fdvs)) / float64(bfc)
 		logr.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
-			fdk.ID(), p+1, bfc, len(fdvs), prate*100, time.Since(stp).Seconds())
+			fdk.ID(), p, bfc, len(fdvs), prate*100, time.Since(stp).Seconds())
 	}
 	return fdvs
 }
@@ -833,8 +827,15 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 }
 
 func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
+	//return passKdjFeatDatSingle(fdvs, prec)
+	return passKdjFeatDatPara(fdvs, prec)
+}
+
+func passKdjFeatDatSingle(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
+	off := 0
 	for i := 0; i < len(fdvs)-1; i++ {
 		f1 := fdvs[i]
+		cdd := make([]int, 0, 16)
 		pend := make([]*model.KDJfdView, 0, 16)
 		for j := i + 1; j < len(fdvs); {
 			f2 := fdvs[j]
@@ -846,16 +847,111 @@ func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdVi
 					fdvs = fdvs[:j]
 				}
 				pend = append(pend, f2)
+				cdd = append(cdd, j+off)
+				off++
 			} else {
 				j++
 			}
 		}
 		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
+		logr.Debugf("%d #cdd: %+v", i, cdd)
 		for _, p := range pend {
 			mergeKdjFd(f1, p)
 		}
 	}
 	return fdvs
+}
+
+func passKdjFeatDatPara(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
+	//TODO mismatched with single-threaded version
+	var wg sync.WaitGroup
+	p := int(float64(runtime.NumCPU()) * 0.8)
+	ptags := new(sync.Map)
+	chjob := make(chan int, len(fdvs))
+	chcdd := make(chan map[int][]int, len(fdvs))
+	chout := make(chan []*model.KDJfdView)
+	for i := 0; i < p; i++ {
+		wg.Add(1)
+		go scanKdjFD(&wg, fdvs, prec, ptags, chjob, chcdd)
+	}
+	go reduceKdjFD(fdvs, ptags, chcdd, chout)
+	for i := 0; i < len(fdvs)-1; i++ {
+		chjob <- i
+	}
+	close(chjob)
+	wg.Wait()
+	close(chcdd)
+	for out := range chout {
+		close(chout)
+		return out
+	}
+	return nil
+}
+
+func scanKdjFD(wg *sync.WaitGroup, fdvs []*model.KDJfdView, prec float64, ptags *sync.Map,
+	chjob chan int, chcdd chan map[int][]int) {
+	defer wg.Done()
+	for j := range chjob {
+		cdd := make([]int, 0, 16)
+		if _, ok := ptags.Load(j); !ok {
+			f1 := fdvs[j]
+			for i := j + 1; i < len(fdvs); i++ {
+				if _, ok := ptags.Load(i); !ok {
+					f2 := fdvs[i]
+					d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
+					if d >= prec {
+						cdd = append(cdd, i)
+					}
+				}
+			}
+		}
+		logr.Debugf("%d cdd: %+v", j, cdd)
+		chcdd <- map[int][]int{j: cdd}
+	}
+}
+
+func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]int,
+	chout chan []*model.KDJfdView) {
+	i := 0
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 1<<16)
+			runtime.Stack(buf, false)
+			logr.Errorf("i=%d recover from cleanKdjFD() is not nil \n %+v \n %+v", i,
+				r, string(bytes.Trim(buf, "\x00")))
+		}
+	}()
+	wmap := make(map[int][]int)
+	for cdd := range chcdd {
+		for k, v := range cdd {
+			wmap[k] = v
+		}
+		for list, ok := wmap[i]; ok; list, ok = wmap[i] {
+			logr.Debugf("reducing %d", i)
+			if _, ok := ptags.Load(i); !ok {
+				f1 := fdvs[i]
+				c := 0
+				for _, x := range list {
+					if _, loaded := ptags.LoadOrStore(x, 0); !loaded {
+						mergeKdjFd(f1, fdvs[x])
+						c++
+					}
+				}
+				logr.Debugf("reduced %d, #cdd: %d", i, c)
+			} else {
+				logr.Debugf("%d in ptag, skip", i)
+			}
+			delete(wmap, i)
+			i++
+		}
+	}
+	rfdvs := make([]*model.KDJfdView, 0, 16)
+	for i, f := range fdvs {
+		if _, ok := ptags.Load(i); !ok {
+			rfdvs = append(rfdvs, f)
+		}
+	}
+	chout <- rfdvs
 }
 
 func mergeKdjFd(to, fr *model.KDJfdView) {

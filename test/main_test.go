@@ -74,3 +74,24 @@ func TestISOWeek(t *testing.T) {
 	y, w = tToday.ISOWeek()
 	fmt.Println(y, w)
 }
+
+func TestNilSlice(t *testing.T) {
+	s := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	s1 := s[5:7]
+	s[5] = 99
+	s[6] = 144
+	s = nil
+	fmt.Println(s1)
+}
+
+func TestMap(t *testing.T) {
+	m := make(map[int]byte)
+	modMap(m)
+	fmt.Printf("%+v", m)
+}
+
+func modMap(m map[int]byte) {
+	m[1]=0
+	m[2]=0
+	m[3]=0
+}
