@@ -905,7 +905,9 @@ func scanKdjFD(wg *sync.WaitGroup, fdvs []*model.KDJfdView, prec float64, ptags 
 				}
 			}
 		}
-		logr.Debugf("%d cdd: %+v", j, cdd)
+		if len(cdd) > 0 {
+			logr.Debugf("%d cdd: %+v", j, cdd)
+		}
 		chcdd <- map[int][]int{j: cdd}
 	}
 }
@@ -927,7 +929,7 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 			wmap[k] = v
 		}
 		for list, ok := wmap[i]; ok; list, ok = wmap[i] {
-			logr.Debugf("reducing %d", i)
+			//logr.Debugf("reducing %d", i)
 			if _, ok := ptags.Load(i); !ok {
 				f1 := fdvs[i]
 				c := 0
@@ -937,9 +939,7 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 						c++
 					}
 				}
-				logr.Debugf("reduced %d, #cdd: %d", i, c)
-			} else {
-				logr.Debugf("%d in ptag, skip", i)
+				//logr.Debugf("reduced %d, #cdd: %d", i, c)
 			}
 			delete(wmap, i)
 			i++
