@@ -16,6 +16,9 @@ import (
 	"archive/zip"
 	"encoding/xml"
 	"io/ioutil"
+	"github.com/carusyte/stock/global"
+	"time"
+	"github.com/carusyte/stock/conf"
 )
 
 func StocksDb() (allstk []*model.Stock) {
@@ -48,9 +51,101 @@ func GetStockInfo() (allstk *model.Stocks) {
 	allstk = getFromExchanges()
 	log.Printf("total stocks: %d", allstk.Size())
 
+	getIndustry(allstk)
+
 	overwrite(allstk.List)
 
 	return
+}
+
+func getIndustry(stocks *model.Stocks) {
+	log.Println("getting industry info...")
+	var wg sync.WaitGroup
+	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	rstks := new(model.Stocks)
+	wgr := collect(rstks, chrstk)
+	for i := 0; i < 3*conf.Args.Concurrency; i++ {
+		wg.Add(1)
+		go doGetIndustry(chstk, chrstk, &wg)
+	}
+	for _, s := range stocks.List {
+		chstk <- s
+	}
+	close(chstk)
+	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d industry info fetched", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
+}
+
+func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
+	defer wg.Done()
+	// target web server can't withstand heavy traffic
+	RETRIES := 5
+	for stock := range chstk {
+		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
+			var ok, r bool
+			switch conf.Args.Datasource.Industry {
+			case conf.TENCENT_TC, conf.TENCENT_CSRC:
+				ok, r = tcIndustry(stock)
+			}
+			if ok {
+				chrstk <- stock
+			} else if r {
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				time.Sleep(time.Second * 3)
+				continue
+			} else {
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+			}
+			break
+		}
+	}
+}
+
+func tcIndustry(stock *model.Stock) (ok, retry bool) {
+	url := fmt.Sprintf(`http://stock.finance.qq.com/corp1/plate.php?zqdm=%s`, stock.Code)
+	res, e := util.HttpGetResp(url)
+	if e != nil {
+		log.Printf("%s, http failed, giving up %s", stock.Code, url)
+		return false, false
+	}
+	defer res.Body.Close()
+
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+
+	// parse body using goquery
+	doc, e := goquery.NewDocumentFromReader(utfBody)
+	if e != nil {
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+			stock.Name)
+		return false, true
+	}
+
+	//parse industry value
+	var sel string
+	switch conf.Args.Datasource.Industry {
+	case conf.TENCENT_TC:
+		sel = `body div.page div table.list tbody tr:nth-child(2) td:nth-child(2) a`
+	case conf.TENCENT_CSRC:
+		sel = `body div.page div table.list tbody tr.nobor td:nth-child(2) a`
+	default:
+		log.Panicf("unrecognized industry info source: %s", conf.Args.Datasource.Industry)
+	}
+	val := doc.Find(sel).Text()
+	stock.Industry.Valid = true
+	stock.Industry.String = val
+
+	return true, false
 }
 
 //get stock list from official exchange web sites
@@ -147,12 +242,13 @@ func overwrite(allstk []*model.Stock) {
 
 		codes := make([]string, len(allstk))
 		valueStrings := make([]string, 0, len(allstk))
-		valueArgs := make([]interface{}, 0, len(allstk)*17)
+		valueArgs := make([]interface{}, 0, len(allstk)*18)
 		for i, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
 			valueArgs = append(valueArgs, stk.Market)
+			valueArgs = append(valueArgs, stk.Industry)
 			valueArgs = append(valueArgs, stk.Price)
 			valueArgs = append(valueArgs, stk.Varate)
 			valueArgs = append(valueArgs, stk.Var)
@@ -182,9 +278,10 @@ func overwrite(allstk []*model.Stock) {
 		}
 		log.Printf("%d stale stock record deleted from basics", ra)
 
-		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,price,varate,var,accer,xrate,volratio,ampl,"+
+		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,price,varate,var,accer,xrate,"+
+			"volratio,ampl,"+
 			"turnover,outstanding,totals,circmarval,timeToMarket,udate,utime) VALUES %s on duplicate key update "+
-			"name=values(name),market=values(market),"+
+			"name=values(name),market=values(market),industry=values(industry),"+
 			"price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
 			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
 			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+

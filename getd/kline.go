@@ -14,11 +14,13 @@ import (
 	"sort"
 	"time"
 	"database/sql"
+	"github.com/carusyte/stock/conf"
 )
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
+	//FIXME 10jqk first access always return 502 Bad Gateway
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
 	wf := make(chan int, MAX_CONCURRENCY)
@@ -213,28 +215,27 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 }
 
 func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
+	switch conf.Args.Datasource.Kline {
+	case conf.THS:
+		return dKlineThs(stk, klt, incr)
+	case conf.TENCENT:
+		return dKlineTc(stk, klt, incr)
+	default:
+		log.Panicf("unrecognized datasource: %+v", conf.Args.Datasource.Kline)
+	}
+	return
+}
+
+func dKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
 	RETRIES := 20
 	var (
 		ldate string
 		lklid int
-		mode  string
 		code  string = stk.Code
 	)
-	//mode:
-	// 00-no reinstatement
-	// 01-forward reinstatement
-	// 02-backward reinstatement
-	switch klt {
-	case model.KLINE_DAY:
-		mode = "01"
-	case model.KLINE_DAY_NR:
-		mode = "00"
-	default:
-		log.Panicf("unhandled kltype: %s", klt)
-	}
 
 	for rt := 0; rt < RETRIES; rt++ {
-		kls, suc, retry := tryDailyKlines(stk, mode, klt, incr, &ldate, &lklid)
+		kls, suc, retry := tryDailyKlines(stk, klt, incr, &ldate, &lklid)
 		if suc {
 			kldy = kls
 			break
@@ -260,7 +261,7 @@ func getDailyKlines(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model
 	return kldy, true
 }
 
-func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {
+func tryDailyKlines(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {
 	var (
 		code   string = stk.Code
 		klast  model.Klast
@@ -270,9 +271,24 @@ func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, l
 		dkeys  []string                = make([]string, 0, 16)         // date as keys to sort
 		klmap  map[string]*model.Quote = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
 		oldest string                                                  // stores the oldest date
+		mode   string
 	)
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/today.js", code, mode)
-	body, e = util.HttpGetBytes(url_today)
+	//mode:
+	// 00-no reinstatement
+	// 01-forward reinstatement
+	// 02-backward reinstatement
+	switch klt {
+	case model.KLINE_DAY:
+		mode = "01"
+	case model.KLINE_DAY_NR:
+		mode = "00"
+	default:
+		log.Panicf("unhandled kltype: %s", klt)
+	}
+	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(url_today,
+		map[string]string{"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html"})
+	//body, e = util.HttpGetBytes(url_today)
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
 		return kldy, false, false
@@ -303,8 +319,10 @@ func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, l
 	}
 
 	//get last kline data
-	url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js", code, mode)
-	body, e = util.HttpGetBytes(url_last)
+	url_last := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/last.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(url_last,
+		map[string]string{"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html"})
+	//body, e = util.HttpGetBytes(url_last)
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_last, e)
 		return kldy, false, true
@@ -370,9 +388,11 @@ func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, l
 		}
 		ok := false
 		for tries := 1; tries <= 3; tries++ {
-			url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/%d.js", code, mode,
+			url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/%d.js", code, mode,
 				yr)
-			body, e = util.HttpGetBytes(url_hist)
+			body, e = util.HttpGetBytesUsingHeaders(url_hist,
+				map[string]string{"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html"})
+			//body, e = util.HttpGetBytes(url_hist)
 			if e != nil {
 				log.Printf("%s [%d] error visiting %s: \n%+v", code, tries, url_hist, e)
 				ok = false
@@ -411,8 +431,10 @@ func tryDailyKlines(stk *model.Stock, mode string, klt model.DBTab, incr bool, l
 }
 
 func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/%s/today.js", code, typ)
-	body, e := util.HttpGetBytes(url_today)
+	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, typ)
+	body, e := util.HttpGetBytesUsingHeaders(url_today,
+		map[string]string{"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html"})
+	//body, e := util.HttpGetBytes(url_today)
 	if e != nil {
 		return nil, false, false
 	}
@@ -426,7 +448,7 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 }
 
 func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
-	urlt := "http://d.10jqka.com.cn/v2/line/hs_%s/%s/last.js"
+	urlt := "http://d.10jqka.com.cn/v6/line/hs_%s/%s/last.js"
 	var (
 		code  = stk.Code
 		typ   string
@@ -492,7 +514,9 @@ func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*mode
 				}
 			}
 		}
-		body, e := util.HttpGetBytes(url)
+		body, e := util.HttpGetBytesUsingHeaders(url,
+			map[string]string{"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html"})
+		//body, e := util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("can't get %s for %s. please try again later.", klt, code)
 			return

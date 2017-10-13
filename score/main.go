@@ -46,6 +46,8 @@ type Item struct {
 	Code string
 	//Security Name
 	Name string
+	//Industry
+	Industry string
 	//Total score
 	Score float64
 	//Reminds
@@ -134,11 +136,12 @@ func (r *Result) String() string {
 	hd = append(hd, "Rank")
 	hd = append(hd, "Code")
 	hd = append(hd, "Name")
+	hd = append(hd, "Industry")
 	hd = append(hd, "Score")
 	fns := []string{}
 	fidx := map[string]int{}
 	pfidx := map[string]int{}
-	idx := 4 + len(r.PfIds)
+	idx := 5 + len(r.PfIds)
 	for _, pfid := range r.PfIds {
 		pfidx[pfid] = len(hd)
 		hd = append(hd, pfid)
@@ -158,7 +161,8 @@ func (r *Result) String() string {
 		data[i][0] = fmt.Sprintf("%d", i+1)
 		data[i][1] = itm.Code
 		data[i][2] = itm.Name
-		data[i][3] = fmt.Sprintf("%.2f", itm.Score)
+		data[i][3] = itm.Industry
+		data[i][4] = fmt.Sprintf("%.2f", itm.Score)
 		for pfid, p := range itm.Profiles {
 			data[i][pfidx[pfid]] = fmt.Sprintf("%.2f", p.Score)
 			for _, fn := range r.Fields[pfid] {
@@ -224,6 +228,9 @@ func Combine(rs ... *Result) (fr *Result) {
 						} else {
 							mi.Profiles[k] = it.Profiles[k]
 						}
+					}
+					if mi.Industry == "" && it.Industry != "" {
+						mi.Industry = it.Industry
 					}
 				} else {
 					fr.AddItem(it)

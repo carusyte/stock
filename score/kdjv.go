@@ -101,6 +101,9 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 		item := new(Item)
 		item.Code = s.Code
 		item.Name = s.Name
+		if s.Industry.Valid {
+			item.Industry = s.Industry.String
+		}
 		items = append(items, item)
 	}
 	for _, idx := range idxlst {
@@ -857,7 +860,10 @@ func scoreKdjLocal(item *Item) {
 			log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 		}
 	} else {
+		kdjv.Sl = stat.Sl
 		kdjv.Sh = stat.Sh
+		kdjv.Bl = stat.Bl
+		kdjv.Bh = stat.Bh
 		kdjv.Bmean = stat.Bmean
 		kdjv.Smean = stat.Smean
 		kdjv.Dod = stat.Dod

@@ -23,7 +23,7 @@ func HttpGetResp(url string) (res *http.Response, e error) {
 }
 
 func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.Response, e error) {
-	var host string = ""
+	host := ""
 	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(url)
 	if len(r) > 0 {
 		host = r[len(r)-1]
@@ -55,17 +55,21 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 			log.Panic(err)
 		}
 
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("Accept", "*/*")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2")
 		req.Header.Set("Cache-Control", "no-cache")
 		req.Header.Set("Connection", "keep-alive")
+		//req.Header.Set("Cookie", "searchGuide=sg; "+
+		//	"UM_distinctid=15d4e2ca50580-064a0c1f749ffa-30667808-232800-15d4e2ca506a9c; "+
+		//	"Hm_lvt_78c58f01938e4d85eaf619eae71b4ed1=1502162404,1502164752,1504536800; "+
+		//	"Hm_lpvt_78c58f01938e4d85eaf619eae71b4ed1=1504536800")
 		if host != "" {
 			req.Header.Set("Host", host)
 		}
 		req.Header.Set("Pragma", "no-cache")
-		req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) AppleWebKit/537.36 (KHTML, "+
-			"like Gecko) "+ "Chrome/60.0.3112.90 Safari/537.36")
+		//req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"+
+			" AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36")
 		if headers != nil && len(headers) > 0 {
 			for k := range headers {
 				req.Header.Set(k, headers[k])

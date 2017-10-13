@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
@@ -21,7 +20,7 @@ import (
 )
 
 const (
-	LOCAL_PRUNE_THRESHOLD = 3000
+	LOCAL_PRUNE_THRESHOLD = 50000
 )
 
 var (
@@ -827,6 +826,10 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 }
 
 func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec, cpuPower float64) []*model.KDJfdView {
+	return passKdjFdPara(fdvs, prec, cpuPower)
+}
+
+func passKdjFdPara(fdvs []*model.KDJfdView, prec, cpuPower float64) []*model.KDJfdView {
 	var wg sync.WaitGroup
 	p := int(float64(runtime.NumCPU()) * cpuPower)
 	ptags := new(sync.Map)
@@ -851,6 +854,37 @@ func passKdjFeatDatPrune(fdvs []*model.KDJfdView, prec, cpuPower float64) []*mod
 	return nil
 }
 
+func passKdjFdSingle(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
+	off := 0
+	for i := 0; i < len(fdvs)-1; i++ {
+		f1 := fdvs[i]
+		cdd := make([]int, 0, 16)
+		pend := make([]*model.KDJfdView, 0, 16)
+		for j := i + 1; j < len(fdvs); {
+			f2 := fdvs[j]
+			d := CalcKdjDevi(f1.K, f1.D, f1.J, f2.K, f2.D, f2.J)
+			if d >= prec {
+				if j < len(fdvs)-1 {
+					fdvs = append(fdvs[:j], fdvs[j+1:]...)
+				} else {
+					fdvs = fdvs[:j]
+				}
+				pend = append(pend, f2)
+				cdd = append(cdd, j+off)
+				off++
+			} else {
+				j++
+			}
+		}
+		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
+		logr.Debugf("%d #cdd: %+v", i, cdd)
+		for _, p := range pend {
+			mergeKdjFd(f1, p)
+		}
+	}
+	return fdvs
+}
+
 func scanKdjFD(wg *sync.WaitGroup, fdvs []*model.KDJfdView, prec float64, ptags *sync.Map,
 	chjob chan int, chcdd chan map[int][]int) {
 	defer wg.Done()
@@ -867,9 +901,6 @@ func scanKdjFD(wg *sync.WaitGroup, fdvs []*model.KDJfdView, prec float64, ptags 
 					}
 				}
 			}
-		}
-		if len(cdd) > 0 {
-			logr.Debugf("%d #cdd: %d", j, len(cdd))
 		}
 		chcdd <- map[int][]int{j: cdd}
 	}
@@ -902,7 +933,9 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 						c++
 					}
 				}
-				//logr.Debugf("reduced %d, #cdd: %d", i, c)
+				if c > 0 {
+					logr.Debugf("reduced %d, #cdd: %d", i, c)
+				}
 			}
 			delete(wmap, i)
 			i++

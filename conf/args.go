@@ -22,6 +22,14 @@ const (
 	AUTO RunMode = "auto"
 )
 
+//Data sources
+const (
+	THS          string = "ths"
+	TENCENT      string = "tencent"
+	TENCENT_CSRC string = "tencent.csrc"
+	TENCENT_TC   string = "tencent.tc"
+)
+
 //Arguments arguments struct type
 type Arguments struct {
 	//RPCServers rpc server address strings
@@ -30,9 +38,15 @@ type Arguments struct {
 	Concurrency       int      `mapstructure:"concurrency"`
 	CPUUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string   `mapstructure:"log_level"`
-	Kdjv              struct {
-		SampleSizeMin int `mapstructure:"sample_size_min"`
+	SqlFileLocation   string   `mapstructure:"sql_file_location"`
+	Kdjv struct {
+		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
+	}
+	Datasource struct {
+		Kline    string `mapstructure:"kline"`
+		Index    string `mapstructure:"index"`
+		Industry string `mapstructure:"industry"`
 	}
 	//TODO logrus log to file
 }
@@ -81,4 +95,7 @@ func setDefaults() {
 	Args.CPUUsageThreshold = 40
 	Args.Kdjv.SampleSizeMin = 5
 	Args.Kdjv.StatsRetroSpan = 600
+	Args.Datasource.Kline = THS
+	Args.Datasource.Index = TENCENT
+	Args.Datasource.Industry = TENCENT_CSRC
 }

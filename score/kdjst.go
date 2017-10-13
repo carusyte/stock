@@ -57,6 +57,7 @@ func (k *KdjSt) Get(stock []string, limit int, ranked bool) (r *Result) {
 		item := new(Item)
 		item.Code = vri.Code
 		item.Name = vri.Name
+		item.Industry = vri.Industry
 
 		kst := new(KdjSt)
 		kst.Code = item.Code

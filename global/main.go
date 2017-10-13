@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"github.com/carusyte/stock/conf"
+	"fmt"
 )
 
 var (
@@ -39,6 +41,9 @@ func init() {
 	log.SetOutput(mw)
 	Dbmap = db.Get(true, false)
 	sqlp := "../sql/sql.txt"
+	if conf.Args.SqlFileLocation != "" {
+		sqlp = fmt.Sprintf("%s/sql.txt", conf.Args.SqlFileLocation)
+	}
 	if _, e = os.Stat(sqlp); e != nil {
 		pwd, _ := os.Getwd()
 		sqlp = pwd + "/sql/sql.txt"
