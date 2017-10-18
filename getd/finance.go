@@ -395,6 +395,11 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks){
 	return
 }
 
+func GetPerfPrediction(stocks *model.Stocks) (rstks *model.Stocks){
+	//TODO get financial performance prediction
+	panic("implement me")
+}
+
 func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	urlt := `http://basic.10jqka.com.cn/%s/finance.html`

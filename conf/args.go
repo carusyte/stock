@@ -47,6 +47,7 @@ type Arguments struct {
 		Kline    string `mapstructure:"kline"`
 		Index    string `mapstructure:"index"`
 		Industry string `mapstructure:"industry"`
+		ThsCookie string `mapstructure:"ths_cookie"`
 	}
 	//TODO logrus log to file
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func TestGetDailyKlines(t *testing.T) {
-	getDailyKlines(&model.Stock{Code: "600242"}, model.KLINE_DAY, true)
+	getKlineCytp(&model.Stock{Code: "600242"}, model.KLINE_DAY, true)
 }
 
 func TestParseLastJson(t *testing.T) {

@@ -88,7 +88,12 @@ func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *mo
 		model.KLINE_WEEK,
 		model.KLINE_MONTH,
 	}
+	//stk := new(model.Stock)
+	//stk.Code = idx.Code
+	//stk.Name = idx.Name
+	//stk.IsIndex = true
 	for _, t := range ts {
+		//_, ok := klineTc(stk, t, true)
 		e := getIndexFor(idx, retry, t)
 		if e != nil {
 			rchs <- ""
@@ -157,6 +162,7 @@ func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 	}
 	qj := &model.QQJson{}
 	qj.Code = code
+	qj.Fcode = code
 	qj.Period = per
 	qj.Sklid = sklid
 	e = json.Unmarshal(d, qj)

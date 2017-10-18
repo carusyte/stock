@@ -71,8 +71,8 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"+
 			" AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36")
 		if headers != nil && len(headers) > 0 {
-			for k := range headers {
-				req.Header.Set(k, headers[k])
+			for k, hv := range headers {
+				req.Header.Set(k, hv)
 			}
 		}
 

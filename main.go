@@ -13,7 +13,7 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	//getData()
+	getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
@@ -42,10 +42,10 @@ func hidBlueKdjSt() {
 		idxc[i] = idx.Code
 	}
 	r1 := new(score.HiD).Geta()
-	r1.Weight = 0.5
+	r1.Weight = 0.2
 	r2 := new(score.BlueChip).Geta()
-	r2.Weight = 0.5
-	r1r2 := score.Combine(r1, r2).Sort().Shrink(500)
+	r2.Weight = 0.8
+	r1r2 := score.Combine(r1, r2).Sort().Shrink(1000)
 	r1r2.Weight = 0
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1

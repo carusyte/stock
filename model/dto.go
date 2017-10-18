@@ -78,6 +78,7 @@ type Stock struct {
 	CircMarVal       sql.NullFloat64
 	UDate            sql.NullString
 	UTime            sql.NullString
+	IsIndex          bool
 }
 
 func (s *Stock) String() string {
@@ -585,6 +586,18 @@ func (k *KlineW) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
+type KlAll struct {
+	Total       int           `json:"total"`
+	Start       string        `json:"start"`
+	Name        string        `json:"name"`
+	SortYear    []interface{} `json:"sortYear"`
+	PriceFactor int           `json:"priceFactor"`
+	Price       string        `json:"price"`
+	Volume      string        `json:"volumn"`
+	Dates       string        `json:"dates"`
+	//IssuePrice  string        `json:"dates"`
+}
+
 type Klast struct {
 	//Rt         string `json:"rt"`
 	Num int `json:"num"`
@@ -833,9 +846,9 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 
 // Set Code and Period before unmarshalling json data
 type QQJson struct {
-	Code, Period string
-	Sklid        int
-	Quotes       []*Quote
+	Fcode, Code, Period string
+	Sklid               int
+	Quotes              []*Quote
 }
 
 func (qj *QQJson) UnmarshalJSON(b []byte) error {
@@ -856,19 +869,25 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	}
 	retcde = m["code"].(float64)
 	msg = m["msg"].(string)
-	if retcde != 0 {
+	if retcde != 0 || msg != "" {
 		return errors.Errorf("server failed with code %d, msg: %s", retcde, msg)
 	}
-	if cdat, exists := m["data"].(map[string]interface{})[qj.Code]; !exists {
+	if cdat, exists := m["data"].(map[string]interface{})[qj.Fcode]; !exists {
 		return errors.Errorf("unrecognized data structure: %+v", f)
 	} else {
-		if pdat, exists := cdat.(map[string]interface{})[qj.Period]; !exists {
-			return errors.Errorf("unrecognized data structure: %+v", f)
+		pdat, exists := cdat.(map[string]interface{})[qj.Period]
+		if !exists {
+			// for securities
+			pdat, exists = cdat.(map[string]interface{})["qfq"+qj.Period]
+			if !exists {
+				return errors.Errorf("unrecognized data structure: %+v", f)
+			}
 		} else {
 			ps := pdat.([]interface{})
 			qj.Quotes = make([]*Quote, len(ps))
 			klid := qj.Sklid
 			dt, tm := util.TimeStr()
+			preclose := math.NaN()
 			for i, pd := range ps {
 				pa := pd.([]interface{})
 				q := new(Quote)
@@ -895,6 +914,14 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 				q.Volume.Float64, e = strconv.ParseFloat(pa[2].(string), 64)
 				if e != nil {
 					return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
+				}
+				q.Varate.Valid = true
+				if math.IsNaN(preclose) {
+					q.Varate.Float64 = 0
+				} else if preclose == 0 {
+					q.Varate.Float64 = 100
+				} else {
+					q.Varate.Float64 = (q.Close - preclose) / math.Abs(preclose) * 100
 				}
 				q.Udate.Valid = true
 				q.Utime.Valid = true
