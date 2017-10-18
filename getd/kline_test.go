@@ -40,9 +40,9 @@ func TestParseLastJson(t *testing.T) {
 
 func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "000006"
-	s.Name = "深振业A"
+	s.Code = "603396"
+	s.Name = "N金辰"
 	ss := new(model.Stocks)
 	ss.Add(s)
-	GetKlines(ss, model.KLINE_DAY)
+	GetKlines(ss, model.KLINE_DAY_NR)
 }

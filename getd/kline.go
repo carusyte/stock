@@ -435,6 +435,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	return kldy, true, false
 }
 
+// order: from oldest to latest
 func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (
 	quotes []*model.Quote, suc, retry bool) {
 	var (
@@ -445,6 +446,8 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		e      error
 		mode   string
 	)
+	*ldate = ""
+	*lklid = -1
 	//mode:
 	// 00-no reinstatement
 	// 01-forward reinstatement
@@ -490,7 +493,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	}
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
 		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
-		return append(quotes, &ktoday.Quote), true, false
+		return quotes, true, false
 	}
 	// If in IPO week, skip the rest chores
 	if (klt == model.KLINE_WEEK || klt == model.KLINE_MONTH) &&
@@ -537,8 +540,6 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		return quotes, false, true
 	}
 
-	*ldate = ""
-	*lklid = -1
 	if incr {
 		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
@@ -559,7 +560,13 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		return quotes, true, false
 	}
 
-	if klt == model.KLINE_WEEK {
+	if (klt == model.KLINE_DAY || klt == model.KLINE_DAY_NR) && kls[0].Date == ktoday.Date {
+		// if ktoday and kls[0] in the same month, remove kls[0]
+		kls = kls[1:]
+	} else if klt == model.KLINE_MONTH && kls[0].Date[:8] == ktoday.Date[:8] {
+		// if ktoday and kls[0] in the same month, remove kls[0]
+		kls = kls[1:]
+	} else if klt == model.KLINE_WEEK {
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		tToday, e := time.Parse("2006-01-02", ktoday.Date)
 		if e != nil {
@@ -576,12 +583,13 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		if yToday == yLast && wToday == wLast {
 			kls = kls[1:]
 		}
-	} else if klt == model.KLINE_MONTH && kls[0].Date[:8] == ktoday.Date[:8] {
-		// if ktoday and kls[0] in the same month, remove kls[0]
-		kls = kls[1:]
 	}
 
 	quotes = append(quotes, kls...)
+	//reverse order
+	for i, j := 0, len(quotes)-1; i < j; i, j = i+1, j-1 {
+		quotes[i], quotes[j] = quotes[j], quotes[i]
+	}
 
 	return quotes, true, false
 }
@@ -801,15 +809,16 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 
 		tran, e := dbmap.Begin()
 		util.CheckErr(e, "failed to start transaction")
-		if lklid >= 0 {
-			lklid++
-			_, e = tran.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
-			if e != nil {
-				log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
-				tran.Rollback()
-				panic(code)
-			}
+
+		// delete stale records first
+		lklid++
+		_, e = tran.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+		if e != nil {
+			log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
+			tran.Rollback()
+			panic(code)
 		}
+
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
@@ -832,17 +841,18 @@ func parseThsKlinesV6(code string, data *model.KlAll, ldate string) (kls []*mode
 	prices := strings.Split(data.Price, ",")
 	vols := strings.Split(data.Volume, ",")
 	dates := strings.Split(data.Dates, ",")
-	if len(prices)/4 != len(vols) || len(vols) != len(dates) || data.Total != len(dates) {
+	// total might not match, it might be ok in this case
+	if len(prices)/4 != len(vols) || len(vols) != len(dates) {
 		return nil, errors.Errorf("%s data length mismatched: total:%d, price:%d, vols:%d, dates:%d",
-			data.Total, len(prices), len(vols), len(dates))
+			code, data.Total, len(prices), len(vols), len(dates))
 	}
-	pf := float64(data.PriceFactor)
+	pf := data.PriceFactor
 	offset := 0
 	for y := len(data.SortYear) - 1; y >= 0; y-- {
-		yrd := data.SortYear[y].([]int)
-		year := strconv.Itoa(yrd[0])
-		ynum := yrd[1]
-		for i := len(dates) - offset - 1; i >= len(dates)-ynum; i-- {
+		yrd := data.SortYear[y].([]interface{})
+		year := strconv.Itoa(int(yrd[0].(float64)))
+		ynum := int(yrd[1].(float64))
+		for i := len(dates) - offset - 1; i >= len(dates)-offset-ynum; i-- {
 			// latest in the last
 			date := year + "-" + dates[i][0:2] + "-" + dates[i][2:]
 			if ldate != "" && date <= ldate {

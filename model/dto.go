@@ -591,11 +591,51 @@ type KlAll struct {
 	Start       string        `json:"start"`
 	Name        string        `json:"name"`
 	SortYear    []interface{} `json:"sortYear"`
-	PriceFactor int           `json:"priceFactor"`
+	PriceFactor float64       `json:"priceFactor"`
 	Price       string        `json:"price"`
 	Volume      string        `json:"volumn"`
 	Dates       string        `json:"dates"`
 	//IssuePrice  string        `json:"dates"`
+}
+
+func (ka *KlAll) UnmarshalJSON(b []byte) (e error) {
+	var f interface{}
+	json.Unmarshal(b, &f)
+
+	m := f.(map[string]interface{})
+
+	for k, v := range m {
+		switch k {
+		case "total":
+			if vi, ok := v.(int); ok {
+				ka.Total = vi
+			} else if vf, ok := v.(float64); ok {
+				ka.Total = int(vf)
+			} else if vs, ok := v.(string); ok {
+				ka.Total, e = strconv.Atoi(vs)
+				if e != nil {
+					return e
+				}
+			}
+		case "start":
+			ka.Start = v.(string)
+		case "name:":
+			ka.Name = v.(string)
+		case "sortYear":
+			ka.SortYear = v.([]interface{})
+		case "priceFactor":
+			ka.PriceFactor = v.(float64)
+		case "price":
+			ka.Price = v.(string)
+		case "volumn":
+			ka.Volume = v.(string)
+		case "dates":
+			ka.Dates = v.(string)
+		default:
+			//do nothing
+		}
+	}
+	return nil
 }
 
 type Klast struct {
