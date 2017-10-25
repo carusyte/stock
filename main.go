@@ -41,11 +41,16 @@ func hidBlueKdjSt() {
 	for i, idx := range idxlst {
 		idxc[i] = idx.Code
 	}
+	c, e := global.Dbmap.SelectInt("select round(count(*)/5) from basics")
+	if e != nil {
+		log.Println("failed to count from basics")
+		log.Println(e)
+	}
 	r1 := new(score.HiD).Geta()
 	r1.Weight = 0.2
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.8
-	r1r2 := score.Combine(r1, r2).Sort().Shrink(1000)
+	r1r2 := score.Combine(r1, r2).Sort().Shrink(int(c))
 	r1r2.Weight = 0
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1

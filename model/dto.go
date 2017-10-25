@@ -635,6 +635,12 @@ func (ka *KlAll) UnmarshalJSON(b []byte) (e error) {
 			//do nothing
 		}
 	}
+
+	// initial check
+	if ka.Total > 0 && (ka.Volume == "" || ka.Dates == "") {
+		return errors.New("invalid json data")
+	}
+
 	return nil
 }
 

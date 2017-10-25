@@ -485,12 +485,12 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		log.Printf("kline today skipped: %s", url_today)
 	}
 
-	// If it is an IPO, return immediately
 	_, e = time.Parse("2006-01-02", ktoday.Date)
 	if e != nil {
 		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, false, true
 	}
+	// If it is an IPO, return immediately
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
 		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return quotes, true, false
@@ -502,17 +502,19 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		if e != nil {
 			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
+			return quotes, false, true
 		} else {
 			ttd, e := time.Parse("2006-01-02", ktoday.Date)
 			if e != nil {
 				log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 					code, ktoday.Date, e)
+				return quotes, false, true
 			} else {
 				y1, w1 := ttm.ISOWeek()
 				y2, w2 := ttd.ISOWeek()
 				if y1 == y2 && w1 == w2 {
 					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
-					return append(quotes, &ktoday.Quote), true, false
+					return quotes, true, false
 				}
 			}
 		}
@@ -552,9 +554,9 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 
-	kls, e := parseThsKlinesV6(code, &kall, *ldate)
+	kls, e := parseThsKlinesV6(code, klt, &kall, *ldate)
 	if e != nil {
-		log.Println(e)
+		log.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, *ldate, e, kall)
 		return quotes, false, true
 	} else if len(kls) == 0 {
 		return quotes, true, false
@@ -837,11 +839,18 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 }
 
 //parse semi-colon separated string to quotes, with latest in the head (reverse order of the string data).
-func parseThsKlinesV6(code string, data *model.KlAll, ldate string) (kls []*model.Quote, e error) {
+func parseThsKlinesV6(code string, klt model.DBTab, data *model.KlAll, ldate string) (kls []*model.Quote, e error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if err, ok := r.(error); ok {
+				log.Println(err)
+				e = err
+			}
+		}
+	}()
 	prices := strings.Split(data.Price, ",")
 	vols := strings.Split(data.Volume, ",")
 	dates := strings.Split(data.Dates, ",")
-	// total might not match, it might be ok in this case
 	if len(prices)/4 != len(vols) || len(vols) != len(dates) {
 		return nil, errors.Errorf("%s data length mismatched: total:%d, price:%d, vols:%d, dates:%d",
 			code, data.Total, len(prices), len(vols), len(dates))
@@ -852,6 +861,11 @@ func parseThsKlinesV6(code string, data *model.KlAll, ldate string) (kls []*mode
 		yrd := data.SortYear[y].([]interface{})
 		year := strconv.Itoa(int(yrd[0].(float64)))
 		ynum := int(yrd[1].(float64))
+		//last year's count might be one more than actually in the data string
+		if y == len(data.SortYear)-1 && data.Total == len(dates)+1 {
+			ynum--
+			log.Printf("%s %s %+v %+v data length mismatch, auto corrected", code, data.Name, data.Total, klt)
+		}
 		for i := len(dates) - offset - 1; i >= len(dates)-offset-ynum; i-- {
 			// latest in the last
 			date := year + "-" + dates[i][0:2] + "-" + dates[i][2:]
