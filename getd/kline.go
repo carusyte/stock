@@ -830,6 +830,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		_, e = tran.Exec(stmt, valueArgs...)
 		if e != nil {
 			tran.Rollback()
+			fmt.Println(e)
 			log.Panicf("%s failed to bulk insert %s", code, table)
 		}
 		c = len(quotes)
