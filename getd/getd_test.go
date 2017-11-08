@@ -11,6 +11,9 @@ import (
 	cdptypes "github.com/knq/chromedp/cdp"
 	"github.com/knq/chromedp/cdp/network"
 	"strings"
+	"github.com/knq/chromedp/runner"
+	"sync"
+	"time"
 )
 
 func TestFinMark(t *testing.T) {
@@ -23,81 +26,206 @@ func TestFinMark(t *testing.T) {
 }
 
 func TestGetByCDP(t *testing.T) {
-	var err error
-
+	var (
+		err  error
+		pool *cdp.Pool
+		wg   sync.WaitGroup
+	)
 	// create context
 	ctxt, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// create chrome instance
-	c, err := cdp.New(ctxt, cdp.WithLog(log.Printf))
+	//cdp.PoolLog(nil, nil, log.Printf)
+	pool, err = cdp.NewPool()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		err = pool.Shutdown()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// run task list
-	var site, res string
-	err = c.Run(ctxt, thsGet("600022"))
-	if err != nil {
-		log.Fatal(err)
+	codes := []string{"600022", "600765", "000766"}
+	tab := model.KLINE_MONTH
+	for _, code := range codes {
+		wg.Add(1)
+		go doGetData(code, tab, ctxt, pool, &wg)
 	}
-
-	// shutdown chrome
-	err = c.Shutdown(ctxt)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// wait for chrome to finish
-	err = c.Wait()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("saved screenshot from search result listing `%s` (%s)", res, site)
+	wg.Wait()
 }
 
-func thsGet(code string) cdp.Tasks {
-	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
-	var (
-		treqId, areqId network.RequestID
+func doGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Pool, wg *sync.WaitGroup) {
+	defer wg.Done()
+	retry := 5
+	for t := 0; t < retry; t++ {
+		ok, retry := tryGetData(code, tab, ctxt, pool)
+		if ok || !retry {
+			break
+		} else {
+			log.Printf("=============== %s retry %d", code, t+1)
+		}
+	}
+}
+
+func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Pool) (ok, retry bool) {
+	// get chrome runner from the pool
+	pr, err := pool.Allocate(ctxt,
+		runner.Flag("headless", true),
+		runner.Flag("no-default-browser-check", true),
+		runner.Flag("no-first-run", true),
+		runner.ExecPath(`/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary`),
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pr.Release()
+	var today, all string
+	chr := make(chan bool)
+	go func(chr chan bool) {
+		err := pr.Run(ctxt, buildActions(code, tab, &today, &all))
+		if err != nil {
+			fmt.Println(err)
+			chr <- false
+		} else {
+			chr <- true
+		}
+	}(chr)
+	select {
+	case suc := <-chr:
+		if suc {
+			fmt.Printf("========= %s today: %s\n", code, today)
+			fmt.Printf("========= %s all: %s\n", code, all)
+			if len(today) > 0 && len(all) > 0 {
+				return true, false
+			} else {
+				log.Printf("====== %s empty data returned", code)
+				return false, true
+			}
+		} else {
+			return false, true
+		}
+	case <-time.After(30 * time.Second):
+		log.Printf("%s timeout waiting for network response", code)
+		return false, true
+	}
+}
+
+func buildActions(code string, tab model.DBTab, today, all *string) cdp.Tasks {
+	//url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
+	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
+	fin := make(chan bool)
+	sel := ``
+	mcode := ""
+	switch tab {
+	case model.KLINE_DAY_NR:
+		sel = `a[hxc3-data-type="hxc3KlineQfqDay"]`
+		mcode = "00"
+		return cdp.Tasks{
+			cdp.Navigate(url),
+			cdp.WaitVisible(sel, cdp.ByQuery),
+			cdp.Click(sel, cdp.ByQuery),
+			cdp.WaitVisible(`#changeFq`, cdp.ByID),
+			cdp.Click(`#changeFq`, cdp.ByID),
+			cdp.WaitVisible(`a[data-type="Bfq"]`, cdp.ByQuery),
+			captureData(today, all, mcode, fin),
+			cdp.Click(`a[data-type="Bfq"]`, cdp.ByQuery),
+			wait(fin),
+		}
+	case model.KLINE_DAY:
+		mcode = "01"
+		sel = `a[hxc3-data-type="hxc3KlineQfqDay"]`
+	case model.KLINE_WEEK:
+		mcode = "11"
+		sel = `a[hxc3-data-type="hxc3KlineQfqWeek"]`
+	case model.KLINE_MONTH:
+		mcode = "21"
+		sel = `a[hxc3-data-type="hxc3KlineQfqMonth"]`
+	}
 	return cdp.Tasks{
-		cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
-			go func() {
-				echan := h.Listen(cdptypes.EventNetworkRequestWillBeSent, cdptypes.EventNetworkLoadingFinished)
-				for d := range echan {
+		cdp.Navigate(url),
+		cdp.WaitVisible(sel, cdp.ByQuery),
+		captureData(today, all, mcode, fin),
+		cdp.Click(sel, cdp.ByQuery),
+		wait(fin),
+	}
+}
+
+func wait(fin chan bool) cdp.Action {
+	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
+		select {
+		case <-time.After(100 * time.Second):
+			return nil
+		case <-ctxt.Done():
+			return nil
+		case <-fin:
+			return nil
+		}
+	})
+}
+
+func captureData(today, all *string, mcode string, fin chan bool) cdp.Action {
+	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
+		echan := h.Listen(cdptypes.EventNetworkRequestWillBeSent, cdptypes.EventNetworkLoadingFinished,
+			cdptypes.EventNetworkLoadingFailed)
+		go func(echan <-chan interface{}, ctxt context.Context, fin chan bool) {
+			defer h.Release(echan)
+			var (
+				reqIdTd, reqIdAll network.RequestID
+				urlTd, urlAll     string
+				finTd, finAll     = false, false
+			)
+			for {
+				select {
+				case d := <-echan:
 					switch d.(type) {
+					case *network.EventLoadingFailed:
+						lfail := d.(*network.EventLoadingFailed)
+						if reqIdTd == lfail.RequestID {
+							log.Printf("===== loading failed: %s, %+v", urlTd, lfail)
+							return
+						} else if reqIdAll == lfail.RequestID {
+							log.Printf("===== loading failed: %s, %+v", urlAll, lfail)
+							return
+						}
 					case *network.EventRequestWillBeSent:
 						req := d.(*network.EventRequestWillBeSent)
-						if strings.HasSuffix(req.Request.URL, "/today.js") {
-							treqId = req.RequestID
-						} else if strings.HasSuffix(req.Request.URL, "/all.js") {
-							areqId = req.RequestID
+						if strings.HasSuffix(req.Request.URL, mcode+"/today.js") {
+							urlTd = req.Request.URL
+							reqIdTd = req.RequestID
+						} else if strings.HasSuffix(req.Request.URL, mcode+"/all.js") {
+							urlAll = req.Request.URL
+							reqIdAll = req.RequestID
 						}
 					case *network.EventLoadingFinished:
 						res := d.(*network.EventLoadingFinished)
-						var data []byte
-						var e error
-						if treqId == res.RequestID {
-							data, e = network.GetResponseBody(treqId).Do(ctxt, h)
-						} else if areqId == res.RequestID {
-							data, e = network.GetResponseBody(areqId).Do(ctxt, h)
-						}
-						if e != nil {
-							panic(e)
-						}
-						if len(data) > 0 {
-							fmt.Printf("=========data: %+v\n", string(data))
+						if reqIdTd == res.RequestID {
+							data, e := network.GetResponseBody(reqIdTd).Do(ctxt, h)
+							if e != nil {
+								panic(e)
+							}
+							*today = string(data)
+							finTd = true
+						} else if reqIdAll == res.RequestID {
+							data, e := network.GetResponseBody(reqIdAll).Do(ctxt, h)
+							if e != nil {
+								panic(e)
+							}
+							*all = string(data)
+							finAll = true
 						}
 					}
+					if finTd && finAll {
+						fin <- true
+						return
+					}
+				case <-ctxt.Done():
+					return
 				}
-			}()
-			return nil
-		}),
-		cdp.Navigate(url),
-		cdp.WaitVisible(`body > ul > li:nth-child(2) > a`, cdp.ByQuery),
-		cdp.Click(`body > ul > li:nth-child(2) > a`, cdp.ByQuery),
-		cdp.WaitVisible(`#testcanvas > div.hxc3-hxc3KlinePricePane-hover`, cdp.ByQuery),
-	}
+			}
+		}(echan, ctxt, fin)
+		return nil
+	})
 }
