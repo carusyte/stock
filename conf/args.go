@@ -25,6 +25,7 @@ const (
 //Data sources
 const (
 	THS          string = "ths"
+	THS_CDP      string = "ths.cdp"
 	TENCENT      string = "tencent"
 	TENCENT_CSRC string = "tencent.csrc"
 	TENCENT_TC   string = "tencent.tc"

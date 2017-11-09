@@ -14,7 +14,20 @@ import (
 	"github.com/knq/chromedp/runner"
 	"sync"
 	"time"
+	"reflect"
 )
+
+func TestTimeoutContext(t *testing.T) {
+	ctxt, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	select {
+	case d := <-ctxt.Done():
+		log.Printf("Done() returns: %+v\n", d)
+		e := ctxt.Err()
+		log.Printf("%+v\n%+v\n", reflect.TypeOf(e), e)
+	}
+	log.Printf("end")
+}
 
 func TestFinMark(t *testing.T) {
 	s := &model.Stock{}
