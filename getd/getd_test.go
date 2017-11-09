@@ -98,7 +98,7 @@ func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Po
 	var today, all string
 	chr := make(chan bool)
 	go func(chr chan bool) {
-		err := pr.Run(ctxt, buildActions(code, tab, &today, &all))
+		err := pr.Run(ctxt, buildActions4test(code, tab, &today, &all))
 		if err != nil {
 			fmt.Println(err)
 			chr <- false
@@ -126,7 +126,7 @@ func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Po
 	}
 }
 
-func buildActions(code string, tab model.DBTab, today, all *string) cdp.Tasks {
+func buildActions4test(code string, tab model.DBTab, today, all *string) cdp.Tasks {
 	//url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
 	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
 	fin := make(chan bool)
@@ -143,9 +143,9 @@ func buildActions(code string, tab model.DBTab, today, all *string) cdp.Tasks {
 			cdp.WaitVisible(`#changeFq`, cdp.ByID),
 			cdp.Click(`#changeFq`, cdp.ByID),
 			cdp.WaitVisible(`a[data-type="Bfq"]`, cdp.ByQuery),
-			captureData(today, all, mcode, fin),
+			captureData4test(today, all, mcode, fin),
 			cdp.Click(`a[data-type="Bfq"]`, cdp.ByQuery),
-			wait(fin),
+			wait4test(fin),
 		}
 	case model.KLINE_DAY:
 		mcode = "01"
@@ -160,13 +160,13 @@ func buildActions(code string, tab model.DBTab, today, all *string) cdp.Tasks {
 	return cdp.Tasks{
 		cdp.Navigate(url),
 		cdp.WaitVisible(sel, cdp.ByQuery),
-		captureData(today, all, mcode, fin),
+		captureData4test(today, all, mcode, fin),
 		cdp.Click(sel, cdp.ByQuery),
-		wait(fin),
+		wait4test(fin),
 	}
 }
 
-func wait(fin chan bool) cdp.Action {
+func wait4test(fin chan bool) cdp.Action {
 	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
 		select {
 		case <-time.After(100 * time.Second):
@@ -179,7 +179,7 @@ func wait(fin chan bool) cdp.Action {
 	})
 }
 
-func captureData(today, all *string, mcode string, fin chan bool) cdp.Action {
+func captureData4test(today, all *string, mcode string, fin chan bool) cdp.Action {
 	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
 		echan := h.Listen(cdptypes.EventNetworkRequestWillBeSent, cdptypes.EventNetworkLoadingFinished,
 			cdptypes.EventNetworkLoadingFailed)

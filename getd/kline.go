@@ -1,21 +1,15 @@
 package getd
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 	"math"
-	"sort"
-	"time"
-	"database/sql"
 	"github.com/carusyte/stock/conf"
-	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 //Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
@@ -188,6 +182,8 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		}
 		if !suc {
 			break
+		} else {
+			logrus.Debugf("%s %+v kline fetched", stk.Code, t)
 		}
 	}
 	if suc {

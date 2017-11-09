@@ -44,6 +44,10 @@ type Arguments struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
 	}
+	ChromeDP struct{
+		Debug bool `mapstructure:"debug"`
+		Path string `mapstructure:"path"`
+	}
 	Datasource struct {
 		Kline    string `mapstructure:"kline"`
 		Index    string `mapstructure:"index"`

@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"bytes"
 	"math"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -199,22 +200,29 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 		runner.Flag("headless", true),
 		runner.Flag("no-default-browser-check", true),
 		runner.Flag("no-first-run", true),
-		runner.ExecPath(`/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary`),
+		runner.ExecPath(conf.Args.ChromeDP.Path),
 	)
 	if err != nil {
 		log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
 		return false, true, today, all
 	}
 	defer pr.Release()
-	err = pr.Run(ctxt, buildActions(code, tab, &today, &all))
-	if err != nil {
-		log.Printf("chrome runner reported error: %+v\n", err)
-		return false, true, today, all
-	}
+	chr := make(chan bool)
+	go func(chr chan bool) {
+		err = pr.Run(ctxt, buildActions(code, tab, &today, &all))
+		if err != nil {
+			log.Printf("chrome runner reported error: %+v\n", err)
+			chr <- false
+		} else {
+			chr <- true
+		}
+	}(chr)
 	select {
+	case ok = <-chr:
+		return ok, !ok, today, all
 	case <-ctxt.Done():
 		if ctxt.Err() != nil {
-			log.Printf("%s timeout waiting for network response", code)
+			log.Printf("%s timeout waiting for chromedp response", code)
 			return false, true, today, all
 		}
 		return true, false, today, all
@@ -346,8 +354,11 @@ func getCdpPool() *chromedp.Pool {
 		return pool
 	}
 	var err error
-	//cdp.PoolLog(nil, nil, log.Printf)
-	pool, err = chromedp.NewPool()
+	opt := make([]chromedp.PoolOption, 0, 4)
+	if conf.Args.ChromeDP.Debug {
+		opt = append(opt, chromedp.PoolLog(logrus.Infof, logrus.Debugf, logrus.Errorf))
+	}
+	pool, err = chromedp.NewPool(opt...)
 	if err != nil {
 		log.Fatal(err)
 	}
