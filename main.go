@@ -51,9 +51,9 @@ func hidBlueKdjSt() {
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.8
 	r1r2 := score.Combine(r1, r2).Sort().Shrink(int(c))
-	r1r2.Weight = 0
+	r1r2.Weight = 0.33
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
-	r3.Weight = 1
+	r3.Weight = 0.67
 	log.Printf("\n%+v", kdjst.Get(idxc, -1, false))
 	fmt.Println()
 	log.Printf("\n%+v", score.Combine(r1r2, r3).Sort())

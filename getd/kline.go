@@ -183,7 +183,7 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		if !suc {
 			break
 		} else {
-			logrus.Debugf("%s %+v kline fetched", stk.Code, t)
+			logrus.Debugf("%s %+v fetched", stk.Code, t)
 		}
 	}
 	if suc {
@@ -263,15 +263,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			code = q.Code
 		}
 
-		tran, e := dbmap.Begin()
-		util.CheckErr(e, "failed to start transaction")
-
 		// delete stale records first
 		lklid++
-		_, e = tran.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+		_, e := dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
 		if e != nil {
 			log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
-			tran.Rollback()
 			panic(code)
 		}
 
@@ -281,14 +277,12 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
 			"(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
-		_, e = tran.Exec(stmt, valueArgs...)
+		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
-			tran.Rollback()
 			fmt.Println(e)
 			log.Panicf("%s failed to bulk insert %s", code, table)
 		}
 		c = len(quotes)
-		tran.Commit()
 	}
 	return
 }
