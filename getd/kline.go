@@ -18,7 +18,7 @@ func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks)
 	defer cleanup()
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
-	wf := make(chan int, MAX_CONCURRENCY)
+	wf := make(chan int, conf.Args.Concurrency)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)

@@ -16,7 +16,6 @@ import (
 const (
 	HIST_DATA_SIZE    = 200
 	JOB_CAPACITY      = global.JOB_CAPACITY
-	MAX_CONCURRENCY   = global.MAX_CONCURRENCY
 	KDJ_FD_PRUNE_PREC = 0.99
 	KDJ_PRUNE_RATE    = 0.1
 )

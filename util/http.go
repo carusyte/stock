@@ -55,8 +55,9 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 			log.Panic(err)
 		}
 
-		req.Header.Set("Accept", "*/*")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,"+
+			"application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6")
 		req.Header.Set("Cache-Control", "no-cache")
 		req.Header.Set("Connection", "keep-alive")
 		//req.Header.Set("Cookie", "searchGuide=sg; "+
@@ -67,9 +68,10 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 			req.Header.Set("Host", host)
 		}
 		req.Header.Set("Pragma", "no-cache")
-		//req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"+
-			" AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+		req.Header.Set("User-Agent",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) "+
+				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36")
 		if headers != nil && len(headers) > 0 {
 			for k, hv := range headers {
 				req.Header.Set(k, hv)
