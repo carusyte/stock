@@ -4,20 +4,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"math"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
-	"log"
-	"math"
-	"net/http"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
-	"strconv"
 )
 
 func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
@@ -57,7 +58,7 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mo
 			ok, r := parse10jqkBonus(stock)
 			//ok, r := ParseIfengBonus(stock)
 			if ok {
-				chrstk  <- stock
+				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Second * 1)
@@ -97,7 +98,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 	//parse column index
 	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRegDate, iXdxrDate, iProgress, iPayoutRatio,
-	iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+		iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	doc.Find(`#bonus_table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
@@ -225,8 +226,8 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 					c, e = dbmap.SelectNullFloat("select close from kline_d_n "+
 						"where code = ? and date < ? order by klid desc limit "+
 						"1", x.Code, date)
-					util.CheckErrNop(e, x.Code + " failed to query close from "+
-						"kline_d_n the day before "+ date)
+					util.CheckErrNop(e, x.Code+" failed to query close from "+
+						"kline_d_n the day before "+date)
 					if e == nil {
 						price = c.Float64
 					}
@@ -366,8 +367,8 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 	}
 }
 
-//get finance info
-func GetFinance(stocks *model.Stocks) (rstks *model.Stocks){
+//GetFinance get finance info from server
+func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting Finance info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -395,9 +396,271 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks){
 	return
 }
 
-func GetPerfPrediction(stocks *model.Stocks) (rstks *model.Stocks){
-	//TODO get financial performance prediction
-	panic("implement me")
+//GetPerfPrediction get financial performance prediction
+func GetPerfPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
+	log.Println("getting financial prediction...")
+	var wg sync.WaitGroup
+	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, chrstk)
+	for i := 0; i < global.MAX_CONCURRENCY; i++ {
+		wg.Add(1)
+		go parseFinPredictPage(chstk, &wg, chrstk)
+	}
+	for _, s := range stocks.List {
+		chstk <- s
+	}
+	close(chstk)
+	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d finance prediction info updated", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
+}
+
+func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
+	defer wg.Done()
+	urlt := `http://basic.10jqka.com.cn/%s/worth.html`
+	RETRIES := 5
+	for stock := range chstk {
+		url := fmt.Sprintf(urlt, stock.Code)
+		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
+			ok, r := doParseFinPredictPage(url, stock.Code)
+			if ok {
+				chrstk <- stock
+				break
+			} else if r {
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				time.Sleep(time.Second * 1)
+				continue
+			} else {
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				break
+			}
+		}
+	}
+}
+
+func doParseFinPredictPage(url string, code string) (ok, retry bool) {
+	var (
+		res *http.Response
+		doc *goquery.Document
+		e   error
+	)
+	// Load the URL
+	res, e = util.HttpGetResp(url)
+	if e != nil {
+		log.Printf("%s, http failed, giving up %s", code, url)
+		return false, false
+	}
+	defer res.Body.Close()
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+	// parse body using goquery
+	doc, e = goquery.NewDocumentFromReader(utfBody)
+	if e != nil {
+		log.Printf("%s failed to read from response body, retrying...", code)
+		return false, true
+	}
+	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p`).Text()) {
+		log.Printf("%s no prediction", code)
+		return true, false
+	}
+	//parse column index
+	iYear, iNum, iMin, iAvg, iMax, iIndAvg := -1, -1, -1, -1, -1, -1
+	doc.Find(`#forecast div.bd div.clearfix div.fl.yjyc table thead tr`).Each(func(i int, s *goquery.Selection) {
+		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
+			v := s2.Text()
+			switch v {
+			case "年度":
+				iYear = j
+			case "预测机构数":
+				iNum = j
+			case "最小值":
+				iMin = j
+			case "均值":
+				iAvg = j
+			case "最大值":
+				iMax = j
+			case "行业平均数":
+				iIndAvg = j
+			default:
+				log.Printf("unidentified column header in EPS predict table %s : %s", url, v)
+			}
+		})
+	})
+	if iYear == -1 {
+		log.Printf("%s unable to parse eps prediction table", url)
+		return true, false
+	}
+	fpMap := make(map[string]*model.FinPredict)
+	doc.Find("#forecast div.bd div.clearfix div.fl.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
+		fp := newFinPredict(code)
+		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
+			v := s2.Text()
+			if "--" != v {
+				switch j {
+				case iYear:
+					fp.Year = strings.TrimSpace(v)
+				case iNum:
+					fp.EpsNum = util.Str2Inull(v)
+				case iMin:
+					fp.EpsMin = util.Str2Fnull(v)
+				case iAvg:
+					fp.EpsAvg = util.Str2Fnull(v)
+				case iMax:
+					fp.EpsMax = util.Str2Fnull(v)
+				case iIndAvg:
+					fp.EpsIndAvg = util.Str2Fnull(v)
+				default:
+					log.Printf("unidentified column value in eps table %s : %s", url, v)
+				}
+			}
+		})
+		if fp.Year == "" {
+			log.Printf("%s eps year not found in %s", code, url)
+		} else {
+			fpMap[fp.Year] = fp
+		}
+		d, t := util.TimeStr()
+		fp.Udate.Valid = true
+		fp.Utime.Valid = true
+		fp.Udate.String = d
+		fp.Utime.String = t
+	})
+	//TODO parse np table
+	//reset column index
+	iYear, iNum, iMin, iAvg, iMax, iIndAvg = -1, -1, -1, -1, -1, -1
+	doc.Find(`#forecast div.bd div.clearfix div.fr.yjyc table thead tr`).Each(func(i int, s *goquery.Selection) {
+		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
+			v := s2.Text()
+			switch v {
+			case "年度":
+				iYear = j
+			case "预测机构数":
+				iNum = j
+			case "最小值":
+				iMin = j
+			case "均值":
+				iAvg = j
+			case "最大值":
+				iMax = j
+			case "行业平均数":
+				iIndAvg = j
+			default:
+				log.Printf("unidentified column header in NP predict table %s : %s", url, v)
+			}
+		})
+	})
+	if iYear == -1 {
+		log.Printf("%s unable to parse np prediction table", url)
+		return true, false
+	}
+
+	doc.Find("#forecast div.bd div.clearfix div.fr.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
+		fp := newFinPredict(code)
+		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
+			v := s2.Text()
+			if "--" != v {
+				switch j {
+				case iYear:
+					fp.Year = strings.TrimSpace(v)
+				case iNum:
+					fp.NpNum = util.Str2Inull(v)
+				case iMin:
+					fp.NpMin = util.Str2Fnull(v)
+				case iAvg:
+					fp.NpAvg = util.Str2Fnull(v)
+				case iMax:
+					fp.NpMax = util.Str2Fnull(v)
+				case iIndAvg:
+					fp.NpIndAvg = util.Str2Fnull(v)
+				default:
+					log.Printf("unidentified column value in np table %s : %s", url, v)
+				}
+			}
+		})
+		if fp.Year == "" {
+			log.Printf("%s np year not found in %s", code, url)
+		} else {
+			if efp, ok := fpMap[fp.Year]; ok {
+				efp.NpAvg = fp.NpAvg
+				efp.NpIndAvg = fp.NpIndAvg
+				efp.NpNum = fp.NpNum
+				efp.NpMax = fp.NpMax
+				efp.NpMin = fp.NpMin
+			} else {
+				d, t := util.TimeStr()
+				fp.Udate.Valid = true
+				fp.Utime.Valid = true
+				fp.Udate.String = d
+				fp.Utime.String = t
+				fpMap[fp.Year] = fp
+			}
+		}
+	})
+	// no records found, return normally
+	if len(fpMap) == 0 {
+		return true, false
+	}
+	//update to database
+	valueStrings := make([]string, 0, len(fpMap))
+	valueArgs := make([]interface{}, 0, len(fpMap)*14)
+	for _, fp := range fpMap {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?")
+		valueArgs = append(valueArgs, fp.Code)
+		valueArgs = append(valueArgs, fp.Year)
+		valueArgs = append(valueArgs, fp.EpsAvg)
+		valueArgs = append(valueArgs, fp.EpsIndAvg)
+		valueArgs = append(valueArgs, fp.EpsNum)
+		valueArgs = append(valueArgs, fp.EpsMax)
+		valueArgs = append(valueArgs, fp.EpsMin)
+		valueArgs = append(valueArgs, fp.NpAvg)
+		valueArgs = append(valueArgs, fp.NpIndAvg)
+		valueArgs = append(valueArgs, fp.NpNum)
+		valueArgs = append(valueArgs, fp.NpMax)
+		valueArgs = append(valueArgs, fp.NpMin)
+		valueArgs = append(valueArgs, fp.Udate)
+		valueArgs = append(valueArgs, fp.Utime)
+	}
+	//TODO adapt sql
+	stmt := fmt.Sprintf("INSERT INTO fin_predict (code,year,eps_avg,eps_ind_avg,eps_num,"+
+		"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES"+
+		" %s"+
+		" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
+		"(eps_yoy),gpm=values(gpm),"+
+		"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
+		"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
+		"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
+		"roe_yoy=values(roe_yoy),roe_dlt=values(roe_dlt),"+
+		"udpps=values(udpps),udpps_yoy=values(udpps_yoy),udate=values(udate),utime=values(utime)",
+		strings.Join(valueStrings, ","))
+	_, err := global.Dbmap.Exec(stmt, valueArgs...)
+	util.CheckErr(err, code+": failed to bulk update finance")
+	return true, false
+}
+
+func newFinPredict(code string) *model.FinPredict {
+	fp := new(model.FinPredict)
+	fp.Code = code
+	fp.EpsAvg = sql.NullFloat64{0, false}
+	fp.EpsIndAvg = sql.NullFloat64{0, false}
+	fp.EpsNum = sql.NullInt64{0, false}
+	fp.EpsMax = sql.NullFloat64{0, false}
+	fp.EpsMin = sql.NullFloat64{0, false}
+	fp.NpAvg = sql.NullFloat64{0, false}
+	fp.NpIndAvg = sql.NullFloat64{0, false}
+	fp.NpNum = sql.NullInt64{0, false}
+	fp.NpMax = sql.NullFloat64{0, false}
+	fp.NpMin = sql.NullFloat64{0, false}
+	return fp
 }
 
 func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {

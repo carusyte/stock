@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/carusyte/stock/util"
 	"log"
-	"strings"
-	"strconv"
-	"github.com/pkg/errors"
 	"math"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/carusyte/stock/util"
+	"github.com/pkg/errors"
 	"gopkg.in/gorp.v2"
 )
 
@@ -127,7 +128,7 @@ func (l *Stocks) SetMarket(m string) {
 	}
 }
 
-func (l *Stocks) Add(stks ... *Stock) {
+func (l *Stocks) Add(stks ...*Stock) {
 	if stks == nil || len(stks) == 0 {
 		return
 	}
@@ -344,7 +345,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	m := f.(map[string]interface{})
 	titles := m["title"].([]interface{})
 	iEps, iNp, iNpYoy, iNpRg, iNpAdn, iNpAdnYoy, iGr, iGrYoy, iNavps, iRoe, iRoeDlt, iAlr, iCrps, iUdpps, iOcfps,
-	iGpm, iNpm, iItr := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+		iGpm, iNpm, iItr := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	mNp, mNpAdn, mGr := .1, .1, .1
 	for i, t := range titles {
 		v := fmt.Sprintf("%s", t)
@@ -844,7 +845,7 @@ type XQJson struct {
 	Stock struct {
 		Symbol string
 	}
-	Success string
+	Success   string
 	Chartlist []struct {
 		Volume                                                                                int64
 		Open, High, Low, Close, Chg, Percent, Turnrate, Ma5, Ma10, Ma20, Ma30, Dif, Dea, Macd float64
@@ -1008,7 +1009,25 @@ func (qj *QQJson) Save(dbmap *gorp.DbMap, table string) {
 	}
 }
 
-// Index List
+// IdxLst Index List
 type IdxLst struct {
 	Code, Name, Src string
+}
+
+// FinPredict financial prediction
+type FinPredict struct {
+	Code      string
+	Year      string
+	EpsNum    sql.NullInt64
+	EpsMin    sql.NullFloat64
+	EpsAvg    sql.NullFloat64
+	EpsMax    sql.NullFloat64
+	EpsIndAvg sql.NullFloat64
+	NpNum     sql.NullInt64
+	NpMin     sql.NullFloat64
+	NpAvg     sql.NullFloat64
+	NpMax     sql.NullFloat64
+	NpIndAvg  sql.NullFloat64
+	Udate     sql.NullString
+	Utime     sql.NullString
 }

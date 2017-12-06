@@ -4,8 +4,16 @@
 package main
 
 import (
+	"github.com/carusyte/stock/getd"
 	"flag"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/carusyte/stock/db"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
@@ -13,12 +21,6 @@ import (
 	"github.com/gchaincl/dotsql"
 	"github.com/ziutek/mymysql/mysql"
 	"gopkg.in/gorp.v2"
-	"io"
-	"log"
-	"os"
-	"strings"
-	"sync"
-	"time"
 )
 
 const APP_VERSION = "0.1"
@@ -44,7 +46,7 @@ func main() {
 		end := time.Now().Format("2006-01-02 15:04:05")
 		dur := time.Since(start).Seconds()
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
-			" on duplicate key update start=?, end=?, dur=?", "CALK_TOTAL", ss, end, dur, ss, end, dur, )
+			" on duplicate key update start=?, end=?, dur=?", "CALK_TOTAL", ss, end, dur, ss, end, dur)
 		log.Printf("Complete. Time Elapsed: %f sec", time.Since(start).Seconds())
 	}()
 
@@ -126,7 +128,7 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 		end := time.Now().Format("2006-01-02 15:04:05")
 		dur := time.Since(start).Seconds()
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
-			" on duplicate key update start=?, end=?, dur=?", s.Code, ss, end, dur, ss, end, dur, )
+			" on duplicate key update start=?, end=?, dur=?", s.Code, ss, end, dur, ss, end, dur)
 	}()
 	supplementKlid(s.Code)
 	klines, mxw, mxm := getKlines(s)
@@ -153,7 +155,7 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 		tw, err := time.Parse("2006-01-02", klw.Date)
 		checkErr(err, "failed to parse date in KlineW "+klw.Date)
 
-		if (int(t.Weekday()) <= lastWeekDay || t.Add(-1 * time.Duration(7) * time.Hour * 24).After(tw)) &&
+		if (int(t.Weekday()) <= lastWeekDay || t.Add(-1*time.Duration(7)*time.Hour*24).After(tw)) &&
 			((mxw != nil && k.Date[:10] > mxw.Date) || mxw == nil) {
 
 			klw = newKlinew()
@@ -323,11 +325,11 @@ func batchInsert(code string, klinesw []*model.KlineW, klinesm []*model.KlineM,
 	indc []*model.Indicator, indcw []*model.IndicatorW, indcm []*model.IndicatorM) {
 	cklw := binsKlw(klinesw)
 	cklm := binsKlm(klinesm)
-	cindc := binsIndc(indc)
-	cindw := binsIndcw(indcw)
-	cindm := binsIndcm(indcm)
-	log.Printf("%s saved to database, wk[%d], mo[%d], ind[%d], indw[%d], indm[%d]", code, cklw, cklm,
-		cindc, cindw, cindm)
+	// cindc := getd.binsIndc(kdjw, "indicator_d")
+	// cindw := getd.binsIndc(kdjw, "indicator_w")
+	// cindm := getd.binsIndc(kdjw, "indicator_m")
+	// log.Printf("%s saved to database, wk[%d], mo[%d], ind[%d], indw[%d], indm[%d]", code, cklw, cklm,
+	// 	cindc, cindw, cindm)
 }
 
 func binsKlm(klinesm []*model.KlineM) (c int) {

@@ -1,9 +1,9 @@
 package advisor
 
 import (
-	"github.com/carusyte/stock/util"
 	"reflect"
-	"gopkg.in/gorp.v2"
+
+	"github.com/carusyte/stock/util"
 )
 
 type cols struct {
