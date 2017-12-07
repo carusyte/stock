@@ -469,6 +469,10 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
 	}
+	return parseFinPredictTables(doc, url, code)
+}
+
+func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry bool) {
 	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p`).Text()) {
 		log.Printf("%s no prediction", code)
 		return true, false
@@ -498,7 +502,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	})
 	if iYear == -1 {
 		log.Printf("%s unable to parse eps prediction table", url)
-		return true, false
+		return false, true
 	}
 	fpMap := make(map[string]*model.FinPredict)
 	doc.Find("#forecast div.bd div.clearfix div.fl.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
@@ -561,9 +565,8 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	})
 	if iYear == -1 {
 		log.Printf("%s unable to parse np prediction table", url)
-		return true, false
+		return false, true
 	}
-
 	doc.Find("#forecast div.bd div.clearfix div.fr.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
 		fp := newFinPredict(code)
 		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
@@ -606,8 +609,11 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 			}
 		}
 	})
+	//TODO parse detail table
+	
 	// no records found, return normally
 	if len(fpMap) == 0 {
+		log.Printf("no prediction data %s", url)
 		return true, false
 	}
 	//update to database
@@ -617,33 +623,29 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?")
 		valueArgs = append(valueArgs, fp.Code)
 		valueArgs = append(valueArgs, fp.Year)
-		valueArgs = append(valueArgs, fp.EpsAvg)
-		valueArgs = append(valueArgs, fp.EpsIndAvg)
 		valueArgs = append(valueArgs, fp.EpsNum)
-		valueArgs = append(valueArgs, fp.EpsMax)
 		valueArgs = append(valueArgs, fp.EpsMin)
-		valueArgs = append(valueArgs, fp.NpAvg)
-		valueArgs = append(valueArgs, fp.NpIndAvg)
+		valueArgs = append(valueArgs, fp.EpsAvg)
+		valueArgs = append(valueArgs, fp.EpsMax)
+		valueArgs = append(valueArgs, fp.EpsIndAvg)
 		valueArgs = append(valueArgs, fp.NpNum)
-		valueArgs = append(valueArgs, fp.NpMax)
 		valueArgs = append(valueArgs, fp.NpMin)
+		valueArgs = append(valueArgs, fp.NpAvg)
+		valueArgs = append(valueArgs, fp.NpMax)
+		valueArgs = append(valueArgs, fp.NpIndAvg)
 		valueArgs = append(valueArgs, fp.Udate)
 		valueArgs = append(valueArgs, fp.Utime)
 	}
-	//TODO adapt sql
-	stmt := fmt.Sprintf("INSERT INTO fin_predict (code,year,eps_avg,eps_ind_avg,eps_num,"+
-		"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES"+
+	stmt := fmt.Sprintf("INSERT INTO fin_predict (code,year,eps_num,eps_min,eps_avg,eps_max,eps_ind_avg,np_num,"+
+		"np_min,np_avg,np_max,np_ind_avg,udate,utime) VALUES"+
 		" %s"+
-		" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
-		"(eps_yoy),gpm=values(gpm),"+
-		"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
-		"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
-		"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
-		"roe_yoy=values(roe_yoy),roe_dlt=values(roe_dlt),"+
-		"udpps=values(udpps),udpps_yoy=values(udpps_yoy),udate=values(udate),utime=values(utime)",
+		" on duplicate key update eps_num=values(eps_num),eps_min=values(eps_min),eps_avg=values(eps_avg),"+
+		"eps_max=values(eps_max),eps_ind_avg=values(eps_ind_avg),"+
+		"np_num=values(np_num),np_min=values(np_min),np_avg=values(np_avg),np_max=values(np_max),"+
+		"np_ind_avg=values(np_ind_avg),udate=values(udate),utime=values(utime)",
 		strings.Join(valueStrings, ","))
 	_, err := global.Dbmap.Exec(stmt, valueArgs...)
-	util.CheckErr(err, code+": failed to bulk update finance")
+	util.CheckErr(err, code+": failed to bulk update fin_predict")
 	return true, false
 }
 
