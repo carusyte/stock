@@ -1,24 +1,26 @@
 package score
 
 import (
+	"database/sql"
+	"fmt"
+	"math"
+	"reflect"
+	"strings"
+
+	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"fmt"
-	"reflect"
-	"github.com/pkg/errors"
-	"math"
-	"database/sql"
 	"github.com/montanaflynn/stats"
-	"strings"
-	"github.com/carusyte/stock/indc"
+	"github.com/pkg/errors"
 )
 
-// Search for stocks with excellent financial report.
-// Medium to long term model, mainly focusing on yearly financial reports.
+// BlueChip Search for stocks with excellent financial report.
+// Medium to long term model, mainly focusing on yearly financial reports and predictions.
 // · Low latest P/E
 // · Growing EPS each year and quarter
 // · Low latest P/U
 // · Growing UDPPS each year and quarter
+// · Promissing financial prediction
 // Get warnings/penalties if:
 // · High latest DAR
 // · High average DAR
@@ -36,7 +38,8 @@ type BlueChip struct {
 	DarAvg     float64
 }
 
-// The assessment metric diverts, some of them are somewhat negative correlated.
+//TODO add fin predict evalutation
+// The assessment metric diverts, some of them are somewhat negatively correlated.
 const (
 	SCORE_PE     = 20.
 	SCORE_GEPS   = 60.
@@ -45,6 +48,7 @@ const (
 	PENALTY_DAR  = 15.
 	//PE_THRESHOLD        = 50.
 	//BLUE_HIST_SPAN_YEAR = 3.
+	ExtFinPredict = 25.
 )
 
 func (b *BlueChip) Geta() (r *Result) {
@@ -78,6 +82,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		item.Profiles[b.Id()] = ip
 		ip.FieldHolder = ib
 
+		//TODO add fin prediction score and sum total score using WsScore
 		hist := getFinHist(ib.Code)
 		ip.Score += sEps(ib, hist)
 		ip.Score += sUdpps(ib, hist)
@@ -129,7 +134,7 @@ func pDar(b *BlueChip, hist []*model.Finance) (s float64) {
 		b.Dars = dars
 	}
 	var (
-		avg float64 = 0
+		avg float64
 		e   error
 	)
 	if len(dars) > 2 {
@@ -207,7 +212,7 @@ func sUdpps(b *BlueChip, fins []*model.Finance) (s float64) {
 	if len(ngrs) > 0 {
 		navg, e := stats.Mean(ngrs)
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", ngrs))
-		s -= SCORE_GUDPPS * math.Min(1, math.Pow(navg / -70., 3.12))
+		s -= SCORE_GUDPPS * math.Min(1, math.Pow(navg/-70., 3.12))
 		s = math.Max(0, s)
 	}
 	return
@@ -278,7 +283,7 @@ func sEps(b *BlueChip, hist []*model.Finance) (s float64) {
 	if len(ngrs) > 0 {
 		navg, e := stats.Mean(ngrs)
 		util.CheckErr(e, "failed to calculate mean for "+fmt.Sprintf("%+v", ngrs))
-		s -= 0.7 * SCORE_GEPS * math.Min(1, math.Pow(navg / -80., 3.12))
+		s -= 0.7 * SCORE_GEPS * math.Min(1, math.Pow(navg/-80., 3.12))
 		s = math.Max(0, s)
 	}
 	return

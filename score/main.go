@@ -1,13 +1,14 @@
 package score
 
 import (
-	"github.com/carusyte/stock/global"
-	"log"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"bytes"
-	"github.com/olekukonko/tablewriter"
+	"log"
 	"sort"
+
+	"github.com/carusyte/stock/global"
+	"github.com/olekukonko/tablewriter"
 )
 
 const JOB_CAPACITY = global.JOB_CAPACITY
@@ -33,11 +34,11 @@ func (p *Profile) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-func (it *Item) Cmt(c ... string) {
+func (it *Item) Cmt(c ...string) {
 	it.Comments = append(it.Comments, c...)
 }
 
-func (it *Item) Cmtf(f string, i ... interface{}) {
+func (it *Item) Cmtf(f string, i ...interface{}) {
 	it.Cmt(fmt.Sprintf(f, i...))
 }
 
@@ -84,7 +85,7 @@ func (r *Result) Stocks() []string {
 	return s
 }
 
-func (r *Result) AddItem(items ... *Item) {
+func (r *Result) AddItem(items ...*Item) {
 	if r.Items == nil {
 		r.Items = make([]*Item, len(items))
 		for i := range items {
@@ -154,7 +155,7 @@ func (r *Result) String() string {
 	hd = append(hd, fns...)
 	hd = append(hd, "Comments")
 
-	table.SetHeader(hd);
+	table.SetHeader(hd)
 	data := make([][]string, len(r.Items))
 	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
@@ -200,7 +201,7 @@ type FieldHolder interface {
 	GetFieldStr(name string) string
 }
 
-func Combine(rs ... *Result) (fr *Result) {
+func Combine(rs ...*Result) (fr *Result) {
 	fr = &Result{}
 	for i, r := range rs {
 		fr.PfIds = append(fr.PfIds, r.PfIds...)
@@ -240,4 +241,36 @@ func Combine(rs ... *Result) (fr *Result) {
 		}
 	}
 	return
+}
+
+type wsPair struct {
+	w, s float64
+}
+
+//WtScore weighted score recorder
+type WtScore map[string]*wsPair
+
+//Add adds score and weight using the specified item id.
+// if an item with the provided id already exists, its
+// weight and score will be replaced.
+func (ws WtScore) Add(id string, score, weight float64) {
+	if wsp, ok := ws[id]; ok {
+		wsp.w += weight - wsp.w
+		wsp.s = score
+	} else {
+		ws[id] = &wsPair{w: weight, s: score}
+	}
+}
+
+//Sum sums the resulting weighted total score by calculating
+// the provided weight and sub-score item pairs.
+func (ws WtScore) Sum() float64 {
+	n, d := .0, .0
+	for _, wsp := range ws {
+		n += wsp.w * wsp.s
+		if wsp.w > 0 {
+			d += wsp.w
+		}
+	}
+	return n / d
 }
