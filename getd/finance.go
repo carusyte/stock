@@ -396,8 +396,8 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	return
 }
 
-//GetPerfPrediction get financial performance prediction
-func GetPerfPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
+//GetFinPrediction get financial performance prediction
+func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting financial prediction...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -478,13 +478,11 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		return true, false
 	}
 	//parse column index
-	iYear, iNum, iMin, iAvg, iMax, iIndAvg := -1, -1, -1, -1, -1, -1
+	iNum, iMin, iAvg, iMax, iIndAvg := -1, -1, -1, -1, -1
 	doc.Find(`#forecast div.bd div.clearfix div.fl.yjyc table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
 			switch v {
-			case "年度":
-				iYear = j
 			case "预测机构数":
 				iNum = j
 			case "最小值":
@@ -500,19 +498,18 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			}
 		})
 	})
-	if iYear == -1 {
+	if iNum == -1 {
 		log.Printf("%s unable to parse eps prediction table", url)
 		return false, true
 	}
 	fpMap := make(map[string]*model.FinPredict)
 	doc.Find("#forecast div.bd div.clearfix div.fl.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
 		fp := newFinPredict(code)
+		fp.Year = strings.TrimSpace(s.Find("th").Text())
 		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
-			if "--" != v {
-				switch j {
-				case iYear:
-					fp.Year = strings.TrimSpace(v)
+			if "-" != v {
+				switch j + 1 {
 				case iNum:
 					fp.EpsNum = util.Str2Inull(v)
 				case iMin:
@@ -541,13 +538,11 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 	})
 	//TODO parse np table
 	//reset column index
-	iYear, iNum, iMin, iAvg, iMax, iIndAvg = -1, -1, -1, -1, -1, -1
+	iNum, iMin, iAvg, iMax, iIndAvg = -1, -1, -1, -1, -1
 	doc.Find(`#forecast div.bd div.clearfix div.fr.yjyc table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
 			switch v {
-			case "年度":
-				iYear = j
 			case "预测机构数":
 				iNum = j
 			case "最小值":
@@ -563,18 +558,17 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			}
 		})
 	})
-	if iYear == -1 {
+	if iNum == -1 {
 		log.Printf("%s unable to parse np prediction table", url)
 		return false, true
 	}
 	doc.Find("#forecast div.bd div.clearfix div.fr.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
 		fp := newFinPredict(code)
+		fp.Year = strings.TrimSpace(s.Find("th").Text())
 		s.Find("td").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
-			if "--" != v {
-				switch j {
-				case iYear:
-					fp.Year = strings.TrimSpace(v)
+			if "-" != v {
+				switch j + 1 {
 				case iNum:
 					fp.NpNum = util.Str2Inull(v)
 				case iMin:
@@ -609,8 +603,6 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			}
 		}
 	})
-	//TODO parse detail table
-	
 	// no records found, return normally
 	if len(fpMap) == 0 {
 		log.Printf("no prediction data %s", url)
@@ -620,7 +612,7 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 	valueStrings := make([]string, 0, len(fpMap))
 	valueArgs := make([]interface{}, 0, len(fpMap)*14)
 	for _, fp := range fpMap {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs, fp.Code)
 		valueArgs = append(valueArgs, fp.Year)
 		valueArgs = append(valueArgs, fp.EpsNum)

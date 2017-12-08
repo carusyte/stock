@@ -1,10 +1,11 @@
 package getd
 
 import (
+	"fmt"
 	"log"
 	"time"
+
 	"github.com/carusyte/stock/model"
-	"fmt"
 	"github.com/carusyte/stock/util"
 )
 
@@ -22,6 +23,10 @@ func Get() {
 	stgkdn := time.Now()
 	stks = GetKlines(stks, model.KLINE_DAY_NR)
 	stop("GET_KLINES_DN", stgkdn)
+
+	fipr := time.Now()
+	stks = GetFinPrediction(stks)
+	stop("GET_FIN_PREDICT", fipr)
 
 	stgx := time.Now()
 	stks = GetXDXRs(stks)
@@ -43,7 +48,7 @@ func Get() {
 	stop("UPD_BASICS", updb)
 
 	// Add indices pending to be calculated
-	for _, idx := range sucIdx{
+	for _, idx := range sucIdx {
 		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
 	}
 	stci := time.Now()

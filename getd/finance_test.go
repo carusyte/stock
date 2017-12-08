@@ -1,8 +1,10 @@
 package getd
 
 import (
-	"github.com/carusyte/stock/model"
+	"reflect"
 	"testing"
+
+	"github.com/carusyte/stock/model"
 )
 
 func TestGetFinance(t *testing.T) {
@@ -26,4 +28,31 @@ func TestGetXDXR(t *testing.T) {
 	s.Name = "兴业证券"
 	ss.Add(s)
 	GetXDXRs(ss)
+}
+
+func TestGetPerfPrediction(t *testing.T) {
+	stk := &model.Stock{}
+	stk.Code = "600383"
+	stk.Name = "金地集团"
+	s := &model.Stocks{}
+	s.Add(stk)
+
+	tests := []struct {
+		name      string
+		args      *model.Stocks
+		wantRstks *model.Stocks
+	}{
+		{
+			name:      "normal",
+			args:      s,
+			wantRstks: s,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if gotRstks := GetFinPrediction(tt.args); !reflect.DeepEqual(gotRstks, tt.wantRstks) {
+				t.Errorf("GetPerfPrediction() = %v, want %v", gotRstks, tt.wantRstks)
+			}
+		})
+	}
 }
