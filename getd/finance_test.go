@@ -56,3 +56,12 @@ func TestGetPerfPrediction(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAllPerfPrediction(t *testing.T) {
+	stks := StocksDb()
+	allstk := new(model.Stocks)
+	for _, s := range stks {
+		allstk.Add(s)
+	}
+	GetFinPrediction(allstk)
+}

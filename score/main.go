@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 
 	"github.com/carusyte/stock/global"
@@ -272,5 +273,5 @@ func (ws WtScore) Sum() float64 {
 			d += wsp.w
 		}
 	}
-	return n / d
+	return math.Max(.0, n/d)
 }

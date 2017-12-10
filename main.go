@@ -18,7 +18,7 @@ func main() {
 	//kdjFirst()
 	//holistic()
 	//BLUE
-	//blue()
+	// blue()
 	//blueKdjv()
 	hidBlueKdjSt()
 	//kdjOnly()

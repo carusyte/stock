@@ -207,8 +207,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 func calcDyrDpr(xdxrs []*model.Xdxr) {
 	for _, x := range xdxrs {
 		if x.Divi.Valid && x.Divi.Float64 > 0 {
-			var price float64 = math.NaN()
-			var date string = time.Now().Format("2006-01-02")
+			price := math.NaN()
+			date := time.Now().Format("2006-01-02")
 			// use normal price at reg_date or impl_date, if not found, use the day before that day
 			if x.RegDate.Valid {
 				date = x.RegDate.String
@@ -608,6 +608,9 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		log.Printf("no prediction data %s", url)
 		return true, false
 	}
+	// clean stale data before insert
+	_, err := dbmap.Exec("delete from fin_predict where code = ?", code)
+	util.CheckErr(err, code+": failed to delete stale fin_predict")
 	//update to database
 	valueStrings := make([]string, 0, len(fpMap))
 	valueArgs := make([]interface{}, 0, len(fpMap)*14)
@@ -636,7 +639,7 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		"np_num=values(np_num),np_min=values(np_min),np_avg=values(np_avg),np_max=values(np_max),"+
 		"np_ind_avg=values(np_ind_avg),udate=values(udate),utime=values(utime)",
 		strings.Join(valueStrings, ","))
-	_, err := global.Dbmap.Exec(stmt, valueArgs...)
+	_, err = global.Dbmap.Exec(stmt, valueArgs...)
 	util.CheckErr(err, code+": failed to bulk update fin_predict")
 	return true, false
 }

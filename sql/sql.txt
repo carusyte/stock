@@ -316,6 +316,15 @@ WHERE
     code = ?
 ORDER BY year DESC
 
+-- name: FIN_PREDICT
+SELECT
+    *
+FROM
+    fin_predict
+WHERE
+    code = ?
+ORDER BY year ASC
+
 -- name: UPD_XPRICE
 UPDATE xdxr x
        INNER JOIN

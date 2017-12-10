@@ -1018,16 +1018,20 @@ type IdxLst struct {
 type FinPredict struct {
 	Code      string
 	Year      string
-	EpsNum    sql.NullInt64
-	EpsMin    sql.NullFloat64
-	EpsAvg    sql.NullFloat64
-	EpsMax    sql.NullFloat64
-	EpsIndAvg sql.NullFloat64
-	NpNum     sql.NullInt64
-	NpMin     sql.NullFloat64
-	NpAvg     sql.NullFloat64
-	NpMax     sql.NullFloat64
-	NpIndAvg  sql.NullFloat64
+	EpsNum    sql.NullInt64   `db:"eps_num"`
+	EpsMin    sql.NullFloat64 `db:"eps_min"`
+	EpsAvg    sql.NullFloat64 `db:"eps_avg"`
+	EpsMax    sql.NullFloat64 `db:"eps_max"`
+	EpsIndAvg sql.NullFloat64 `db:"eps_ind_avg"`
+	EpsUpRt   sql.NullFloat64 `db:"eps_up_rt"`
+	EpsDnRt   sql.NullFloat64 `db:"eps_dn_rt"`
+	NpUpRt    sql.NullFloat64 `db:"np_up_rt"`
+	NpDnRt    sql.NullFloat64 `db:"np_dn_rt"`
+	NpNum     sql.NullInt64   `db:"np_num"`
+	NpMin     sql.NullFloat64 `db:"np_min"`
+	NpAvg     sql.NullFloat64 `db:"np_avg"`
+	NpMax     sql.NullFloat64 `db:"np_max"`
+	NpIndAvg  sql.NullFloat64 `db:"np_ind_avg"`
 	Udate     sql.NullString
 	Utime     sql.NullString
 }
