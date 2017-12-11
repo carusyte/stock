@@ -13,14 +13,14 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	getData()
+	// getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
 	//BLUE
-	// blue()
+	blue()
 	//blueKdjv()
-	hidBlueKdjSt()
+	// hidBlueKdjSt()
 	//kdjOnly()
 	//renewKdjStats(true)
 	//test()

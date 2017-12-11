@@ -19,6 +19,7 @@ import (
 // Medium to long term model, mainly focusing on annualy financial reports and predictions.
 // · Low latest P/E
 // · Growing EPS each year and quarter
+// · Growing ROE each year and quarter
 // · Low latest P/U
 // · Growing UDPPS each year and quarter
 // · Promissing financial prediction
@@ -31,6 +32,7 @@ type BlueChip struct {
 	Pe         sql.NullFloat64 `db:"pe"`
 	Pu         sql.NullFloat64 `db:"pu"`
 	Po         sql.NullFloat64 `db:"po"`
+	RoeGrs     []float64
 	EpsGrs     []float64
 	EpsGrAvg   float64
 	UdppsGrs   []float64
@@ -46,14 +48,19 @@ type BlueChip struct {
 //TODO add fin predict evalutation
 // The assessment metric diverts, some of them are somewhat negatively correlated.
 const (
-	WeightPE     = 20.
-	WeightGEPS   = 60.
-	WeightPU     = 10.
-	WeightGUDPPS = 10.
+	WeightPE     = 25.
+	WeightGEPS   = 30.
+	WeightROE    = 35.
+	WeightPU     = 5.
+	WeightGUDPPS = 5.
 	PenaltyDAR   = 15.
 	//PE_THRESHOLD        = 50.
 	//BLUE_HIST_SPAN_YEAR = 3.
 	ExtWeightFinPredict = 50.
+)
+
+var (
+	roeLambda = math.NaN()
 )
 
 //Geta evaluate scores of all stock
@@ -96,7 +103,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		sFinPredict(ib, hist, wts)
 		sEps(ib, hist, wts)
 		//TODO add ROE evaluation
-		// sROE(ib, hist, wts)
+		sROE(ib, hist, wts)
 		sUdpps(ib, hist, wts)
 		pDar(ib, hist, wts)
 		ip.Score = wts.Sum()
@@ -116,6 +123,90 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 	}
 	r.Shrink(limit)
 	return
+}
+
+// Score based on self ROE growth rate.
+// get max score if historical data is complete for 5 years
+// and MA growth rate >= the best ranked 25% roe annual growth rate.
+func sROE(b *BlueChip, finHist []*model.Finance, wts WtScore) {
+	var (
+		ygrs []float64
+		qgrs []float64
+		qcnt = 0
+		s    = 0.
+	)
+	for _, f := range finHist {
+		if "12" == f.Year[5:7] {
+			if f.RoeYoy.Valid {
+				ygrs = append(ygrs, f.RoeYoy.Float64)
+			} else {
+				ygrs = append(ygrs, math.NaN())
+			}
+		} else if len(ygrs) == 0 {
+			qcnt++
+			if f.RoeYoy.Valid {
+				qgrs = append(qgrs, f.RoeYoy.Float64)
+			}
+		}
+		if len(ygrs) >= 5 {
+			break
+		}
+	}
+	wtHead := 0.
+	if qcnt > 0 {
+		wtHead = 0.05 * float64(qcnt)
+		if len(qgrs) > 0 {
+			roeGr, e := stats.Mean(qgrs)
+			util.CheckErr(e, fmt.Sprintf("%s failed to calculate mean for quarterly roe: %+v",
+				b.Code, qgrs))
+			s = wtHead * scoreRoeGr(roeGr)
+		}
+	}
+	cf := 0.
+	if len(ygrs) >= 5 {
+		cf = 1.
+	} else if len(ygrs) > 0 {
+		cf = 0.05*float64(len(ygrs)) + 0.75
+	}
+	maRoeGr := 0.
+	for i := len(ygrs) - 1; i >= 0; i-- {
+		if math.IsNaN(ygrs[i]) {
+			maRoeGr = math.NaN()
+			break
+		}
+		if i < len(ygrs)-1 {
+			maRoeGr = (maRoeGr + ygrs[i]) / 2.
+		} else {
+			maRoeGr = ygrs[i]
+		}
+	}
+	if !math.IsNaN(maRoeGr) {
+		s += (1 - wtHead) * cf * scoreRoeGr(maRoeGr)
+	}
+	wts.Add("ROE_GR", s, WeightROE)
+	b.RoeGrs = ygrs
+}
+
+func scoreRoeGr(roe float64) (s float64) {
+	lambda := getRoeLambda(0.25)
+	if roe >= lambda {
+		return 100.
+	} else if roe <= 0. {
+		return 0.
+	}
+	return  100. * math.Log((math.E-1.)/lambda*roe+1.)
+}
+
+func getRoeLambda(pos float64) float64 {
+	if math.IsNaN(roeLambda) {
+		c, e := dbmap.SelectInt("select count(*) from finance where year like '%-12-%'")
+		util.CheckErr(e, "failed to count annual report in finance table")
+		rank := math.Ceil(pos * float64(c))
+		roeLambda, e = dbmap.SelectFloat("select roe_yoy from finance "+
+			"where year like '%-12-%' order by roe_yoy desc limit 1 offset ?", int(rank))
+		util.CheckErr(e, "failed to query roe lambda from finance table")
+	}
+	return roeLambda
 }
 
 // Score based on the financial performance prediction.
@@ -639,7 +730,7 @@ func (*BlueChip) Id() string {
 
 //Fields returns the related fields assessed by this scorer
 func (b *BlueChip) Fields() []string {
-	return []string{"Latest Report", "PE", "EPS GR%",
+	return []string{"Latest Report", "PE", "ROE GR%", "EPS GR%",
 		"EPS GR AVG%", "PU", "UDPPS GR%", "UDPPS GR AVG%",
 		"EPS Predict", "EPS Industry", "NP Predict", "NP Industry",
 		"DARS%", "DAR AVG%"}
@@ -655,6 +746,8 @@ func (b *BlueChip) GetFieldStr(name string) string {
 			return fmt.Sprintf("%.2f", b.Pe.Float64)
 		}
 		return "NaN"
+	case "ROE GR%":
+		return util.SprintFa(b.RoeGrs, "%.2f", "/", 5)
 	case "EPS GR%":
 		return util.SprintFa(b.EpsGrs, "%.2f", "/", 4)
 	case "EPS GR AVG%":
@@ -696,6 +789,7 @@ func (b *BlueChip) Description() string {
 		"Medium to long term model, mainly focusing on annualy financial reports." +
 		"· Low latest P/E, normally below 50" +
 		"· Growing EPS each year and quarter, up to 3 years" +
+		"· Growing ROE each year and quarter" +
 		"· Low latest P/U" +
 		"· Growing UDPPS each year and quarter, up to 3 years" +
 		"· Promissing financial prediction" +

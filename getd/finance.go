@@ -712,7 +712,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	}
 	fr.SetCode(code)
 	fins := fr.Items
-	supplement(fins)
+	organize(fins)
 	//update to database
 	if len(fins) > 0 {
 		valueStrings := make([]string, 0, len(fins))
@@ -765,8 +765,16 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 }
 
 //Supplement data such as EpsYoy, OcfpsYoy, RoeYoy, UdppsYoy etc.
-func supplement(fins []*model.Finance) {
-	for i, f := range fins {
+func organize(fins []*model.Finance) {
+	for i := 0; i < len(fins); i++ {
+		f := fins[i]
+		if len(f.Year) == 0 {
+			if i < len(fins)-1 {
+				fins = append(fins[:i], fins[i+1:]...)
+			} else {
+				fins = fins[:i]
+			}
+		}
 		if i >= len(fins)-1 {
 			break
 		}
