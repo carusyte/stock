@@ -483,6 +483,8 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
 			switch v {
+			case "年度":
+				//do nothing
 			case "预测机构数":
 				iNum = j
 			case "最小值":
@@ -765,7 +767,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 }
 
 //Supplement data such as EpsYoy, OcfpsYoy, RoeYoy, UdppsYoy etc.
-func organize(fins []*model.Finance) []*model.Finance{
+func organize(fins []*model.Finance) []*model.Finance {
 	for i := 0; i < len(fins); i++ {
 		f := fins[i]
 		if len(f.Year) == 0 {
