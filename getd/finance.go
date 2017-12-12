@@ -712,7 +712,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	}
 	fr.SetCode(code)
 	fins := fr.Items
-	organize(fins)
+	fins = organize(fins)
 	//update to database
 	if len(fins) > 0 {
 		valueStrings := make([]string, 0, len(fins))
@@ -765,7 +765,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 }
 
 //Supplement data such as EpsYoy, OcfpsYoy, RoeYoy, UdppsYoy etc.
-func organize(fins []*model.Finance) {
+func organize(fins []*model.Finance) []*model.Finance{
 	for i := 0; i < len(fins); i++ {
 		f := fins[i]
 		if len(f.Year) == 0 {
@@ -774,6 +774,7 @@ func organize(fins []*model.Finance) {
 			} else {
 				fins = fins[:i]
 			}
+			continue
 		}
 		if i >= len(fins)-1 {
 			break
@@ -825,6 +826,7 @@ func organize(fins []*model.Finance) {
 			}
 		}
 	}
+	return fins
 }
 
 func findByYear(fins []*model.Finance, year string) *model.Finance {

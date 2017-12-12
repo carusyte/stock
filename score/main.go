@@ -12,7 +12,13 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-const JOB_CAPACITY = global.JOB_CAPACITY
+type mark string
+
+const (
+	JOB_CAPACITY      = global.JOB_CAPACITY
+	StarMark     mark = `☆`
+	WarnMark     mark = `⚠`
+)
 
 //TODO TRY 30/60 min ENE
 var (
@@ -56,6 +62,7 @@ type Item struct {
 	Comments []string
 	//Score evaluation aspect
 	Profiles map[string]*Profile
+	Marks    []mark
 }
 
 func (i *Item) String() string {
@@ -103,12 +110,22 @@ func (r *Result) AddItem(items ...*Item) {
 	}
 }
 
+//Sort the result items by its score in descending order.
 func (r *Result) Sort() (rr *Result) {
 	rr = r
 	sort.Slice(r.Items, func(i, j int) bool {
 		return r.Items[i].Score > r.Items[j].Score
 	})
 	return
+}
+
+//Mark the leading n items in the result, which will be display
+// in the "Rank" column with the specified marks.
+func (r *Result) Mark(n int, m ...mark) (rr *Result) {
+	for i := 0; i < n; i++ {
+		r.Items[i].Marks = m
+	}
+	return r
 }
 
 func (r *Result) Shrink(num int) *Result {
@@ -130,8 +147,8 @@ func (r *Result) String() string {
 		return ""
 	}
 
-	var bytes bytes.Buffer
-	table := tablewriter.NewWriter(&bytes)
+	var buffer bytes.Buffer
+	table := tablewriter.NewWriter(&buffer)
 	table.SetRowLine(true)
 
 	hd := make([]string, 0, 16)
@@ -160,10 +177,18 @@ func (r *Result) String() string {
 	data := make([][]string, len(r.Items))
 	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
-		data[i][0] = fmt.Sprintf("%d", i+1)
+		if len(itm.Marks) > 0 {
+			var marks bytes.Buffer
+			for _, m := range itm.Marks {
+				marks.WriteString(string(m))
+			}
+			data[i][0] = fmt.Sprintf(" %s  %d", marks.String(), i+1)
+		} else {
+			data[i][0] = fmt.Sprintf("%d", i+1)
+		}
 		data[i][1] = itm.Code
-		data[i][2] = itm.Name
-		data[i][3] = itm.Industry
+		data[i][2] = itm.Name + " "
+		data[i][3] = itm.Industry + " "
 		data[i][4] = fmt.Sprintf("%.2f", itm.Score)
 		for pfid, p := range itm.Profiles {
 			data[i][pfidx[pfid]] = fmt.Sprintf("%.2f", p.Score)
@@ -187,9 +212,11 @@ func (r *Result) String() string {
 	table.AppendBulk(data)
 	table.Render()
 
-	return bytes.String()
+	return buffer.String()
 }
 
+//Scorer evaluates the quality of stocks according to various metrics and
+// produces result indicating the quantified value of each stock.
 type Scorer interface {
 	Get(stock []string, limit int, ranked bool) (r *Result)
 	Geta() (r *Result)
@@ -234,6 +261,7 @@ func Combine(rs ...*Result) (fr *Result) {
 					if mi.Industry == "" && it.Industry != "" {
 						mi.Industry = it.Industry
 					}
+					mi.Marks = append(mi.Marks, it.Marks...)
 				} else {
 					fr.AddItem(it)
 					it.Score *= r.Weight
