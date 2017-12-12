@@ -328,3 +328,26 @@ CREATE TABLE `xdxr` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `fin_predict` (
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
+  `year` varchar(4) NOT NULL COMMENT '年份',
+  `eps_num` int(11) DEFAULT NULL COMMENT '每股收益预测机构数',
+  `eps_min` double DEFAULT NULL COMMENT '每股收益最小值',
+  `eps_avg` double DEFAULT NULL COMMENT '每股收益平均值',
+  `eps_max` double DEFAULT NULL COMMENT '每股收益最大值',
+  `eps_ind_avg` double DEFAULT NULL COMMENT '每股收益行业平均',
+  `eps_up_rt` double DEFAULT NULL COMMENT 'EPS预测上调机构占比',
+  `eps_dn_rt` double DEFAULT NULL COMMENT 'EPS预测下调机构占比',
+  `np_num` int(11) DEFAULT NULL COMMENT '净利润预测机构数',
+  `np_min` double DEFAULT NULL COMMENT '净利润最小值 (亿元）',
+  `np_avg` double DEFAULT NULL COMMENT '净利润平均值 (亿元）',
+  `np_max` double DEFAULT NULL COMMENT '净利润最大值 (亿元）',
+  `np_ind_avg` double DEFAULT NULL COMMENT '净利润行业平均值 (亿元）',
+  `np_up_rt` double DEFAULT NULL COMMENT '净利润预测上调机构占比',
+  `np_dn_rt` double DEFAULT NULL COMMENT '净利润预测下调机构占比',
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
+
