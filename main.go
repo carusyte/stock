@@ -1,9 +1,9 @@
 package main
 
 import (
-	"math"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/carusyte/stock/getd"
@@ -14,7 +14,7 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	// getData()
+	getData()
 	//pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
@@ -52,7 +52,7 @@ func hidBlueKdjSt() {
 	r2 := new(score.BlueChip).Geta()
 	r2.Weight = 0.8
 	r1r2 := score.Combine(r1, r2).Sort().Shrink(int(c))
-	n := int(math.Max(1, math.Floor(float64(c) * 0.05)))
+	n := int(math.Max(1, math.Floor(float64(c)*0.05)))
 	r1r2.Mark(n, score.StarMark)
 	r1r2.Weight = 0.33
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
