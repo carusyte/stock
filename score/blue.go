@@ -102,7 +102,6 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		hist := getFinHist(ib.Code)
 		sFinPredict(ib, hist, wts)
 		sEps(ib, hist, wts)
-		//TODO add ROE evaluation
 		sROE(ib, hist, wts)
 		sUdpps(ib, hist, wts)
 		pDar(ib, hist, wts)
@@ -194,7 +193,7 @@ func scoreRoeGr(roe float64) (s float64) {
 	} else if roe <= 0. {
 		return 0.
 	}
-	return  100. * math.Log((math.E-1.)/lambda*roe+1.)
+	return 100. * math.Log((math.E-1.)/lambda*roe+1.)
 }
 
 func getRoeLambda(pos float64) float64 {
@@ -233,6 +232,14 @@ func sFinPredict(b *BlueChip, finHist []*model.Finance, wts WtScore) {
 		}
 	}
 	if larp != nil {
+		// remove overlap year
+		if strings.HasPrefix(larp.Year, fps[0].Year) {
+			if len(fps) > 1 {
+				fps = fps[1:]
+			} else {
+				return
+			}
+		}
 		nextPerf(larp, fps, wts, epsCofa, npCofa, 0.35)
 	}
 	compIndustrial(fps, wts, epsCofa, npCofa, 0.25)
