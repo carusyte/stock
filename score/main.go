@@ -182,13 +182,13 @@ func (r *Result) String() string {
 			for _, m := range itm.Marks {
 				marks.WriteString(string(m))
 			}
-			data[i][0] = fmt.Sprintf(" %s  %d", marks.String(), i+1)
+			data[i][0] = fmt.Sprintf(" %s %d", marks.String(), i+1)
 		} else {
 			data[i][0] = fmt.Sprintf("%d", i+1)
 		}
 		data[i][1] = itm.Code
-		data[i][2] = itm.Name + " "
-		data[i][3] = itm.Industry + " "
+		data[i][2] = itm.Name
+		data[i][3] = itm.Industry
 		data[i][4] = fmt.Sprintf("%.2f", itm.Score)
 		for pfid, p := range itm.Profiles {
 			data[i][pfidx[pfid]] = fmt.Sprintf("%.2f", p.Score)
