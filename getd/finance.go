@@ -545,6 +545,8 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
 			switch v {
+			case "年度":
+				//do nothing
 			case "预测机构数":
 				iNum = j
 			case "最小值":
