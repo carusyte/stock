@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/carusyte/stock/conf"
+
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/score"
@@ -48,15 +50,15 @@ func hidBlueKdjSt() {
 		log.Println(e)
 	}
 	r1 := new(score.HiD).Geta()
-	r1.Weight = 0.2
+	r1.Weight = 1. - conf.Args.Scorer.BlueWeight
 	r2 := new(score.BlueChip).Geta()
-	r2.Weight = 0.8
+	r2.Weight = conf.Args.Scorer.BlueWeight
 	r1r2 := score.Combine(r1, r2).Sort().Shrink(int(c))
-	n := int(math.Max(1, math.Floor(float64(c)*0.05)))
+	n := int(math.Max(1, math.Floor(float64(c)*conf.Args.Scorer.HidBlueStarRatio)))
 	r1r2.Mark(n, score.StarMark)
-	r1r2.Weight = 0.33
+	r1r2.Weight = 1. - conf.Args.Scorer.KdjStWeight
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
-	r3.Weight = 0.67
+	r3.Weight = conf.Args.Scorer.KdjStWeight
 	log.Printf("\n%+v", kdjst.Get(idxc, -1, false))
 	fmt.Println()
 	log.Printf("\n%+v", score.Combine(r1r2, r3).Sort())

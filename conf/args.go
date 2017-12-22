@@ -39,20 +39,25 @@ type Arguments struct {
 	Concurrency       int      `mapstructure:"concurrency"`
 	CPUUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string   `mapstructure:"log_level"`
-	SqlFileLocation   string   `mapstructure:"sql_file_location"`
-	Kdjv struct {
+	SQLFileLocation   string   `mapstructure:"sql_file_location"`
+	Kdjv              struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
 	}
-	ChromeDP struct{
-		Debug bool `mapstructure:"debug"`
-		Path string `mapstructure:"path"`
+	ChromeDP struct {
+		Debug bool   `mapstructure:"debug"`
+		Path  string `mapstructure:"path"`
 	}
 	Datasource struct {
-		Kline    string `mapstructure:"kline"`
-		Index    string `mapstructure:"index"`
-		Industry string `mapstructure:"industry"`
+		Kline     string `mapstructure:"kline"`
+		Index     string `mapstructure:"index"`
+		Industry  string `mapstructure:"industry"`
 		ThsCookie string `mapstructure:"ths_cookie"`
+	}
+	Scorer struct {
+		BlueWeight       float64 `mapstructure:"blue_weight"`
+		KdjStWeight      float64 `mapstructure:"kdjst_weight"`
+		HidBlueStarRatio float64 `mapstructure:"hid_blue_star_ratio"`
 	}
 	//TODO logrus log to file
 }
@@ -104,4 +109,7 @@ func setDefaults() {
 	Args.Datasource.Kline = THS
 	Args.Datasource.Index = TENCENT
 	Args.Datasource.Industry = TENCENT_CSRC
+	Args.Scorer.BlueWeight = 0.8
+	Args.Scorer.KdjStWeight = 0.67
+	Args.Scorer.HidBlueStarRatio = 0.05
 }

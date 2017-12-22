@@ -1,25 +1,26 @@
 package getd
 
 import (
-	"time"
-	"fmt"
+	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
-	"sort"
+	"fmt"
 	"log"
+	"math"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/carusyte/stock/conf"
-	"strconv"
 	"github.com/knq/chromedp"
-	"github.com/knq/chromedp/runner"
-	"context"
 	"github.com/knq/chromedp/cdp"
 	"github.com/knq/chromedp/cdp/network"
-	"strings"
+	"github.com/knq/chromedp/runner"
 	"github.com/pkg/errors"
-	"database/sql"
-	"bytes"
-	"math"
 	"github.com/sirupsen/logrus"
 )
 
@@ -66,7 +67,7 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (
 	quotes []*model.Quote, suc, retry bool) {
 	var (
-		code       string = stk.Code
+		code       = stk.Code
 		today, all []byte
 		kall       model.KlAll
 		ktoday     model.Ktoday
@@ -956,7 +957,7 @@ func strip(data []byte) []byte {
 	s := bytes.IndexByte(data, 40)     // first occurrence of '('
 	e := bytes.LastIndexByte(data, 41) // last occurrence of ')'
 	if s >= 0 && e >= 0 {
-		return data[s+1:e]
+		return data[s+1 : e]
 	} else {
 		return data
 	}

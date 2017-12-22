@@ -1,24 +1,25 @@
 package getd
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/carusyte/stock/model"
-	"github.com/carusyte/stock/util"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
+	"io/ioutil"
 	"log"
 	"strconv"
 	"strings"
 	"sync"
-	"encoding/json"
-	"bytes"
-	"archive/zip"
-	"encoding/xml"
-	"io/ioutil"
-	"github.com/carusyte/stock/global"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 func StocksDb() (allstk []*model.Stock) {
@@ -26,7 +27,7 @@ func StocksDb() (allstk []*model.Stock) {
 	return
 }
 
-func StocksDbByCode(code ... string) (stocks []*model.Stock) {
+func StocksDbByCode(code ...string) (stocks []*model.Stock) {
 	sql := fmt.Sprintf("select * from basics where code in (%s)", util.Join(code, ",", true))
 	_, e := dbmap.Select(&stocks, sql)
 	if e != nil {
@@ -47,7 +48,6 @@ func StocksDbTo(target interface{}) {
 func GetStockInfo() (allstk *model.Stocks) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
-	//TODO need to get industry or area info
 	allstk = getFromExchanges()
 	log.Printf("total stocks: %d", allstk.Size())
 
@@ -96,6 +96,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			switch conf.Args.Datasource.Industry {
 			case conf.TENCENT_TC, conf.TENCENT_CSRC:
 				ok, r = tcIndustry(stock)
+				//TODO get industry from THS
 			}
 			if ok {
 				chrstk <- stock

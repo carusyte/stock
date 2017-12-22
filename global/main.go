@@ -1,14 +1,15 @@
 package global
 
 import (
-	"github.com/carusyte/stock/db"
-	"github.com/gchaincl/dotsql"
-	"gopkg.in/gorp.v2"
+	"fmt"
 	"io"
 	"log"
 	"os"
+
 	"github.com/carusyte/stock/conf"
-	"fmt"
+	"github.com/carusyte/stock/db"
+	"github.com/gchaincl/dotsql"
+	"gopkg.in/gorp.v2"
 )
 
 var (
@@ -41,8 +42,8 @@ func init() {
 	log.SetOutput(mw)
 	Dbmap = db.Get(true, false)
 	sqlp := "../sql/sql.txt"
-	if conf.Args.SqlFileLocation != "" {
-		sqlp = fmt.Sprintf("%s/sql.txt", conf.Args.SqlFileLocation)
+	if conf.Args.SQLFileLocation != "" {
+		sqlp = fmt.Sprintf("%s/sql.txt", conf.Args.SQLFileLocation)
 	}
 	if _, e = os.Stat(sqlp); e != nil {
 		pwd, _ := os.Getwd()
