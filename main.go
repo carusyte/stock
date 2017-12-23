@@ -16,7 +16,9 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	getData()
+	if conf.Args.Scorer.FetchData {
+		getData()
+	}
 	//pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()

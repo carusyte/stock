@@ -55,6 +55,7 @@ type Arguments struct {
 		ThsCookie string `mapstructure:"ths_cookie"`
 	}
 	Scorer struct {
+		FetchData        bool    `mapstructure:"fetch_data"`
 		BlueWeight       float64 `mapstructure:"blue_weight"`
 		KdjStWeight      float64 `mapstructure:"kdjst_weight"`
 		HidBlueStarRatio float64 `mapstructure:"hid_blue_star_ratio"`
@@ -109,6 +110,7 @@ func setDefaults() {
 	Args.Datasource.Kline = THS
 	Args.Datasource.Index = TENCENT
 	Args.Datasource.Industry = TENCENT_CSRC
+	Args.Scorer.FetchData = true
 	Args.Scorer.BlueWeight = 0.8
 	Args.Scorer.KdjStWeight = 0.67
 	Args.Scorer.HidBlueStarRatio = 0.05

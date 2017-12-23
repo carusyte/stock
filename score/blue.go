@@ -45,7 +45,6 @@ type BlueChip struct {
 	DarAvg     float64
 }
 
-//TODO add fin predict evalutation
 // The assessment metric diverts, some of them are somewhat negatively correlated.
 const (
 	WeightPE     = 25.
@@ -293,7 +292,6 @@ func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCof
 			break
 		}
 	}
-	//FIXME zero denominator issue
 	if larp != nil {
 		cntEps++
 		cntNp++
@@ -362,7 +360,6 @@ func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCof
 		s = 100. * math.Log(10.*(math.E-1.)*math.Sqrt(math.Pi+math.E)/(math.Pi*math.E)*maEps+1.)
 	}
 	wts.Add("FP_GR_EPS", s, ExtWeightFinPredict*wtPortion*avgWtEps*0.7)
-	//TODO calculates NP score
 	if maNp > max {
 		s = 100.
 	} else if maNp < 0. {
@@ -440,7 +437,7 @@ func compIndustrial(fps []*model.FinPredict, wts WtScore, epsCofa, npCofa []floa
 }
 
 // evaluation of next year performance prediction
-// max: >= pi/10 better than last year's eps growth rate & >= 0.5 better than last year's np growth rate
+// max: >= pi/10 better than last year's eps & np growth rate
 func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa, npCofa []float64, wtPortion float64) {
 	var (
 		fp          *model.FinPredict
@@ -459,9 +456,8 @@ func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa
 		}
 	}
 	if fp != nil {
-		s := 0.
 		if fp.EpsAvg.Valid && larp.Eps.Valid && larp.EpsYoy.Valid && fp.EpsAvg.Float64 > larp.Eps.Float64 {
-			ngr := 0.
+			s, ngr := 0., 0.
 			if larp.Eps.Float64 == 0. {
 				ngr = 100.
 			} else {
@@ -479,11 +475,11 @@ func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa
 				} else {
 					s = 100. * math.Log(10./math.Pi*(math.E-1.)*dgr+1.)
 				}
-				wts.Add("FP_NEXT_EPS", s, ExtWeightFinPredict*wtPortion*epscf*0.7)
 			}
+			wts.Add("FP_NEXT_EPS", s, ExtWeightFinPredict*wtPortion*epscf*0.7)
 		}
 		if fp.NpAvg.Valid && larp.Np.Valid && larp.NpYoy.Valid && fp.NpAvg.Float64 > larp.Np.Float64 {
-			ngr := 0.
+			s, ngr := 0., 0.
 			if larp.Np.Float64 == 0. {
 				ngr = 100.
 			} else {
@@ -496,13 +492,13 @@ func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa
 				} else {
 					dgr = (ngr - larp.NpYoy.Float64) / math.Abs(larp.NpYoy.Float64)
 				}
-				if dgr > 0.5 {
+				if dgr > math.Pi/10. {
 					s = 100.
 				} else {
-					s = 100. * math.Log(2*(math.E-1.)*dgr+1.)
+					s = 100. * math.Log(10./math.Pi*(math.E-1.)*dgr+1.)
 				}
-				wts.Add("FP_NEXT_NP", s, ExtWeightFinPredict*wtPortion*npcf*0.3)
 			}
+			wts.Add("FP_NEXT_NP", s, ExtWeightFinPredict*wtPortion*npcf*0.3)
 		}
 	}
 }
