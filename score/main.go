@@ -65,14 +65,16 @@ type Item struct {
 	Marks    []mark
 }
 
-func (i *Item) String() string {
-	j, e := json.Marshal(i)
+func (it *Item) String() string {
+	j, e := json.Marshal(it)
 	if e != nil {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
 }
 
+//Result is the scorer result that incorporates evaluation information and
+//provides convenient functions for manipulating them.
 type Result struct {
 	Items []*Item
 	//Code - Item map
@@ -81,8 +83,9 @@ type Result struct {
 	//Profile weights in total score
 	PfWts []float64
 	//Weight in parent result
-	Weight float64
-	Fields map[string][]string
+	Weight     float64
+	Fields     map[string][]string
+	Highlights map[string]bool
 }
 
 func (r *Result) Stocks() []string {
@@ -119,11 +122,29 @@ func (r *Result) Sort() (rr *Result) {
 	return
 }
 
-//Mark the leading n items in the result, which will be display
-// in the "Rank" column with the specified marks.
+//Mark mark the leading n (positive) or trailing n (negative) items in the result,
+//which will be display in the "Rank" column with the specified marks.
 func (r *Result) Mark(n int, m ...mark) (rr *Result) {
-	for i := 0; i < n; i++ {
-		r.Items[i].Marks = m
+	if n == 0 {
+		return r
+	} else if n > 0 {
+		for i := 0; i < n; i++ {
+			r.Items[i].Marks = m
+		}
+	} else {
+		p := len(r.Items) + n
+		for i := len(r.Items) - 1; i >= p; i-- {
+			r.Items[i].Marks = m
+		}
+	}
+	return r
+}
+
+//Highlight highlighted stocks will be printed before the rest.
+func (r *Result) Highlight(codes ...string) *Result {
+	r.Highlights = make(map[string]bool)
+	for _, c := range codes {
+		r.Highlights[c] = true
 	}
 	return r
 }
@@ -175,6 +196,7 @@ func (r *Result) String() string {
 
 	table.SetHeader(hd)
 	data := make([][]string, len(r.Items))
+	hdat := make([][]string, 0, 16)
 	for i, itm := range r.Items {
 		data[i] = make([]string, len(hd))
 		if len(itm.Marks) > 0 {
@@ -208,11 +230,23 @@ func (r *Result) String() string {
 			}
 		}
 		data[i][len(data[i])-1] = cmt
+		if _, ok := r.Highlights[itm.Code]; ok {
+			hdat = append(hdat, data[i])
+		}
 	}
 	table.AppendBulk(data)
 	table.Render()
-
-	return buffer.String()
+	var res bytes.Buffer
+	if len(hdat) > 0 {
+		htab := tablewriter.NewWriter(&res)
+		htab.SetRowLine(true)
+		htab.SetHeader(hd)
+		htab.AppendBulk(hdat)
+		htab.Render()
+		res.WriteString("\n")
+	}
+	res.Write(buffer.Bytes())
+	return res.String()
 }
 
 //Scorer evaluates the quality of stocks according to various metrics and
@@ -247,6 +281,7 @@ func Combine(rs ...*Result) (fr *Result) {
 			for _, it := range fr.Items {
 				it.Score *= r.Weight
 			}
+			fr.Highlights = r.Highlights
 		} else {
 			for _, it := range r.Items {
 				if mi, ok := fr.itMap[it.Code]; ok {
@@ -265,6 +300,11 @@ func Combine(rs ...*Result) (fr *Result) {
 				} else {
 					fr.AddItem(it)
 					it.Score *= r.Weight
+				}
+			}
+			if r.Highlights != nil {
+				for c := range r.Highlights {
+					fr.Highlights[c] = true
 				}
 			}
 		}

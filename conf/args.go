@@ -55,10 +55,13 @@ type Arguments struct {
 		ThsCookie string `mapstructure:"ths_cookie"`
 	}
 	Scorer struct {
-		FetchData        bool    `mapstructure:"fetch_data"`
-		BlueWeight       float64 `mapstructure:"blue_weight"`
-		KdjStWeight      float64 `mapstructure:"kdjst_weight"`
-		HidBlueStarRatio float64 `mapstructure:"hid_blue_star_ratio"`
+		Highlight            []string `mapstructure:"highlight"`
+		FetchData            bool     `mapstructure:"fetch_data"`
+		BlueWeight           float64  `mapstructure:"blue_weight"`
+		KdjStWeight          float64  `mapstructure:"kdjst_weight"`
+		HidBlueBaseRatio     float64  `mapstructure:"hid_blue_base_ratio"`
+		HidBlueStarRatio     float64  `mapstructure:"hid_blue_star_ratio"`
+		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	//TODO logrus log to file
 }
@@ -113,5 +116,7 @@ func setDefaults() {
 	Args.Scorer.FetchData = true
 	Args.Scorer.BlueWeight = 0.8
 	Args.Scorer.KdjStWeight = 0.67
+	Args.Scorer.HidBlueBaseRatio = 0.2
 	Args.Scorer.HidBlueStarRatio = 0.05
+	Args.Scorer.HidBlueRearWarnRatio = 0.1
 }

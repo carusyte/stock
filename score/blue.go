@@ -269,7 +269,7 @@ func sFinPredict(b *BlueChip, finHist []*model.Finance, wts WtScore) {
 
 // evaluate trend of prediction.
 // focuses on the growing rate of eps and np prediction.
-// max: pi*e/(10*sqrt(pi+e)) (around 0.35)
+// max: e/pi^pi (around 0.074)
 func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa, npCofa []float64, wtPortion float64) {
 	var (
 		maEps    = 0.
@@ -280,7 +280,7 @@ func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCof
 		cntEps   = 0.
 		cntNp    = 0.
 		s        = 0.
-		max      = (math.Pi * math.E) / (10. * math.Sqrt(math.Pi+math.E))
+		max      = math.E / math.Pow(math.Pi, math.Pi)
 	)
 	for i, fpt := range fps {
 		fpy, e := strconv.Atoi(fpt.Year)
@@ -357,7 +357,7 @@ func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCof
 	} else if maEps < 0. {
 		s = 0.
 	} else {
-		s = 100. * math.Log(10.*(math.E-1.)*math.Sqrt(math.Pi+math.E)/(math.Pi*math.E)*maEps+1.)
+		s = 100. * math.Log(1./max*(math.E-1.)*maEps+1.)
 	}
 	wts.Add("FP_GR_EPS", s, ExtWeightFinPredict*wtPortion*avgWtEps*0.7)
 	if maNp > max {
@@ -365,7 +365,7 @@ func perfTrend(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCof
 	} else if maNp < 0. {
 		s = 0.
 	} else {
-		s = 100. * math.Log(10.*(math.E-1.)*math.Sqrt(math.Pi+math.E)/(math.Pi*math.E)*maNp+1.)
+		s = 100. * math.Log(1./max*(math.E-1.)*maNp+1.)
 	}
 	wts.Add("FP_GR_NP", s, ExtWeightFinPredict*wtPortion*avgWtNp*0.3)
 }
@@ -437,11 +437,12 @@ func compIndustrial(fps []*model.FinPredict, wts WtScore, epsCofa, npCofa []floa
 }
 
 // evaluation of next year performance prediction
-// max: >= pi/10 better than last year's eps & np growth rate
+// max: >= e/pi^e better than last year's eps & np growth rate (around 0.12)
 func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa, npCofa []float64, wtPortion float64) {
 	var (
 		fp          *model.FinPredict
 		epscf, npcf float64
+		max         = math.E / math.Pow(math.Pi, math.E)
 	)
 	for i, fpt := range fps {
 		fpy, e := strconv.Atoi(fpt.Year)
@@ -470,10 +471,10 @@ func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa
 				} else {
 					dgr = (ngr - larp.EpsYoy.Float64) / math.Abs(larp.EpsYoy.Float64)
 				}
-				if dgr > math.Pi/10. {
+				if dgr > max {
 					s = 100.
 				} else {
-					s = 100. * math.Log(10./math.Pi*(math.E-1.)*dgr+1.)
+					s = 100. * math.Log(1./max*(math.E-1.)*dgr+1.)
 				}
 			}
 			wts.Add("FP_NEXT_EPS", s, ExtWeightFinPredict*wtPortion*epscf*0.7)
@@ -492,10 +493,10 @@ func nextPerf(larp *model.Finance, fps []*model.FinPredict, wts WtScore, epsCofa
 				} else {
 					dgr = (ngr - larp.NpYoy.Float64) / math.Abs(larp.NpYoy.Float64)
 				}
-				if dgr > math.Pi/10. {
+				if dgr > max {
 					s = 100.
 				} else {
-					s = 100. * math.Log(10./math.Pi*(math.E-1.)*dgr+1.)
+					s = 100. * math.Log(1./max*(math.E-1.)*dgr+1.)
 				}
 			}
 			wts.Add("FP_NEXT_NP", s, ExtWeightFinPredict*wtPortion*npcf*0.3)

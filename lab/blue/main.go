@@ -4,7 +4,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/score"
 )
 
@@ -26,11 +25,6 @@ func hidblue() {
 }
 
 func blue() {
-	s := &model.Stock{}
-	s.Code = "000651"
-	s.Name = "格力电器"
-	ss := new(model.Stocks)
-	ss.Add(s)
 	b := new(score.BlueChip)
-	b.Get([]string{"000651"}, -1, false)
+	b.Get([]string{"600104"}, -1, false)
 }
