@@ -16,10 +16,11 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/knq/chromedp"
-	"github.com/knq/chromedp/cdp"
-	"github.com/knq/chromedp/cdp/network"
-	"github.com/knq/chromedp/runner"
+	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/runner"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -270,7 +271,7 @@ func buildActions(code string, tab model.DBTab, today, all *[]byte) chromedp.Tas
 }
 
 func wait(fin chan error) chromedp.Action {
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Handler) error {
+	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
 		select {
 		case <-ctxt.Done():
 			return nil
@@ -281,12 +282,16 @@ func wait(fin chan error) chromedp.Action {
 }
 
 func captureData(today, all *[]byte, mcode string, fin chan error) chromedp.Action {
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Handler) error {
-		echan := h.Listen(cdp.EventNetworkRequestWillBeSent, cdp.EventNetworkLoadingFinished,
-			cdp.EventNetworkLoadingFailed)
+	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+		th, ok := h.(*chromedp.TargetHandler)
+		if !ok {
+			log.Fatal("invalid Executor type")
+		}
+		echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
+			cdproto.EventNetworkLoadingFailed)
 		go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
 			defer func() {
-				h.Release(echan)
+				th.Release(echan)
 				close(fin)
 			}()
 			var (

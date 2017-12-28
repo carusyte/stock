@@ -1,20 +1,22 @@
 package getd
 
 import (
-	"testing"
-	"github.com/carusyte/stock/model"
 	"context"
 	"fmt"
 	"log"
+	"testing"
 
-	cdp "github.com/knq/chromedp"
-	cdptypes "github.com/knq/chromedp/cdp"
-	"github.com/knq/chromedp/cdp/network"
+	"github.com/carusyte/stock/model"
+
+	"reflect"
 	"strings"
-	"github.com/knq/chromedp/runner"
 	"sync"
 	"time"
-	"reflect"
+
+	cdptypes "github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/network"
+	cdp "github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/runner"
 )
 
 func TestTimeoutContext(t *testing.T) {
