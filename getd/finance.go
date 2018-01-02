@@ -427,7 +427,8 @@ func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 
 func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
-	urlt := `http://basic.10jqka.com.cn/%s/worth.html`
+	// urlt := `http://basic.10jqka.com.cn/%s/worth.html`
+	urlt := `http://stockpage.10jqka.com.cn/%s/worth`
 	RETRIES := 5
 	for stock := range chstk {
 		url := fmt.Sprintf(urlt, stock.Code)
@@ -462,9 +463,9 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	}
 	defer res.Body.Close()
 	// Convert the designated charset HTML to utf-8 encoded HTML.
-	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+	// utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
 	// parse body using goquery
-	doc, e = goquery.NewDocumentFromReader(utfBody)
+	doc, e = goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true

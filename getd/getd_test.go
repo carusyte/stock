@@ -13,9 +13,10 @@ import (
 	"sync"
 	"time"
 
-	cdptypes "github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
-	cdp "github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/runner"
 )
 
@@ -43,7 +44,7 @@ func TestFinMark(t *testing.T) {
 func TestGetByCDP(t *testing.T) {
 	var (
 		err  error
-		pool *cdp.Pool
+		pool *chromedp.Pool
 		wg   sync.WaitGroup
 	)
 	// create context
@@ -51,7 +52,7 @@ func TestGetByCDP(t *testing.T) {
 	defer cancel()
 
 	//cdp.PoolLog(nil, nil, log.Printf)
-	pool, err = cdp.NewPool()
+	pool, err = chromedp.NewPool()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestGetByCDP(t *testing.T) {
 	wg.Wait()
 }
 
-func doGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Pool, wg *sync.WaitGroup) {
+func doGetData(code string, tab model.DBTab, ctxt context.Context, pool *chromedp.Pool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	retry := 5
 	for t := 0; t < retry; t++ {
@@ -85,7 +86,7 @@ func doGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Poo
 	}
 }
 
-func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Pool) (ok, retry bool) {
+func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *chromedp.Pool) (ok, retry bool) {
 	// get chrome runner from the pool
 	pr, err := pool.Allocate(ctxt,
 		runner.Flag("headless", true),
@@ -128,7 +129,7 @@ func tryGetData(code string, tab model.DBTab, ctxt context.Context, pool *cdp.Po
 	}
 }
 
-func buildActions4test(code string, tab model.DBTab, today, all *string) cdp.Tasks {
+func buildActions4test(code string, tab model.DBTab, today, all *string) chromedp.Tasks {
 	//url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
 	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
 	fin := make(chan bool)
@@ -138,15 +139,15 @@ func buildActions4test(code string, tab model.DBTab, today, all *string) cdp.Tas
 	case model.KLINE_DAY_NR:
 		sel = `a[hxc3-data-type="hxc3KlineQfqDay"]`
 		mcode = "00"
-		return cdp.Tasks{
-			cdp.Navigate(url),
-			cdp.WaitVisible(sel, cdp.ByQuery),
-			cdp.Click(sel, cdp.ByQuery),
-			cdp.WaitVisible(`#changeFq`, cdp.ByID),
-			cdp.Click(`#changeFq`, cdp.ByID),
-			cdp.WaitVisible(`a[data-type="Bfq"]`, cdp.ByQuery),
+		return chromedp.Tasks{
+			chromedp.Navigate(url),
+			chromedp.WaitVisible(sel, chromedp.ByQuery),
+			chromedp.Click(sel, chromedp.ByQuery),
+			chromedp.WaitVisible(`#changeFq`, chromedp.ByID),
+			chromedp.Click(`#changeFq`, chromedp.ByID),
+			chromedp.WaitVisible(`a[data-type="Bfq"]`, chromedp.ByQuery),
 			captureData4test(today, all, mcode, fin),
-			cdp.Click(`a[data-type="Bfq"]`, cdp.ByQuery),
+			chromedp.Click(`a[data-type="Bfq"]`, chromedp.ByQuery),
 			wait4test(fin),
 		}
 	case model.KLINE_DAY:
@@ -159,17 +160,17 @@ func buildActions4test(code string, tab model.DBTab, today, all *string) cdp.Tas
 		mcode = "21"
 		sel = `a[hxc3-data-type="hxc3KlineQfqMonth"]`
 	}
-	return cdp.Tasks{
-		cdp.Navigate(url),
-		cdp.WaitVisible(sel, cdp.ByQuery),
+	return chromedp.Tasks{
+		chromedp.Navigate(url),
+		chromedp.WaitVisible(sel, chromedp.ByQuery),
 		captureData4test(today, all, mcode, fin),
-		cdp.Click(sel, cdp.ByQuery),
+		chromedp.Click(sel, chromedp.ByQuery),
 		wait4test(fin),
 	}
 }
 
-func wait4test(fin chan bool) cdp.Action {
-	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
+func wait4test(fin chan bool) chromedp.Action {
+	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
 		select {
 		case <-time.After(100 * time.Second):
 			return nil
@@ -181,12 +182,13 @@ func wait4test(fin chan bool) cdp.Action {
 	})
 }
 
-func captureData4test(today, all *string, mcode string, fin chan bool) cdp.Action {
-	return cdp.ActionFunc(func(ctxt context.Context, h cdptypes.Handler) error {
-		echan := h.Listen(cdptypes.EventNetworkRequestWillBeSent, cdptypes.EventNetworkLoadingFinished,
-			cdptypes.EventNetworkLoadingFailed)
+func captureData4test(today, all *string, mcode string, fin chan bool) chromedp.Action {
+	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+		th := h.(*chromedp.TargetHandler)
+		echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
+			cdproto.EventNetworkLoadingFailed)
 		go func(echan <-chan interface{}, ctxt context.Context, fin chan bool) {
-			defer h.Release(echan)
+			defer th.Release(echan)
 			var (
 				reqIdTd, reqIdAll network.RequestID
 				urlTd, urlAll     string
