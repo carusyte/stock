@@ -45,14 +45,25 @@ type Arguments struct {
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
 	}
 	ChromeDP struct {
-		Debug bool   `mapstructure:"debug"`
-		Path  string `mapstructure:"path"`
+		Debug    bool   `mapstructure:"debug"`
+		Path     string `mapstructure:"path"`
+		PoolSize int    `mapstructure:"pool_size"`
 	}
 	Datasource struct {
-		Kline     string `mapstructure:"kline"`
-		Index     string `mapstructure:"index"`
-		Industry  string `mapstructure:"industry"`
-		ThsCookie string `mapstructure:"ths_cookie"`
+		Kline                 string `mapstructure:"kline"`
+		Index                 string `mapstructure:"index"`
+		Industry              string `mapstructure:"industry"`
+		ThsCookie             string `mapstructure:"ths_cookie"`
+		SkipStocks            bool   `mapstructure:"skip_stocks"`
+		SkipFinance           bool   `mapstructure:"skip_finance"`
+		SkipKlineDn           bool   `mapstructure:"skip_kline_dn"`
+		SkipFinancePrediction bool   `mapstructure:"skip_finance_prediction"`
+		SkipXdxr              bool   `mapstructure:"skip_xdxr"`
+		SkipKlines            bool   `mapstructure:"skip_klines"`
+		SkipIndices           bool   `mapstructure:"skip_indices"`
+		SkipBasicsUpdate      bool   `mapstructure:"skip_basics_update"`
+		SkipIndexCalculation  bool   `mapstructure:"skip_index_calculation"`
+		SkipFinMark           bool   `mapstructure:"skip_fin_mark"`
 	}
 	Scorer struct {
 		Highlight            []string `mapstructure:"highlight"`
@@ -119,4 +130,5 @@ func setDefaults() {
 	Args.Scorer.HidBlueBaseRatio = 0.2
 	Args.Scorer.HidBlueStarRatio = 0.05
 	Args.Scorer.HidBlueRearWarnRatio = 0.1
+	Args.ChromeDP.PoolSize = Args.Concurrency
 }

@@ -2,23 +2,24 @@ package getd
 
 import (
 	"fmt"
-	"github.com/carusyte/stock/model"
-	"github.com/carusyte/stock/util"
 	"log"
+	"math"
 	"strings"
 	"sync"
-	"math"
+
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
 	"github.com/sirupsen/logrus"
 )
 
-//Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
-func GetKlines(stks *model.Stocks, kltype ... model.DBTab) (rstks *model.Stocks) {
+//GetKlines Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
+func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
 	defer cleanup()
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
-	wf := make(chan int, conf.Args.Concurrency)
+	wf := make(chan int, conf.Args.ChromeDP.PoolSize)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
