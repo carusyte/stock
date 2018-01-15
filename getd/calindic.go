@@ -1,16 +1,18 @@
 package getd
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
+	"runtime"
+	"strings"
+	"sync"
+
+	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"log"
-	"strings"
-	"sync"
-	"github.com/carusyte/stock/global"
-	"database/sql"
-	"runtime"
 )
 
 const (
@@ -97,7 +99,9 @@ func calcWeek(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjw, "indicator_w")
 
-	SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
+	if conf.Args.Datasource.SampleKdjFeature {
+		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
+	}
 }
 
 func calcMonth(stk *model.Stock, offset int64) {
@@ -125,7 +129,9 @@ func calcMonth(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjm, "indicator_m")
 
-	SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
+	if conf.Args.Datasource.SampleKdjFeature {
+		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
+	}
 }
 
 func calcDay(stk *model.Stock, offset int64) {
@@ -154,7 +160,9 @@ func calcDay(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjd, "indicator_d")
 
-	SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
+	if conf.Args.Datasource.SampleKdjFeature {
+		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
+	}
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {

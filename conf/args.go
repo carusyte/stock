@@ -64,6 +64,7 @@ type Arguments struct {
 		SkipBasicsUpdate      bool   `mapstructure:"skip_basics_update"`
 		SkipIndexCalculation  bool   `mapstructure:"skip_index_calculation"`
 		SkipFinMark           bool   `mapstructure:"skip_fin_mark"`
+		SampleKdjFeature      bool   `mapstructure:"sample_kdj_feature"`
 	}
 	Scorer struct {
 		Highlight            []string `mapstructure:"highlight"`

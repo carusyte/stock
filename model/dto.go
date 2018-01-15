@@ -311,7 +311,7 @@ type Finance struct {
 	Crps sql.NullFloat64
 	//Undistributed Profit Per Share 每股未分配利润
 	Udpps sql.NullFloat64
-	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比增长率
+	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比�����������长率
 	UdppsYoy sql.NullFloat64 `db:"udpps_yoy"`
 	//Operational Cash Flow Per Share 每股经营现金流
 	Ocfps sql.NullFloat64
@@ -1034,4 +1034,19 @@ type FinPredict struct {
 	NpIndAvg  sql.NullFloat64 `db:"np_ind_avg"`
 	Udate     sql.NullString
 	Utime     sql.NullString
+}
+
+//KeyPoint mapped to database table kpts.
+type KeyPoint struct {
+	UUID     string
+	Code     string
+	Klid     int
+	Date     string
+	Score    float64
+	RgnRise  float64 `db:"rgn_rise"`
+	RgnLen   int     `db:"rgn_len"`
+	UnitRise float64 `db:"unit_rise"`
+	Flag     string
+	Udate    string
+	Utime    string
 }
