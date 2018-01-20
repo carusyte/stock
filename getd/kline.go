@@ -1,6 +1,7 @@
 package getd
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"math"
@@ -101,6 +102,78 @@ func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist [
 	return
 }
 
+//FixVarate fixes stock varate inaccurate issue caused by 0 close price introduced in reinstate process.
+func FixVarate() {
+	tabs := []model.DBTab{model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH}
+	for _, t := range tabs {
+		qry := fmt.Sprintf(`select * from %v where close = 0 order by code, klid`, t)
+		var qs []*model.Quote
+		_, e := dbmap.Select(&qs, qry)
+		if e != nil {
+			if e == sql.ErrNoRows {
+				logrus.Infof("%v has no 0 close price records.", t)
+				continue
+			} else {
+				logrus.Panicf("failed to query %v for 0 close price records. %+v", t, e)
+			}
+		}
+		if len(qs) == 0 {
+			logrus.Infof("%v has no 0 close price records.", t)
+			continue
+		}
+		qmap := make(map[string]*model.Quote)
+		logrus.Infof("%v found %d 0 close price records", t, len(qs))
+		for i, q := range qs {
+			tbu := make([]*model.Quote, 0, 3)
+			qry = fmt.Sprintf("select * from %v where code = ? and klid between ? and ? order by klid", t)
+			_, e := dbmap.Select(&tbu, qry, q.Code, q.Klid-1, q.Klid+1)
+			if e != nil {
+				logrus.Panicf("failed to query %v for 0 close price records. %+v", t, e)
+			}
+			if len(tbu) == 1 {
+				continue
+			}
+			for j := 1; j < len(tbu); j++ {
+				k := fmt.Sprintf("%s_%d", tbu[j].Code, tbu[j].Klid)
+				if _, ok := qmap[k]; ok {
+					continue
+				}
+				pc := tbu[j-1].Close
+				cc := tbu[j].Close
+				if pc == 0 && cc == 0 {
+					tbu[j].Varate.Float64 = 0
+				} else if pc == 0 {
+					tbu[j].Varate.Float64 = cc / .01 * 100.
+				} else if cc == 0 {
+					tbu[j].Varate.Float64 = (-0.01 - pc) / math.Abs(pc) * 100.
+				} else {
+					tbu[j].Varate.Float64 = (cc - pc) / math.Abs(pc) * 100.
+				}
+				qmap[k] = tbu[j]
+			}
+			prgs := float64(i+1) / float64(len(qs)) * 100.
+			logrus.Infof("%d/%d\t%.2f%%\t%s %d %s varate recalculated",
+				i+1, len(qs), prgs, q.Code, q.Klid, q.Date)
+		}
+		updateVarate(qmap, t)
+	}
+}
+
+func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
+	d, t := util.TimeStr()
+	s := fmt.Sprintf("update %v set varate = ?, udate = ?, utime = ? where code = ? and klid = ?", tab)
+	stm, e := dbmap.Prepare(s)
+	if e != nil {
+		logrus.Panicf("failed to prepare varate update statement: %+v", e)
+	}
+	for _, q := range qmap {
+		_, e = stm.Exec(q.Varate, d, t, q.Code, q.Klid)
+		if e != nil {
+			logrus.Panicf("failed to update varate for %s %d %s: %+v", q.Code, q.Klid, q.Date, e)
+		}
+	}
+}
+
 func ToOne(qs []*model.Quote, preClose float64, preKlid int) *model.Quote {
 	oq := new(model.Quote)
 	if len(qs) == 0 {
@@ -116,11 +189,16 @@ func ToOne(qs []*model.Quote, preClose float64, preKlid int) *model.Quote {
 		oq.Close = qs[len(qs)-1].Close
 		oq.Date = qs[len(qs)-1].Date
 		oq.Varate.Valid = true
-		denom := preClose
-		if preClose == 0 {
-			denom = .01
+		cc := oq.Close
+		if preClose == 0 && cc == 0 {
+			oq.Varate.Float64 = 0
+		} else if preClose == 0 {
+			oq.Varate.Float64 = cc / .01 * 100.
+		} else if cc == 0 {
+			oq.Varate.Float64 = (-0.01 - preClose) / math.Abs(preClose) * 100.
+		} else {
+			oq.Varate.Float64 = (cc - preClose) / math.Abs(preClose) * 100.
 		}
-		oq.Varate.Float64 = (oq.Close - preClose) / math.Abs(denom)
 		d, t := util.TimeStr()
 		oq.Udate.Valid = true
 		oq.Utime.Valid = true
@@ -168,28 +246,32 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		wg.Done()
 		<-*wf
 	}()
-	xdxr := latestUFRXdxr(stk.Code)
-	suc := false
-	for _, t := range kltype {
-		switch t {
-		case model.KLINE_60M:
-			_, suc = getMinuteKlines(stk.Code, t)
-		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
-			_, suc = getKlineCytp(stk, t, xdxr == nil)
-		case model.KLINE_DAY_NR:
-			_, suc = getKlineCytp(stk, t, true)
-		default:
-			log.Panicf("unhandled kltype: %s", t)
-		}
-		if !suc {
-			break
-		} else {
-			logrus.Debugf("%s %+v fetched", stk.Code, t)
-		}
-	}
+	_, suc := getKlineThs(stk, kltype)
 	if suc {
 		outstks <- stk
 	}
+	// xdxr := latestUFRXdxr(stk.Code)
+	// suc := false
+	// for _, t := range kltype {
+	// 	switch t {
+	// 	case model.KLINE_60M:
+	// 		_, suc = getMinuteKlines(stk.Code, t)
+	// 	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+	// 		_, suc = getKlineCytp(stk, t, xdxr == nil)
+	// 	case model.KLINE_DAY_NR:
+	// 		_, suc = getKlineCytp(stk, t, true)
+	// 	default:
+	// 		log.Panicf("unhandled kltype: %s", t)
+	// 	}
+	// 	if !suc {
+	// 		break
+	// 	} else {
+	// 		logrus.Debugf("%s %+v fetched", stk.Code, t)
+	// 	}
+	// }
+	// if suc {
+	// 	outstks <- stk
+	// }
 }
 
 func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bool) {
@@ -300,3 +382,5 @@ func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 	}
 	return
 }
+
+//TODO add function to update regulated varate in non-reinstated kline tables

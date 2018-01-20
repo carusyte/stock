@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
@@ -16,19 +17,29 @@ import (
 
 func main() {
 	//logr.SetLevel(logr.DebugLevel)
-	if conf.Args.Scorer.FetchData {
-		getData()
-	}
+
+	// if conf.Args.Scorer.FetchData {
+	// 	getData()
+	// }
+
 	//pruneKdjFd(true)
 	//kdjFirst()
 	//holistic()
 	//BLUE
 	// blue()
 	//blueKdjv()
-	hidBlueKdjSt()
+
+	// hidBlueKdjSt()
+
 	//kdjOnly()
 	//renewKdjStats(true)
 	//test()
+	fixVarate()
+}
+
+func fixVarate() {
+	getd.FixVarate()
+	logrus.Info("all varate has been fixed.")
 }
 
 func test() {

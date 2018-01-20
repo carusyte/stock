@@ -37,7 +37,9 @@ const (
 	KLINE_DAY       DBTab = "kline_d"
 	KLINE_DAY_NR    DBTab = "kline_d_n"
 	KLINE_WEEK      DBTab = "kline_w"
+	KLINE_WEEK_NR   DBTab = "kline_w_n"
 	KLINE_MONTH     DBTab = "kline_m"
+	KLINE_MONTH_NR  DBTab = "kline_m_n"
 	KLINE_60M       DBTab = "kline_60m"
 )
 
@@ -311,7 +313,7 @@ type Finance struct {
 	Crps sql.NullFloat64
 	//Undistributed Profit Per Share 每股未分配利润
 	Udpps sql.NullFloat64
-	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比�����������长率
+	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比���������������������长率
 	UdppsYoy sql.NullFloat64 `db:"udpps_yoy"`
 	//Operational Cash Flow Per Share 每股经营现金流
 	Ocfps sql.NullFloat64
@@ -483,24 +485,25 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 }
 
 type Quote struct {
-	Code   string `db:",size:6"`
-	Date   string `db:",size:10"`
-	Time   sql.NullString
-	Klid   int
-	Open   float64
-	High   float64
-	Close  float64
-	Low    float64
-	Volume sql.NullFloat64
-	Amount sql.NullFloat64
-	Xrate  sql.NullFloat64
-	Varate sql.NullFloat64
-	Ma5    sql.NullFloat64
-	Ma10   sql.NullFloat64
-	Ma20   sql.NullFloat64
-	Ma30   sql.NullFloat64
-	Udate  sql.NullString
-	Utime  sql.NullString
+	Code      string `db:",size:6"`
+	Date      string `db:",size:10"`
+	Time      sql.NullString
+	Klid      int
+	Open      float64
+	High      float64
+	Close     float64
+	Low       float64
+	Volume    sql.NullFloat64
+	Amount    sql.NullFloat64
+	Xrate     sql.NullFloat64
+	Varate    sql.NullFloat64
+	VarateRgl sql.NullFloat64 `db:"varate_rgl"`
+	Ma5       sql.NullFloat64
+	Ma10      sql.NullFloat64
+	Ma20      sql.NullFloat64
+	Ma30      sql.NullFloat64
+	Udate     sql.NullString
+	Utime     sql.NullString
 }
 
 func (q *Quote) String() string {
@@ -517,7 +520,7 @@ type K60MinList struct {
 
 type Kline struct {
 	Quote
-	Factor sql.NullFloat64
+	// Factor sql.NullFloat64
 }
 
 type KlineW struct {
@@ -965,10 +968,18 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 				q.Varate.Valid = true
 				if math.IsNaN(preclose) {
 					q.Varate.Float64 = 0
-				} else if preclose == 0 {
-					q.Varate.Float64 = 100
 				} else {
-					q.Varate.Float64 = (q.Close - preclose) / math.Abs(preclose) * 100
+					pc := preclose
+					cc := q.Close
+					if pc == 0 && cc == 0 {
+						q.Varate.Float64 = 0
+					} else if pc == 0 {
+						q.Varate.Float64 = cc / .01 * 100.
+					} else if cc == 0 {
+						q.Varate.Float64 = (-0.01 - pc) / math.Abs(pc) * 100.
+					} else {
+						q.Varate.Float64 = (cc - pc) / math.Abs(pc) * 100.
+					}
 				}
 				q.Udate.Valid = true
 				q.Utime.Valid = true

@@ -26,15 +26,50 @@ import (
 )
 
 var (
-	pool *chromedp.Pool
+	pool  *chromedp.Pool
+	dt2mc = map[model.DBTab]string{
+		model.KLINE_DAY_NR:   "00",
+		model.KLINE_DAY:      "01",
+		model.KLINE_WEEK_NR:  "10",
+		model.KLINE_WEEK:     "11",
+		model.KLINE_MONTH_NR: "20",
+		model.KLINE_MONTH:    "21",
+	}
 )
+
+// This version trys to run fetch for multiple kline types in a single chrome instance,
+// may improve performance to some degree
+func getKlineThs(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc bool) {
+	RETRIES := 20
+	var (
+		code = stk.Code
+	)
+
+	for rt := 0; rt < RETRIES; rt++ {
+		klsMap, suc, retry := klineThsCDPv2(stk, kltype)
+		if suc {
+			qmap = klsMap
+			break
+		} else {
+			if retry && rt+1 < RETRIES {
+				log.Printf("%s retrying [%d]", code, rt+1)
+				time.Sleep(time.Millisecond * 2500)
+				continue
+			} else {
+				log.Printf("%s failed", code)
+				return qmap, false
+			}
+		}
+	}
+	return
+}
 
 func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
 	RETRIES := 20
 	var (
 		ldate string
 		lklid int
-		code  string = stk.Code
+		code  = stk.Code
 	)
 
 	for rt := 0; rt < RETRIES; rt++ {
@@ -62,6 +97,150 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 	}
 	binsert(quotes, string(klt), lklid)
 	return quotes, true
+}
+
+func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc, retry bool) {
+	suc, retry, tdmap, hismap := runCdpV2(stk.Code, kltype)
+	if !suc {
+		return qmap, false, retry
+	}
+	xdxr := latestUFRXdxr(stk.Code)
+	lkmap := make(map[model.DBTab]int)
+	for t, tdat := range tdmap {
+		quotes, lklid, suc, retry := byte2Quote(stk, t, tdat, hismap[t], xdxr)
+		if !suc {
+			return qmap, false, retry
+		}
+		qmap[t] = quotes
+		lkmap[t] = lklid
+	}
+	for klt, quotes := range qmap {
+		supplementMisc(quotes, lkmap[klt])
+		if lkmap[klt] != -1 {
+			//skip the first record which is for varate calculation
+			quotes = quotes[1:]
+		}
+		binsert(quotes, string(klt), lkmap[klt])
+	}
+	return qmap, true, false
+}
+
+func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *model.Xdxr) (
+	quotes []*model.Quote, lklid int, suc, retry bool) {
+	var (
+		code   = stk.Code
+		ktoday = model.Ktoday{}
+		kall   = model.KlAll{}
+		e      error
+	)
+	e = json.Unmarshal(strip(today), &ktoday)
+	if e != nil {
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(today), e)
+		return quotes, -1, false, true
+	}
+	if ktoday.Code != "" {
+		quotes = append(quotes, &ktoday.Quote)
+	} else {
+		log.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
+	}
+
+	ttd, e := time.Parse("2006-01-02", ktoday.Date)
+	if e != nil {
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		return quotes, -1, false, true
+	}
+	// If it is an IPO, return immediately
+	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
+		return quotes, -1, true, false
+	}
+	// If in IPO week, skip the rest chores
+	switch klt {
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_MONTH, model.KLINE_MONTH_NR:
+		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
+			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+			if e != nil {
+				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+					code, stk.TimeToMarket.String, e)
+			} else {
+				y1, w1 := ttm.ISOWeek()
+				y2, w2 := ttd.ISOWeek()
+				if y1 == y2 && w1 == w2 {
+					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+					return quotes, -1, true, false
+				}
+			}
+		}
+	}
+
+	//get all kline data
+	e = json.Unmarshal(strip(all), &kall)
+	if e != nil {
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(all), e)
+		return quotes, -1, false, true
+	} else if kall.Price == "" {
+		log.Printf("%s %+v empty price data in json response: %s", code, klt, string(all))
+		return quotes, -1, false, true
+	}
+
+	incr := true
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+		incr = xdxr == nil
+	}
+	ldate := ""
+	if incr {
+		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		if ldy != nil {
+			ldate = ldy.Date
+			lklid = ldy.Klid
+		} else {
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+		}
+	} else {
+		log.Printf("%s %s data will be fully refreshed", code, klt)
+	}
+
+	kls, e := parseThsKlinesV6(code, klt, &kall, ldate)
+	if e != nil {
+		log.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, ldate, e, kall)
+		return quotes, -1, false, true
+	} else if len(kls) == 0 {
+		return quotes, -1, true, false
+	}
+
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_NR:
+		// if ktoday and kls[0] in the same day, remove kls[0]
+		if kls[0].Date == ktoday.Date {
+			kls = kls[1:]
+		}
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR:
+		// if ktoday and kls[0] in the same week, remove kls[0]
+		yToday, wToday := ttd.ISOWeek()
+		tHead, e := time.Parse("2006-01-02", kls[0].Date)
+		if e != nil {
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
+			return quotes, -1, false, true
+		}
+		yLast, wLast := tHead.ISOWeek()
+		if yToday == yLast && wToday == wLast {
+			kls = kls[1:]
+		}
+	case model.KLINE_MONTH, model.KLINE_MONTH_NR:
+		// if ktoday and kls[0] in the same month, remove kls[0]
+		if kls[0].Date[:8] == ktoday.Date[:8] {
+			kls = kls[1:]
+		}
+	}
+
+	quotes = append(quotes, kls...)
+	//reverse order
+	for i, j := 0, len(quotes)-1; i < j; i, j = i+1, j-1 {
+		quotes[i], quotes[j] = quotes[j], quotes[i]
+	}
+
+	return quotes, lklid, true, false
 }
 
 // order: from oldest to latest
@@ -192,6 +371,45 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	return quotes, true, false
 }
 
+func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap map[model.DBTab][]byte) {
+	// create context
+	ctxt, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	// get chrome runner from the pool
+	pr, err := getCdpPool().Allocate(ctxt,
+		runner.Flag("headless", true),
+		runner.Flag("no-default-browser-check", true),
+		runner.Flag("no-first-run", true),
+		runner.ExecPath(conf.Args.ChromeDP.Path),
+	)
+	if err != nil {
+		log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
+		return false, true, tdmap, hismap
+	}
+	defer pr.Release()
+	chr := make(chan bool)
+	go func(chr chan bool) {
+		err = pr.Run(ctxt, buildBatchActions(code, tabs, tdmap, hismap))
+		if err != nil {
+			log.Printf("chrome runner reported error: %+v\n", err)
+			chr <- false
+		} else {
+			chr <- true
+		}
+	}(chr)
+	select {
+	case ok = <-chr:
+		return ok, !ok, tdmap, hismap
+	case <-ctxt.Done():
+		if ctxt.Err() != nil {
+			log.Printf("%s timeout waiting for chromedp response", code)
+			return false, true, tdmap, hismap
+		}
+		return true, false, tdmap, hismap
+	}
+}
+
 func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 	// create context
 	ctxt, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -229,6 +447,48 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 		}
 		return true, false, today, all
 	}
+}
+
+func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.DBTab][]byte) chromedp.Tasks {
+	fin := make(chan error)
+	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
+	//.hxc3-hxc3KlinePricePane-hover visible indicates kline data loaded
+	ltag := `.hxc3-hxc3KlinePricePane-hover`
+	tasks := chromedp.Tasks{
+		chromedp.Navigate(url),
+		batchCaptureData(tdmap, hismap, tabs, fin),
+	}
+	for _, t := range tabs {
+		sel := `a[hxc3-data-type^="hxc3Kline"][hxc3-data-type$="%s"]`
+		switch t {
+		case model.KLINE_DAY_NR, model.KLINE_DAY:
+			sel = fmt.Sprintf(sel, "Day")
+		case model.KLINE_WEEK_NR, model.KLINE_WEEK:
+			sel = fmt.Sprintf(sel, "Week")
+		case model.KLINE_MONTH_NR, model.KLINE_MONTH:
+			sel = fmt.Sprintf(sel, "Month")
+		default:
+			log.Panicf("unsupported DBTab: %+v", t)
+		}
+		tasks = append(tasks,
+			chromedp.WaitVisible(sel, chromedp.ByQuery),
+			chromedp.Click(sel, chromedp.ByQuery),
+		)
+		fqSel := `a[data-type="%s"]`
+		if t == model.KLINE_DAY_NR || t == model.KLINE_WEEK_NR || t == model.KLINE_MONTH_NR {
+			fqSel = fmt.Sprintf(fqSel, "Bfq")
+		} else {
+			fqSel = fmt.Sprintf(fqSel, "Qfq")
+		}
+		tasks = append(tasks,
+			chromedp.WaitVisible(`#changeFq`, chromedp.ByID),
+			chromedp.Click(`#changeFq`, chromedp.ByID),
+			chromedp.WaitVisible(fqSel, chromedp.ByQuery),
+			chromedp.Click(fqSel, chromedp.ByQuery),
+			chromedp.WaitVisible(ltag, chromedp.ByQuery))
+	}
+	tasks = append(tasks, wait(fin))
+	return tasks
 }
 
 func buildActions(code string, tab model.DBTab, today, all *[]byte) chromedp.Tasks {
@@ -278,6 +538,85 @@ func wait(fin chan error) chromedp.Action {
 		case e := <-fin:
 			return e
 		}
+	})
+}
+
+func batchCaptureData(tdmap, hismap map[model.DBTab][]byte, tabs []model.DBTab, fin chan error) chromedp.Action {
+	mcodes := make(map[string]model.DBTab)
+	for _, t := range tabs {
+		mcodes[dt2mc[t]] = t
+	}
+	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+		th, ok := h.(*chromedp.TargetHandler)
+		if !ok {
+			log.Fatal("invalid Executor type")
+		}
+		echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
+			cdproto.EventNetworkLoadingFailed)
+		go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
+			defer func() {
+				th.Release(echan)
+				close(fin)
+			}()
+			reqIDTd := make(map[network.RequestID]model.DBTab)
+			reqIDAll := make(map[network.RequestID]model.DBTab)
+			urlmap := make(map[network.RequestID]string)
+			for {
+				select {
+				case d := <-echan:
+					switch d.(type) {
+					case *network.EventLoadingFailed:
+						lfail := d.(*network.EventLoadingFailed)
+						if _, ok := reqIDTd[lfail.RequestID]; ok {
+							fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
+							return
+						}
+						if _, ok := reqIDAll[lfail.RequestID]; ok {
+							fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
+							return
+						}
+					case *network.EventRequestWillBeSent:
+						req := d.(*network.EventRequestWillBeSent)
+						for mcode, t := range mcodes {
+							if strings.HasSuffix(req.Request.URL, mcode+"/today.js") {
+								urlmap[req.RequestID] = req.Request.URL
+								reqIDTd[req.RequestID] = t
+							} else if strings.HasSuffix(req.Request.URL, mcode+"/all.js") {
+								urlmap[req.RequestID] = req.Request.URL
+								reqIDAll[req.RequestID] = t
+							}
+						}
+					case *network.EventLoadingFinished:
+						res := d.(*network.EventLoadingFinished)
+						if t, ok := reqIDTd[res.RequestID]; ok {
+							data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
+							if e != nil {
+								fin <- errors.Wrapf(e, "failed to get response body "+
+									"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
+								return
+							}
+							tdmap[t] = data
+						}
+						if t, ok := reqIDAll[res.RequestID]; ok {
+							data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
+							if e != nil {
+								fin <- errors.Wrapf(e, "failed to get response body "+
+									"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
+								return
+							}
+							hismap[t] = data
+						}
+					}
+					if len(tdmap) == len(tabs) && len(hismap) == len(tabs) {
+						fin <- nil
+						return
+					}
+				case <-ctxt.Done():
+					return
+				}
+			}
+		}(echan, ctxt, fin)
+		return nil
 	})
 }
 
@@ -982,10 +1321,17 @@ func supplementMisc(klines []*model.Quote, start int) {
 		klines[i].Varate.Valid = true
 		if math.IsNaN(preclose) {
 			klines[i].Varate.Float64 = 0
-		} else if preclose == 0 {
-			klines[i].Varate.Float64 = 100
 		} else {
-			klines[i].Varate.Float64 = (klines[i].Close - preclose) / math.Abs(preclose) * 100
+			cc := klines[i].Close
+			if preclose == 0 && cc == 0 {
+				klines[i].Varate.Float64 = 0
+			} else if preclose == 0 {
+				klines[i].Varate.Float64 = cc / .01 * 100.
+			} else if cc == 0 {
+				klines[i].Varate.Float64 = (-0.01 - preclose) / math.Abs(preclose) * 100.
+			} else {
+				klines[i].Varate.Float64 = (cc - preclose) / math.Abs(preclose) * 100.
+			}
 		}
 		preclose = klines[i].Close
 	}

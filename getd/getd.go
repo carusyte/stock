@@ -61,7 +61,9 @@ func Get() {
 
 	if !conf.Args.Datasource.SkipKlines {
 		stgkl := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH)
+		stks = GetKlines(stks, model.KLINE_DAY,
+			model.KLINE_WEEK, model.KLINE_MONTH,
+			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
 		stop("GET_KLINES", stgkl)
 	} else {
 		log.Printf("skipped klines data from web")
