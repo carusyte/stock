@@ -48,6 +48,8 @@ type Arguments struct {
 		Debug    bool   `mapstructure:"debug"`
 		Path     string `mapstructure:"path"`
 		PoolSize int    `mapstructure:"pool_size"`
+		Headless bool   `mapstructure:"headless"`
+		Timeout  int64  `mapstructure:"timeout"`
 	}
 	Datasource struct {
 		Kline                 string `mapstructure:"kline"`
@@ -132,4 +134,6 @@ func setDefaults() {
 	Args.Scorer.HidBlueStarRatio = 0.05
 	Args.Scorer.HidBlueRearWarnRatio = 0.1
 	Args.ChromeDP.PoolSize = Args.Concurrency
+	Args.ChromeDP.Headless = true
+	Args.ChromeDP.Timeout = 45
 }

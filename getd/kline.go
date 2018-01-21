@@ -326,10 +326,10 @@ func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*mode
 func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) > 0 {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*13)
+		valueArgs := make([]interface{}, 0, len(quotes)*14)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), round(?,3), ?, ?)")
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -341,6 +341,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			valueArgs = append(valueArgs, q.Amount)
 			valueArgs = append(valueArgs, q.Xrate)
 			valueArgs = append(valueArgs, q.Varate)
+			valueArgs = append(valueArgs, q.VarateRgl)
 			valueArgs = append(valueArgs, q.Udate)
 			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
@@ -355,10 +356,10 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		}
 
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,varate,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"volume,amount,xrate,varate,varate_rgl,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),udate=values"+
-			"(udate),utime=values(utime)",
+			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
+			"varate_rgl=values(varate_rgl),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {

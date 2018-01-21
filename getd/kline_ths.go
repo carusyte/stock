@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -61,7 +64,7 @@ func getKlineThs(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][
 			}
 		}
 	}
-	return
+	return qmap, true
 }
 
 func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
@@ -100,6 +103,7 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 }
 
 func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc, retry bool) {
+	qmap = make(map[model.DBTab][]*model.Quote)
 	suc, retry, tdmap, hismap := runCdpV2(stk.Code, kltype)
 	if !suc {
 		return qmap, false, retry
@@ -118,62 +122,100 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 		supplementMisc(quotes, lkmap[klt])
 		if lkmap[klt] != -1 {
 			//skip the first record which is for varate calculation
-			quotes = quotes[1:]
+			qmap[klt] = quotes[1:]
 		}
 	}
-	calcVarateRgl(stk, qmap)
+	// insert non-reinstated quotes first
 	for klt, quotes := range qmap {
-		binsert(quotes, string(klt), lkmap[klt])
+		switch klt {
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			binsert(quotes, string(klt), lkmap[klt])
+		}
+	}
+	e := calcVarateRgl(stk, qmap)
+	if e != nil {
+		return qmap, false, false
+	}
+	for klt, quotes := range qmap {
+		switch klt {
+		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+			binsert(quotes, string(klt), lkmap[klt])
+		}
 	}
 	return qmap, true, false
 }
 
-func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) {
+func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
 	for t, qs := range qmap {
 		switch t {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
 			continue
 		case model.KLINE_DAY:
-			inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
+			e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
 		case model.KLINE_WEEK:
-			inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
+			e = inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
 		case model.KLINE_MONTH:
-			inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
+			e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
 		default:
-			log.Printf("%s can't calculate varate_rgl for unsupported type: %v", stk.Code, t)
+			return fmt.Errorf("%s can't calculate varate_rgl for unsupported type: %v", stk.Code, t)
+		}
+		if e != nil {
+			log.Println(e)
+			return e
 		}
 	}
+	return nil
 }
 
-func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs []*model.Quote, tgqs []*model.Quote) {
-	if tgqs == nil || len(tgqs) == 0 {
-		log.Printf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter.",
-			stk.Code, tab)
-		return
-	}
-	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
-	if nrqs == nil || len(nrqs) == 0 {
-		//load nrqs from db
-		qry := fmt.Sprintf(`select * from %s where code = ? and date between ? and ? order by date desc`, tab)
-		_, e := dbmap.Select(&nrqs, qry, stk.Code, sDate, eDate)
-		if e != nil {
-			log.Printf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-			return
+func matchSlice(nrqs, tgqs []*model.Quote) (rqs []*model.Quote, err error) {
+	s, e := -1, -1
+	for i := len(nrqs) - 1; i >= 0; i-- {
+		if s < 0 && nrqs[i].Klid == tgqs[0].Klid {
+			s = i
+			break
+		} else if e < 0 && nrqs[i].Klid == tgqs[len(tgqs)-1].Klid {
+			e = i
+		} else if nrqs[i].Klid < tgqs[0].Klid {
+			break
 		}
 	}
-	if len(nrqs) != len(tgqs) {
-		log.Printf("%s unable to infer varate_rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
+	if s < 0 {
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
+	} else if e < 0 {
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[len(tgqs)-1], len(tgqs)-1)
+	}
+	return nrqs[s : e+1], nil
+}
+
+func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote) error {
+	if tgqs == nil || len(tgqs) == 0 {
+		return fmt.Errorf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter",
+			stk.Code, tab)
+	}
+	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
+	if nrqs == nil || len(nrqs) < len(tgqs) {
+		//load nrqs from db
+		qry := fmt.Sprintf(`select * from %s where code = ? and date between ? and ? order by klid`, tab)
+		_, e := dbmap.Select(&nrqs, qry, stk.Code, sDate, eDate)
+		if e != nil {
+			return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+		}
+	}
+	if len(nrqs) < len(tgqs) {
+		return fmt.Errorf("%s unable to infer varate_rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
 			stk.Code, tab, len(nrqs), len(tgqs))
-		return
+	}
+	nrqs, e := matchSlice(nrqs, tgqs)
+	if e != nil {
+		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
 	// handle xdxr events
 	rows, e := dbmap.Query(`select code, xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
 		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, stk.Code, sDate, eDate)
 	if e != nil {
 		if e != sql.ErrNoRows {
-			log.Printf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+			return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 		}
-		return
 	}
 	defer rows.Close()
 	xemap := make(map[string]*model.Xdxr)
@@ -184,8 +226,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs []*model.Quote, tgqs
 	for rows.Next() {
 		e = rows.Scan(&code, &xdate, &divi, &shallot, &shcvt)
 		if e != nil {
-			log.Printf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-			return
+			return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 		}
 		xemap[xdate] = &model.Xdxr{
 			Code:        code,
@@ -196,16 +237,15 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs []*model.Quote, tgqs
 		}
 	}
 	if e = rows.Err(); e != nil {
-		log.Printf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
 	// begin varate transferation
 	for i := 0; i < len(tgqs); i++ {
 		nrq := nrqs[i]
 		tgq := tgqs[i]
 		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
-			log.Printf("%s unable to infer varate_rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
+			return fmt.Errorf("%s unable to infer varate_rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
 				stk.Code, tab, i, nrq, tgq)
-			return
 		}
 		tvar := nrq.Varate.Float64
 		if len(xemap) > 0 {
@@ -229,11 +269,12 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs []*model.Quote, tgqs
 		tgq.VarateRgl.Valid = true
 		tgq.VarateRgl.Float64 = tvar
 	}
-	return
+	return nil
 }
 
 func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *model.Xdxr) (
 	quotes []*model.Quote, lklid int, suc, retry bool) {
+	lklid = -1
 	var (
 		code   = stk.Code
 		ktoday = model.Ktoday{}
@@ -479,17 +520,22 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 }
 
 func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap map[model.DBTab][]byte) {
+	tdmap = make(map[model.DBTab][]byte)
+	hismap = make(map[model.DBTab][]byte)
 	// create context
-	ctxt, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
 	defer cancel()
 
-	// get chrome runner from the pool
-	pr, err := getCdpPool().Allocate(ctxt,
-		runner.Flag("headless", true),
+	ropts := []runner.CommandLineOption{
+		runner.ExecPath(conf.Args.ChromeDP.Path),
 		runner.Flag("no-default-browser-check", true),
 		runner.Flag("no-first-run", true),
-		runner.ExecPath(conf.Args.ChromeDP.Path),
-	)
+	}
+	if conf.Args.ChromeDP.Headless {
+		ropts = append(ropts, runner.Flag("headless", true))
+	}
+	// get chrome runner from the pool
+	pr, err := getCdpPool().Allocate(ctxt, ropts...)
 	if err != nil {
 		log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
 		return false, true, tdmap, hismap
@@ -805,6 +851,13 @@ func getCdpPool() *chromedp.Pool {
 	if pool != nil {
 		return pool
 	}
+	c := make(chan os.Signal, 3)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-c
+		cleanupTHS()
+		os.Exit(1)
+	}()
 	var err error
 	opt := make([]chromedp.PoolOption, 0, 4)
 	if conf.Args.ChromeDP.Debug {
@@ -1409,9 +1462,8 @@ func strip(data []byte) []byte {
 	e := bytes.LastIndexByte(data, 41) // last occurrence of ')'
 	if s >= 0 && e >= 0 {
 		return data[s+1 : e]
-	} else {
-		return data
 	}
+	return data
 }
 
 //Assign KLID, calculate Varate, add update datetime
