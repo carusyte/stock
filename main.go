@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/model"
 	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
@@ -33,8 +34,8 @@ func main() {
 
 	//kdjOnly()
 	//renewKdjStats(true)
-	//test()
-	fixVarate()
+	test()
+	// fixVarate()
 }
 
 func fixVarate() {
@@ -43,7 +44,14 @@ func fixVarate() {
 }
 
 func test() {
-	fmt.Println(new(score.KdjSt).Get([]string{"600828"}, -1, false))
+	s := &model.Stock{}
+	s.Code = "600104"
+	s.Name = "上汽集团"
+	ss := new(model.Stocks)
+	ss.Add(s)
+	getd.GetKlines(ss, model.KLINE_DAY,
+		model.KLINE_WEEK, model.KLINE_MONTH,
+		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR, model.KLINE_DAY_NR)
 }
 
 func hidBlueKdjSt() {

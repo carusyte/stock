@@ -120,9 +120,116 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 			//skip the first record which is for varate calculation
 			quotes = quotes[1:]
 		}
+	}
+	calcVarateRgl(stk, qmap)
+	for klt, quotes := range qmap {
 		binsert(quotes, string(klt), lkmap[klt])
 	}
 	return qmap, true, false
+}
+
+func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) {
+	for t, qs := range qmap {
+		switch t {
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			continue
+		case model.KLINE_DAY:
+			inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
+		case model.KLINE_WEEK:
+			inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
+		case model.KLINE_MONTH:
+			inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
+		default:
+			log.Printf("%s can't calculate varate_rgl for unsupported type: %v", stk.Code, t)
+		}
+	}
+}
+
+func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs []*model.Quote, tgqs []*model.Quote) {
+	if tgqs == nil || len(tgqs) == 0 {
+		log.Printf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter.",
+			stk.Code, tab)
+		return
+	}
+	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
+	if nrqs == nil || len(nrqs) == 0 {
+		//load nrqs from db
+		qry := fmt.Sprintf(`select * from %s where code = ? and date between ? and ? order by date desc`, tab)
+		_, e := dbmap.Select(&nrqs, qry, stk.Code, sDate, eDate)
+		if e != nil {
+			log.Printf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+			return
+		}
+	}
+	if len(nrqs) != len(tgqs) {
+		log.Printf("%s unable to infer varate_rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
+			stk.Code, tab, len(nrqs), len(tgqs))
+		return
+	}
+	// handle xdxr events
+	rows, e := dbmap.Query(`select code, xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
+		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, stk.Code, sDate, eDate)
+	if e != nil {
+		if e != sql.ErrNoRows {
+			log.Printf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+		}
+		return
+	}
+	defer rows.Close()
+	xemap := make(map[string]*model.Xdxr)
+	var (
+		code, xdate          string
+		divi, shallot, shcvt sql.NullFloat64
+	)
+	for rows.Next() {
+		e = rows.Scan(&code, &xdate, &divi, &shallot, &shcvt)
+		if e != nil {
+			log.Printf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+			return
+		}
+		xemap[xdate] = &model.Xdxr{
+			Code:        code,
+			XdxrDate:    sql.NullString{Valid: true, String: xdate},
+			Divi:        divi,
+			SharesAllot: shallot,
+			SharesCvt:   shcvt,
+		}
+	}
+	if e = rows.Err(); e != nil {
+		log.Printf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+	}
+	// begin varate transferation
+	for i := 0; i < len(tgqs); i++ {
+		nrq := nrqs[i]
+		tgq := tgqs[i]
+		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
+			log.Printf("%s unable to infer varate_rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
+				stk.Code, tab, i, nrq, tgq)
+			return
+		}
+		tvar := nrq.Varate.Float64
+		if len(xemap) > 0 {
+			if xe, ok := xemap[tgq.Date]; ok && i-1 >= 0 {
+				// adjust fore-day price for regulated varate calculation
+				pcl := nrqs[i-1].Close
+				d, sa, sc := 0., 0., 0.
+				if xe.Divi.Valid {
+					d = xe.Divi.Float64
+				}
+				if xe.SharesAllot.Valid {
+					sa = xe.SharesAllot.Float64
+				}
+				if xe.SharesCvt.Valid {
+					sc = xe.SharesCvt.Float64
+				}
+				pcl = (pcl*10.0 - d) / (10.0 + sa + sc)
+				tvar = (nrq.Close - pcl) / pcl * 100.
+			}
+		}
+		tgq.VarateRgl.Valid = true
+		tgq.VarateRgl.Float64 = tvar
+	}
+	return
 }
 
 func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *model.Xdxr) (
