@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
+	"github.com/mitchellh/panicwrap"
 	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
@@ -17,11 +20,27 @@ import (
 )
 
 func main() {
+	exitStatus, err := panicwrap.BasicWrap(panicHandler)
+	if err != nil {
+		// Something went wrong setting up the panic wrapper. Unlikely,
+		// but possible.
+		panic(err)
+	}
+
+	// If exitStatus >= 0, then we're the parent process and the panicwrap
+	// re-executed ourselves and completed. Just exit with the proper status.
+	if exitStatus >= 0 {
+		os.Exit(exitStatus)
+	}
+
+	// Otherwise, exitStatus < 0 means we're the child. Continue executing as
+	// normal...
+
 	//logr.SetLevel(logr.DebugLevel)
 
-	// if conf.Args.Scorer.FetchData {
-	// 	getData()
-	// }
+	if conf.Args.Scorer.FetchData {
+		getData()
+	}
 
 	//pruneKdjFd(true)
 	//kdjFirst()
@@ -30,12 +49,26 @@ func main() {
 	// blue()
 	//blueKdjv()
 
-	// hidBlueKdjSt()
+	hidBlueKdjSt()
 
 	//kdjOnly()
 	//renewKdjStats(true)
-	test()
+	// test()
+	// testSplitAfter()
 	// fixVarate()
+}
+
+func panicHandler(output string) {
+	//clear ChromeDP resource
+	getd.Cleanup()
+	// output contains the full output (including stack traces) of the
+	// panic. Put it in a file or something.
+	fmt.Printf("The child panicked:\n\n%s\n", output)
+	os.Exit(1)
+}
+
+func testSplitAfter() {
+	fmt.Println(strings.SplitN("hello_world_n_you", "_", 3))
 }
 
 func fixVarate() {
@@ -44,14 +77,35 @@ func fixVarate() {
 }
 
 func test() {
-	s := &model.Stock{}
-	s.Code = "600104"
-	s.Name = "上汽集团"
-	ss := new(model.Stocks)
-	ss.Add(s)
-	getd.GetKlines(ss, model.KLINE_DAY,
-		model.KLINE_WEEK, model.KLINE_MONTH,
-		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR, model.KLINE_DAY_NR)
+	// stocks := new(model.Stocks)
+	// s := &model.Stock{}
+	// s.Code = "000009"
+	// s.Name = "中国宝安"
+	// stocks.Add(s)
+	// getd.GetKlines(stocks,
+	// 	model.KLINE_DAY,
+	// 	model.KLINE_WEEK,
+	// 	model.KLINE_MONTH,
+	// 	model.KLINE_MONTH_NR,
+	// 	model.KLINE_DAY_NR,
+	// 	model.KLINE_WEEK_NR,
+	// )
+	allstk := getd.StocksDb()
+	stocks := new(model.Stocks)
+	stocks.Add(allstk...)
+	getd.GetKlines(stocks,
+		model.KLINE_WEEK,
+		model.KLINE_MONTH,
+		model.KLINE_DAY,
+		model.KLINE_DAY_NR,
+		model.KLINE_WEEK_NR,
+		model.KLINE_MONTH_NR)
+	e := getd.AppendVarateRgl(allstk...)
+	if e != nil {
+		log.Println(e)
+	} else {
+		log.Printf("%v stocks varate_rgl fixed", len(allstk))
+	}
 }
 
 func hidBlueKdjSt() {

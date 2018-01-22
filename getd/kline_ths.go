@@ -40,6 +40,42 @@ var (
 	}
 )
 
+//AppendVarateRgl supplements varate_rgl field in relevant kline tables.
+func AppendVarateRgl(stks ...*model.Stock) (e error) {
+	for _, stk := range stks {
+		qmap := make(map[model.DBTab][]*model.Quote)
+		tabs := []model.DBTab{
+			model.KLINE_DAY,
+			model.KLINE_WEEK,
+			model.KLINE_MONTH,
+		}
+		for _, t := range tabs {
+			qmap[t] = GetKlineDb(stk.Code, t, 0, false)
+		}
+		e = calcVarateRgl(stk, qmap)
+		if e != nil {
+			return e
+		}
+		for t, qs := range qmap {
+			stmt := fmt.Sprintf(`update %v set varate_rgl = round(?,3) where code = ? and klid = ?`, t)
+			ps, e := dbmap.Prepare(stmt)
+			if e != nil {
+				return e
+			}
+			for _, q := range qs {
+				_, e = ps.Exec(q.VarateRgl, q.Code, q.Klid)
+				if e != nil {
+					ps.Close()
+					return e
+				}
+			}
+			ps.Close()
+			log.Printf("%s %v (%d) varate_rgl fixed", stk.Code, t, len(qs))
+		}
+	}
+	return nil
+}
+
 // This version trys to run fetch for multiple kline types in a single chrome instance,
 // may improve performance to some degree
 func getKlineThs(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc bool) {
@@ -120,15 +156,15 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 	}
 	for klt, quotes := range qmap {
 		supplementMisc(quotes, lkmap[klt])
-		if lkmap[klt] != -1 {
-			//skip the first record which is for varate calculation
-			qmap[klt] = quotes[1:]
-		}
 	}
 	// insert non-reinstated quotes first
 	for klt, quotes := range qmap {
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			if lkmap[klt] != -1 {
+				//skip the first record which is for varate calculation
+				quotes = quotes[1:]
+			}
 			binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
@@ -137,6 +173,11 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 		return qmap, false, false
 	}
 	for klt, quotes := range qmap {
+		if lkmap[klt] != -1 {
+			//skip the first record which is for varate calculation
+			qmap[klt] = quotes[1:]
+			quotes = quotes[1:]
+		}
 		switch klt {
 		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
 			binsert(quotes, string(klt), lkmap[klt])
@@ -169,13 +210,20 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 
 func matchSlice(nrqs, tgqs []*model.Quote) (rqs []*model.Quote, err error) {
 	s, e := -1, -1
+	if len(nrqs) == 1 && len(tgqs) == 1 {
+		if nrqs[0].Klid == tgqs[0].Klid && nrqs[0].Date == tgqs[0].Date {
+			return nrqs, nil
+		}
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
+	}
 	for i := len(nrqs) - 1; i >= 0; i-- {
-		if s < 0 && nrqs[i].Klid == tgqs[0].Klid {
+		if s < 0 && nrqs[i].Klid == tgqs[0].Klid && nrqs[i].Date == tgqs[0].Date {
 			s = i
 			break
-		} else if e < 0 && nrqs[i].Klid == tgqs[len(tgqs)-1].Klid {
+		} else if e < 0 && nrqs[i].Klid == tgqs[len(tgqs)-1].Klid &&
+			nrqs[i].Date == tgqs[len(tgqs)-1].Date {
 			e = i
-		} else if nrqs[i].Klid < tgqs[0].Klid {
+		} else if nrqs[i].Klid < tgqs[0].Klid || nrqs[i].Date < tgqs[0].Date {
 			break
 		}
 	}
@@ -195,11 +243,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
 	if nrqs == nil || len(nrqs) < len(tgqs) {
 		//load nrqs from db
-		qry := fmt.Sprintf(`select * from %s where code = ? and date between ? and ? order by klid`, tab)
-		_, e := dbmap.Select(&nrqs, qry, stk.Code, sDate, eDate)
-		if e != nil {
-			return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-		}
+		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) < len(tgqs) {
 		return fmt.Errorf("%s unable to infer varate_rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
@@ -209,47 +253,37 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	if e != nil {
 		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
-	// handle xdxr events
-	rows, e := dbmap.Query(`select code, xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
-		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, stk.Code, sDate, eDate)
+	xemap, e := loadXdxr(stk.Code, sDate, eDate)
 	if e != nil {
-		if e != sql.ErrNoRows {
-			return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-		}
+		return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
-	defer rows.Close()
-	xemap := make(map[string]*model.Xdxr)
-	var (
-		code, xdate          string
-		divi, shallot, shcvt sql.NullFloat64
-	)
-	for rows.Next() {
-		e = rows.Scan(&code, &xdate, &divi, &shallot, &shcvt)
-		if e != nil {
-			return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-		}
-		xemap[xdate] = &model.Xdxr{
-			Code:        code,
-			XdxrDate:    sql.NullString{Valid: true, String: xdate},
-			Divi:        divi,
-			SharesAllot: shallot,
-			SharesCvt:   shcvt,
-		}
-	}
-	if e = rows.Err(); e != nil {
-		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
-	}
-	// begin varate transferation
+	return transferVarateRgl(stk.Code, tab, nrqs, tgqs, xemap)
+}
+
+func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
+	xemap map[string]*model.Xdxr) (e error) {
 	for i := 0; i < len(tgqs); i++ {
 		nrq := nrqs[i]
 		tgq := tgqs[i]
 		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
 			return fmt.Errorf("%s unable to infer varate_rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
-				stk.Code, tab, i, nrq, tgq)
+				code, tab, i, nrq, tgq)
 		}
 		tvar := nrq.Varate.Float64
-		if len(xemap) > 0 {
-			if xe, ok := xemap[tgq.Date]; ok && i-1 >= 0 {
+		if len(xemap) > 0 && i > 0 {
+			xdxr := false
+			var xe *model.Xdxr
+			switch tab {
+			case model.KLINE_DAY_NR:
+				xe, xdxr = xemap[tgq.Date]
+			default:
+				//TODO take care of week and month situation
+				xe, xdxr, e = mergeXdxr(xemap, tgq.Date, tab)
+			}
+			if e != nil {
+				return fmt.Errorf("%s unable to infer varate_rgl from %v. : %+v", code, tab, e)
+			}
+			if xdxr {
 				// adjust fore-day price for regulated varate calculation
 				pcl := nrqs[i-1].Close
 				d, sa, sc := 0., 0., 0.
@@ -270,6 +304,74 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 		tgq.VarateRgl.Float64 = tvar
 	}
 	return nil
+}
+
+func loadXdxr(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e error) {
+	rows, e := dbmap.Query(`select xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
+		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, code, sDate, eDate)
+	if e != nil {
+		if e != sql.ErrNoRows {
+			return xemap, e
+		}
+	}
+	defer rows.Close()
+	xemap = make(map[string]*model.Xdxr)
+	var (
+		xdate                string
+		divi, shallot, shcvt sql.NullFloat64
+	)
+	for rows.Next() {
+		e = rows.Scan(&xdate, &divi, &shallot, &shcvt)
+		if e != nil {
+			return xemap, e
+		}
+		xemap[xdate] = &model.Xdxr{
+			Code:        code,
+			XdxrDate:    sql.NullString{Valid: true, String: xdate},
+			Divi:        divi,
+			SharesAllot: shallot,
+			SharesCvt:   shcvt,
+		}
+	}
+	if e = rows.Err(); e != nil {
+		return xemap, e
+	}
+	return xemap, nil
+}
+
+//
+func mergeXdxr(xemap map[string]*model.Xdxr, date string, tab model.DBTab) (xe *model.Xdxr, in bool, e error) {
+	for dt, x := range xemap {
+		switch tab {
+		case model.KLINE_WEEK_NR:
+			in, e = util.SameWeek(dt, date, "")
+		case model.KLINE_MONTH_NR:
+			in = dt[:8] == date[:8]
+		}
+		if e != nil {
+			return xe, false, e
+		}
+		if in {
+			// in case multiple xdxr events happen within the same period
+			if xe == nil {
+				xe = x
+			} else {
+				if x.Divi.Valid {
+					xe.Divi.Valid = true
+					xe.Divi.Float64 += x.Divi.Float64
+				}
+				if x.SharesAllot.Valid {
+					xe.SharesAllot.Valid = true
+					xe.SharesAllot.Float64 += x.SharesAllot.Float64
+				}
+				if x.SharesCvt.Valid {
+					xe.SharesCvt.Valid = true
+					xe.SharesCvt.Float64 += x.SharesCvt.Float64
+				}
+			}
+		}
+	}
+	return xe, in, e
 }
 
 func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *model.Xdxr) (
@@ -604,41 +706,47 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 
 func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.DBTab][]byte) chromedp.Tasks {
 	fin := make(chan error)
+	prevTab := model.DBTab("NIL_DB_TAB")
 	url := fmt.Sprintf(`http://stockpage.10jqka.com.cn/HQ_v4.html#hs_%s`, code)
 	//.hxc3-hxc3KlinePricePane-hover visible indicates kline data loaded
 	ltag := `.hxc3-hxc3KlinePricePane-hover`
 	tasks := chromedp.Tasks{
 		chromedp.Navigate(url),
-		batchCaptureData(tdmap, hismap, tabs, fin),
+		batchCaptureData(code, tdmap, hismap, tabs, fin),
 	}
 	for _, t := range tabs {
-		sel := `a[hxc3-data-type^="hxc3Kline"][hxc3-data-type$="%s"]`
-		switch t {
-		case model.KLINE_DAY_NR, model.KLINE_DAY:
-			sel = fmt.Sprintf(sel, "Day")
-		case model.KLINE_WEEK_NR, model.KLINE_WEEK:
-			sel = fmt.Sprintf(sel, "Week")
-		case model.KLINE_MONTH_NR, model.KLINE_MONTH:
-			sel = fmt.Sprintf(sel, "Month")
-		default:
-			log.Panicf("unsupported DBTab: %+v", t)
+		if strings.Split(string(t), "_")[1] != strings.Split(string(prevTab), "_")[1] {
+			sel := `a[hxc3-data-type^="hxc3Kline"][hxc3-data-type$="%s"]`
+			switch t {
+			case model.KLINE_DAY_NR, model.KLINE_DAY:
+				sel = fmt.Sprintf(sel, "Day")
+			case model.KLINE_WEEK_NR, model.KLINE_WEEK:
+				sel = fmt.Sprintf(sel, "Week")
+			case model.KLINE_MONTH_NR, model.KLINE_MONTH:
+				sel = fmt.Sprintf(sel, "Month")
+			default:
+				log.Panicf("unsupported DBTab: %+v", t)
+			}
+			tasks = append(tasks,
+				chromedp.WaitVisible(sel, chromedp.ByQuery),
+				chromedp.Click(sel, chromedp.ByQuery),
+			)
 		}
-		tasks = append(tasks,
-			chromedp.WaitVisible(sel, chromedp.ByQuery),
-			chromedp.Click(sel, chromedp.ByQuery),
-		)
-		fqSel := `a[data-type="%s"]`
-		if t == model.KLINE_DAY_NR || t == model.KLINE_WEEK_NR || t == model.KLINE_MONTH_NR {
-			fqSel = fmt.Sprintf(fqSel, "Bfq")
-		} else {
-			fqSel = fmt.Sprintf(fqSel, "Qfq")
+		if strings.HasSuffix(string(t), "_n") != strings.HasSuffix(string(prevTab), "_n") {
+			fqSel := `a[data-type="%s"]`
+			if t == model.KLINE_DAY_NR || t == model.KLINE_WEEK_NR || t == model.KLINE_MONTH_NR {
+				fqSel = fmt.Sprintf(fqSel, "Bfq")
+			} else {
+				fqSel = fmt.Sprintf(fqSel, "Qfq")
+			}
+			tasks = append(tasks,
+				chromedp.WaitVisible(`#changeFq`, chromedp.ByID),
+				chromedp.Click(`#changeFq`, chromedp.ByID),
+				chromedp.WaitVisible(fqSel, chromedp.ByQuery),
+				chromedp.Click(fqSel, chromedp.ByQuery),
+				chromedp.WaitVisible(ltag, chromedp.ByQuery))
 		}
-		tasks = append(tasks,
-			chromedp.WaitVisible(`#changeFq`, chromedp.ByID),
-			chromedp.Click(`#changeFq`, chromedp.ByID),
-			chromedp.WaitVisible(fqSel, chromedp.ByQuery),
-			chromedp.Click(fqSel, chromedp.ByQuery),
-			chromedp.WaitVisible(ltag, chromedp.ByQuery))
+		prevTab = t
 	}
 	tasks = append(tasks, wait(fin))
 	return tasks
@@ -694,7 +802,7 @@ func wait(fin chan error) chromedp.Action {
 	})
 }
 
-func batchCaptureData(tdmap, hismap map[model.DBTab][]byte, tabs []model.DBTab, fin chan error) chromedp.Action {
+func batchCaptureData(code string, tdmap, hismap map[model.DBTab][]byte, tabs []model.DBTab, fin chan error) chromedp.Action {
 	mcodes := make(map[string]model.DBTab)
 	for _, t := range tabs {
 		mcodes[dt2mc[t]] = t
@@ -731,10 +839,12 @@ func batchCaptureData(tdmap, hismap map[model.DBTab][]byte, tabs []model.DBTab, 
 					case *network.EventRequestWillBeSent:
 						req := d.(*network.EventRequestWillBeSent)
 						for mcode, t := range mcodes {
-							if strings.HasSuffix(req.Request.URL, mcode+"/today.js") {
+							tdsuf := fmt.Sprintf("/hs_%s/%s/today.js", code, mcode)
+							allsuf := fmt.Sprintf("/hs_%s/%s/all.js", code, mcode)
+							if strings.HasSuffix(req.Request.URL, tdsuf) {
 								urlmap[req.RequestID] = req.Request.URL
 								reqIDTd[req.RequestID] = t
-							} else if strings.HasSuffix(req.Request.URL, mcode+"/all.js") {
+							} else if strings.HasSuffix(req.Request.URL, allsuf) {
 								urlmap[req.RequestID] = req.Request.URL
 								reqIDAll[req.RequestID] = t
 							}

@@ -440,3 +440,18 @@ WHERE
             kdjv_stats ks
         WHERE
             ks.code = b.code)
+
+-- name: DELETE_KLINE_AFTER_KLID
+DELETE FROM %[1]s 
+WHERE
+    code = '%[2]s'
+    AND klid IN (SELECT 
+        *
+    FROM
+        (SELECT 
+            klid
+        FROM
+            %[1]s
+        WHERE
+            code = '%[2]s' AND klid > %[3]d
+        ORDER BY klid) AS X)
