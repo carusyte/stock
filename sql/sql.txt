@@ -107,6 +107,11 @@ FROM
     FROM
         xdxr
     GROUP BY code) x2 USING (code , year)
+        INNER JOIN
+    (SELECT 
+        code
+    FROM
+        basics) b USING (code)
 ORDER BY x1.dyr DESC
 
 -- name: HID_SCOPED
@@ -455,3 +460,28 @@ WHERE
         WHERE
             code = '%[2]s' AND klid > %[3]d
         ORDER BY klid) AS X)
+
+-- name: QUERY_NR_DAILY
+SELECT 
+    tn.code,
+    tn.date,
+    tn.klid,
+    tn.open,
+    tn.high,
+    tn.close,
+    tn.low,
+    tn.volume,
+    tn.amount,
+    tn.xrate,
+    tn.varate,
+    t.varate_rgl,
+    tn.udate,
+    tn.utime
+FROM
+    kline_d_n tn
+        INNER JOIN
+    kline_d t USING (code , klid)
+WHERE
+    tn.code = ？
+    %s
+ORDER BY tn.klid

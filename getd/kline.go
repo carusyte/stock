@@ -168,6 +168,26 @@ func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
 	}
 }
 
+// Reinstate adjusts price considering given XDXR data.
+// if x is nil, return p as is.
+func Reinstate(p float64, x *model.Xdxr) float64 {
+	if x == nil {
+		return p
+	}
+	d, sa, sc := 0., 0., 0.
+	if x.Divi.Valid {
+		d = x.Divi.Float64
+	}
+	if x.SharesAllot.Valid {
+		sa = x.SharesAllot.Float64
+	}
+	if x.SharesCvt.Valid {
+		sc = x.SharesCvt.Float64
+	}
+	return (p*10.0 - d) / (10.0 + sa + sc)
+}
+
+// ToOne merges qs into one quote, such as merging daily quotes into weekly quote or month quote
 func ToOne(qs []*model.Quote, preClose float64, preKlid int) *model.Quote {
 	oq := new(model.Quote)
 	if len(qs) == 0 {

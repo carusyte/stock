@@ -77,6 +77,9 @@ type Arguments struct {
 		HidBlueStarRatio     float64  `mapstructure:"hid_blue_star_ratio"`
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
+	Sampler struct {
+		KeyPointEvalFrame int `mapstructure:"key_point_eval_frame"`
+	}
 	//TODO logrus log to file
 }
 
@@ -136,4 +139,5 @@ func setDefaults() {
 	Args.ChromeDP.PoolSize = Args.Concurrency
 	Args.ChromeDP.Headless = true
 	Args.ChromeDP.Timeout = 45
+	Args.Sampler.KeyPointEvalFrame = 10
 }

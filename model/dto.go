@@ -1057,7 +1057,7 @@ type KeyPoint struct {
 	RgnRise  float64 `db:"rgn_rise"`
 	RgnLen   int     `db:"rgn_len"`
 	UnitRise float64 `db:"unit_rise"`
-	Flag     string
+	Flag     sql.NullString
 	Udate    string
 	Utime    string
 }

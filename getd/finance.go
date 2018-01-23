@@ -49,6 +49,42 @@ func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	return
 }
 
+//XdxrDateBetween sums xdxr data according to xdxr_date, returning a map of xdxr_date and its
+// accumulated divi, shares_allot, and shares_cvt, excluding other fields. Both sDate and eDate
+// are included.
+func XdxrDateBetween(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e error) {
+	rows, e := dbmap.Query(`select xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
+		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, code, sDate, eDate)
+	if e != nil {
+		if e != sql.ErrNoRows {
+			return xemap, e
+		}
+	}
+	defer rows.Close()
+	xemap = make(map[string]*model.Xdxr)
+	var (
+		xdate                string
+		divi, shallot, shcvt sql.NullFloat64
+	)
+	for rows.Next() {
+		e = rows.Scan(&xdate, &divi, &shallot, &shcvt)
+		if e != nil {
+			return xemap, e
+		}
+		xemap[xdate] = &model.Xdxr{
+			Code:        code,
+			XdxrDate:    sql.NullString{Valid: true, String: xdate},
+			Divi:        divi,
+			SharesAllot: shallot,
+			SharesCvt:   shcvt,
+		}
+	}
+	if e = rows.Err(); e != nil {
+		return xemap, e
+	}
+	return xemap, nil
+}
+
 func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	// target web server can't withstand heavy traffic

@@ -253,7 +253,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	if e != nil {
 		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
-	xemap, e := loadXdxr(stk.Code, sDate, eDate)
+	xemap, e := XdxrDateBetween(stk.Code, sDate, eDate)
 	if e != nil {
 		return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
@@ -277,7 +277,6 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 			case model.KLINE_DAY_NR:
 				xe, xdxr = xemap[tgq.Date]
 			default:
-				//TODO take care of week and month situation
 				xe, xdxr, e = mergeXdxr(xemap, tgq.Date, tab)
 			}
 			if e != nil {
@@ -285,18 +284,7 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 			}
 			if xdxr {
 				// adjust fore-day price for regulated varate calculation
-				pcl := nrqs[i-1].Close
-				d, sa, sc := 0., 0., 0.
-				if xe.Divi.Valid {
-					d = xe.Divi.Float64
-				}
-				if xe.SharesAllot.Valid {
-					sa = xe.SharesAllot.Float64
-				}
-				if xe.SharesCvt.Valid {
-					sc = xe.SharesCvt.Float64
-				}
-				pcl = (pcl*10.0 - d) / (10.0 + sa + sc)
+				pcl := Reinstate(nrqs[i-1].Close, xe)
 				tvar = (nrq.Close - pcl) / pcl * 100.
 			}
 		}
@@ -306,40 +294,6 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 	return nil
 }
 
-func loadXdxr(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e error) {
-	rows, e := dbmap.Query(`select xdxr_date, sum(divi), sum(shares_allot), sum(shares_cvt) `+
-		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, code, sDate, eDate)
-	if e != nil {
-		if e != sql.ErrNoRows {
-			return xemap, e
-		}
-	}
-	defer rows.Close()
-	xemap = make(map[string]*model.Xdxr)
-	var (
-		xdate                string
-		divi, shallot, shcvt sql.NullFloat64
-	)
-	for rows.Next() {
-		e = rows.Scan(&xdate, &divi, &shallot, &shcvt)
-		if e != nil {
-			return xemap, e
-		}
-		xemap[xdate] = &model.Xdxr{
-			Code:        code,
-			XdxrDate:    sql.NullString{Valid: true, String: xdate},
-			Divi:        divi,
-			SharesAllot: shallot,
-			SharesCvt:   shcvt,
-		}
-	}
-	if e = rows.Err(); e != nil {
-		return xemap, e
-	}
-	return xemap, nil
-}
-
-//
 func mergeXdxr(xemap map[string]*model.Xdxr, date string, tab model.DBTab) (xe *model.Xdxr, in bool, e error) {
 	for dt, x := range xemap {
 		switch tab {
