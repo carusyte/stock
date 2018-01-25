@@ -17,6 +17,7 @@ import (
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"github.com/pkg/errors"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -57,6 +58,7 @@ func XdxrDateBetween(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e
 		`from xdxr where code = ? and xdxr_date between ? and ? group by xdxr_date`, code, sDate, eDate)
 	if e != nil {
 		if e != sql.ErrNoRows {
+			e = errors.WithStack(e)
 			return xemap, e
 		}
 	}
@@ -69,6 +71,7 @@ func XdxrDateBetween(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e
 	for rows.Next() {
 		e = rows.Scan(&xdate, &divi, &shallot, &shcvt)
 		if e != nil {
+			e = errors.WithStack(e)
 			return xemap, e
 		}
 		xemap[xdate] = &model.Xdxr{
@@ -80,6 +83,7 @@ func XdxrDateBetween(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e
 		}
 	}
 	if e = rows.Err(); e != nil {
+		e = errors.WithStack(e)
 		return xemap, e
 	}
 	return xemap, nil

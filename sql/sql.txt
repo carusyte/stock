@@ -482,6 +482,6 @@ FROM
         INNER JOIN
     kline_d t USING (code , klid)
 WHERE
-    tn.code = ？
+    tn.code = ?
     %s
 ORDER BY tn.klid

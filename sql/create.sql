@@ -1,5 +1,3 @@
-CREATE DATABASE `secu` /*!40100 DEFAULT CHARACTER SET utf8 */;
-
 CREATE TABLE `basics` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
   `name` varchar(10) DEFAULT NULL COMMENT '名称',
@@ -70,6 +68,28 @@ CREATE TABLE `finance` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='财务信息';
+
+CREATE TABLE `fin_predict` (
+  `code` varchar(8) NOT NULL COMMENT '股票代码',
+  `year` varchar(4) NOT NULL COMMENT '年份',
+  `eps_num` int(11) DEFAULT NULL COMMENT '每股收益预测机构数',
+  `eps_min` double DEFAULT NULL COMMENT '每股收益最小值',
+  `eps_avg` double DEFAULT NULL COMMENT '每股收益平均值',
+  `eps_max` double DEFAULT NULL COMMENT '每股收益最大值',
+  `eps_ind_avg` double DEFAULT NULL COMMENT '每股收益行业平均',
+  `eps_up_rt` double DEFAULT NULL COMMENT 'EPS预测上调机构占比',
+  `eps_dn_rt` double DEFAULT NULL COMMENT 'EPS预测下调机构占比',
+  `np_num` int(11) DEFAULT NULL COMMENT '净利润预测机构数',
+  `np_min` double DEFAULT NULL COMMENT '净利润最小值 (亿元）',
+  `np_avg` double DEFAULT NULL COMMENT '净利润平均值 (亿元）',
+  `np_max` double DEFAULT NULL COMMENT '净利润最大值 (亿元）',
+  `np_ind_avg` double DEFAULT NULL COMMENT '净利润行业平均值 (亿元）',
+  `np_up_rt` double DEFAULT NULL COMMENT '净利润预测上调机构占比',
+  `np_dn_rt` double DEFAULT NULL COMMENT '净利润预测下调机构占比',
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
 
 CREATE TABLE `idxlst` (
   `code` varchar(8) NOT NULL COMMENT '代码',
@@ -223,9 +243,11 @@ CREATE TABLE `kline_d` (
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`)
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（前复权）';
 
 CREATE TABLE `kline_d_n` (
@@ -238,12 +260,13 @@ CREATE TABLE `kline_d_n` (
   `low` double DEFAULT NULL,
   `volume` double DEFAULT NULL,
   `amount` double DEFAULT NULL,
-  `factor` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`)
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_N_IDX1` (`code`,`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（不复权）';
 
 CREATE TABLE `kline_m` (
@@ -258,9 +281,30 @@ CREATE TABLE `kline_m` (
   `Amount` double DEFAULT NULL,
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`Code`,`Klid`)
+  PRIMARY KEY (`Code`,`Klid`),
+  UNIQUE KEY `KLINE_M_IDX1` (`Code`,`Date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `kline_m_n` (
+  `Code` varchar(8) NOT NULL,
+  `Date` varchar(10) NOT NULL,
+  `Klid` int(11) NOT NULL,
+  `Open` double DEFAULT NULL,
+  `High` double DEFAULT NULL,
+  `Close` double DEFAULT NULL,
+  `Low` double DEFAULT NULL,
+  `Volume` double DEFAULT NULL,
+  `Amount` double DEFAULT NULL,
+  `Xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`Code`,`Klid`),
+  UNIQUE KEY `KLINE_M_N_IDX1` (`Code`,`Date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `kline_w` (
@@ -275,10 +319,49 @@ CREATE TABLE `kline_w` (
   `Amount` double DEFAULT NULL,
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`Code`,`Klid`)
+  PRIMARY KEY (`Code`,`Klid`),
+  UNIQUE KEY `KLINE_W_IDX1` (`Code`,`Date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `kline_w_n` (
+  `Code` varchar(8) NOT NULL,
+  `Date` varchar(10) NOT NULL,
+  `Klid` int(11) NOT NULL,
+  `Open` double DEFAULT NULL,
+  `High` double DEFAULT NULL,
+  `Close` double DEFAULT NULL,
+  `Low` double DEFAULT NULL,
+  `Volume` double DEFAULT NULL,
+  `Amount` double DEFAULT NULL,
+  `Xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`Code`,`Klid`),
+  UNIQUE KEY `KLINE_W_N_IDX1` (`Code`,`Date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `kpts` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,3) NOT NULL,
+  `sum_fall` decimal(6,3) NOT NULL,
+  `rgn_rise` decimal(6,3) NOT NULL,
+  `rgn_len` int(11) NOT NULL,
+  `unit_rise` decimal(6,3) NOT NULL,
+  `flag` varchar(5) NOT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`uuid`),
+  KEY `kpts_idx1` (`code`,`klid`,`date`),
+  KEY `kpts_idx2` (`flag`,`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='key points';
 
 CREATE TABLE `stats` (
   `code` varchar(6) NOT NULL,
@@ -326,28 +409,6 @@ CREATE TABLE `xdxr` (
   `xprice` varchar(1) DEFAULT NULL COMMENT '是否已更新过前复权价格信息',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`idx`)
+  PRIMARY KEY (`code`,`idx`),
+  UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-CREATE TABLE `fin_predict` (
-  `code` varchar(8) NOT NULL COMMENT '股票代码',
-  `year` varchar(4) NOT NULL COMMENT '年份',
-  `eps_num` int(11) DEFAULT NULL COMMENT '每股收益预测机构数',
-  `eps_min` double DEFAULT NULL COMMENT '每股收益最小值',
-  `eps_avg` double DEFAULT NULL COMMENT '每股收益平均值',
-  `eps_max` double DEFAULT NULL COMMENT '每股收益最大值',
-  `eps_ind_avg` double DEFAULT NULL COMMENT '每股收益行业平均',
-  `eps_up_rt` double DEFAULT NULL COMMENT 'EPS预测上调机构占比',
-  `eps_dn_rt` double DEFAULT NULL COMMENT 'EPS预测下调机构占比',
-  `np_num` int(11) DEFAULT NULL COMMENT '净利润预测机构数',
-  `np_min` double DEFAULT NULL COMMENT '净利润最小值 (亿元）',
-  `np_avg` double DEFAULT NULL COMMENT '净利润平均值 (亿元）',
-  `np_max` double DEFAULT NULL COMMENT '净利润最大值 (亿元）',
-  `np_ind_avg` double DEFAULT NULL COMMENT '净利润行业平均值 (亿元）',
-  `np_up_rt` double DEFAULT NULL COMMENT '净利润预测上调机构占比',
-  `np_dn_rt` double DEFAULT NULL COMMENT '净利润预测下调机构占比',
-  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
-  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`year`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
-

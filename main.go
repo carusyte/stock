@@ -10,6 +10,7 @@ import (
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/sampler"
 	"github.com/mitchellh/panicwrap"
 	"github.com/sirupsen/logrus"
 
@@ -38,9 +39,10 @@ func main() {
 
 	//logr.SetLevel(logr.DebugLevel)
 
-	if conf.Args.Scorer.FetchData {
-		getData()
-	}
+	// if conf.Args.Scorer.FetchData {
+	// 	getData()
+	// }
+	// hidBlueKdjSt()
 
 	//pruneKdjFd(true)
 	//kdjFirst()
@@ -48,14 +50,19 @@ func main() {
 	//BLUE
 	// blue()
 	//blueKdjv()
-
-	hidBlueKdjSt()
-
 	//kdjOnly()
 	//renewKdjStats(true)
 	// test()
 	// testSplitAfter()
 	// fixVarate()
+
+	sampleKeyPoints()
+}
+
+func sampleKeyPoints() {
+	start := time.Now()
+	sampler.SampAllKeyPoints(-1, 120, nil)
+	log.Printf("time cost: %.2f", time.Since(start).Seconds())
 }
 
 func panicHandler(output string) {

@@ -1054,6 +1054,7 @@ type KeyPoint struct {
 	Klid     int
 	Date     string
 	Score    float64
+	SumFall  float64 `db:"sum_fall"`
 	RgnRise  float64 `db:"rgn_rise"`
 	RgnLen   int     `db:"rgn_len"`
 	UnitRise float64 `db:"unit_rise"`
