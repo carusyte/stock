@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Assess scores based on KdjV scores against its statistical data.
+//KdjSt Assess scores based on KdjV scores against its statistical data.
 type KdjSt struct {
 	Code                               string
 	Name                               string
@@ -45,7 +45,7 @@ func (k *KdjSt) GetFieldStr(name string) string {
 }
 
 var (
-	kdjv *KdjV = new(KdjV)
+	kdjv = new(KdjV)
 )
 
 func (k *KdjSt) Get(stock []string, limit int, ranked bool) (r *Result) {

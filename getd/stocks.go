@@ -22,29 +22,32 @@ import (
 	"golang.org/x/text/transform"
 )
 
+//StocksDb loads all stocks from basics table.
 func StocksDb() (allstk []*model.Stock) {
 	dbmap.Select(&allstk, "select * from basics")
 	return
 }
 
+//StocksDbByCode load stocks of specified codes from the basics table.
 func StocksDbByCode(code ...string) (stocks []*model.Stock) {
 	sql := fmt.Sprintf("select * from basics where code in (%s)", util.Join(code, ",", true))
 	_, e := dbmap.Select(&stocks, sql)
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return
-		} else {
-			log.Panicln("failed to run sql", e)
 		}
+		log.Panicln("failed to run sql", e)
 	}
 	return
 }
 
+//StocksDbTo load all stock data from basics into specified interface{}
 func StocksDbTo(target interface{}) {
 	dbmap.Select(target, "select * from basics")
 	return
 }
 
+//GetStockInfo fetches basic stocks info from remote servers.
 func GetStockInfo() (allstk *model.Stocks) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
@@ -52,6 +55,7 @@ func GetStockInfo() (allstk *model.Stocks) {
 	log.Printf("total stocks: %d", allstk.Size())
 
 	getIndustry(allstk)
+	getShares(allstk)
 
 	overwrite(allstk.List)
 
@@ -65,7 +69,7 @@ func getIndustry(stocks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	rstks := new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < 3*conf.Args.Concurrency; i++ {
+	for i := 0; i < conf.Args.Concurrency; i++ {
 		wg.Add(1)
 		go doGetIndustry(chstk, chrstk, &wg)
 	}
@@ -86,6 +90,34 @@ func getIndustry(stocks *model.Stocks) {
 	return
 }
 
+func getShares(stocks *model.Stocks) {
+	log.Println("getting share info...")
+	var wg sync.WaitGroup
+	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	rstks := new(model.Stocks)
+	wgr := collect(rstks, chrstk)
+	for i := 0; i < conf.Args.Concurrency; i++ {
+		wg.Add(1)
+		go doGetShares(chstk, chrstk, &wg)
+	}
+	for _, s := range stocks.List {
+		chstk <- s
+	}
+	close(chstk)
+	wg.Wait()
+	close(chrstk)
+	wgr.Wait()
+	log.Printf("%d share info fetched", rstks.Size())
+	if stocks.Size() != rstks.Size() {
+		same, skp := stocks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
+}
+
 func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// target web server can't withstand heavy traffic
@@ -96,7 +128,10 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			switch conf.Args.Datasource.Industry {
 			case conf.TENCENT_TC, conf.TENCENT_CSRC:
 				ok, r = tcIndustry(stock)
-				//TODO get industry from THS
+			case conf.THS:
+				ok, r = thsIndustry(stock)
+			default:
+				panic("unable to get industry, unsupported source: " + conf.Args.Datasource.Industry)
 			}
 			if ok {
 				chrstk <- stock
@@ -110,6 +145,112 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			break
 		}
 	}
+}
+
+func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
+	defer wg.Done()
+	RETRIES := 5
+	for stock := range chstk {
+		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
+			ok, r := thsShares(stock)
+			if ok {
+				chrstk <- stock
+			} else if r {
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				time.Sleep(time.Second * 3)
+				continue
+			} else {
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+			}
+			break
+		}
+	}
+}
+
+func thsShares(stock *model.Stock) (ok, retry bool) {
+	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/equity.html`, stock.Code)
+	res, e := util.HttpGetResp(url)
+	if e != nil {
+		log.Printf("%s, http failed, giving up %s", stock.Code, url)
+		return false, false
+	}
+	defer res.Body.Close()
+
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+
+	// parse body using goquery
+	doc, e := goquery.NewDocumentFromReader(utfBody)
+	if e != nil {
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+			stock.Name)
+		return false, true
+	}
+
+	//parse share structure table
+	doc.Find("#stockcapit div.bd.pt5 table tbody tr").Each(
+		func(i int, s *goquery.Selection) {
+			typ := strings.TrimSpace(s.Find("th").Text())
+			if "变动原因" == typ {
+				return
+			}
+			sval := s.Find("td").First().Text()
+			var (
+				fval float64
+				div  = 100000000.
+			)
+			if strings.Contains(sval, "亿") {
+				fval, e = strconv.ParseFloat(strings.TrimSuffix(sval, "亿"), 64)
+				if e != nil {
+					log.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
+				}
+				div = 1.
+			} else if strings.Contains(sval, "万") {
+				fval, e = strconv.ParseFloat(strings.TrimSuffix(sval, "万"), 64)
+				if e != nil {
+					log.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
+				}
+				div = 10000.
+			}
+			fval /= div
+			switch typ {
+			case "总股本(股)":
+				stock.ShareSum.Valid = true
+				stock.ShareSum.Float64 = fval
+			case "A股总股本(股)":
+				stock.AShareSum.Valid = true
+				stock.AShareSum.Float64 = fval
+			case "流通A股(股)":
+				stock.AShareExch.Valid = true
+				stock.AShareExch.Float64 = fval
+			case "限售A股(股)":
+				stock.AShareR.Valid = true
+				stock.AShareR.Float64 = fval
+			case "B股总股本(股)":
+				stock.BShareSum.Valid = true
+				stock.BShareSum.Float64 = fval
+			case "流通B股(股)":
+				stock.BShareExch.Valid = true
+				stock.BShareExch.Float64 = fval
+			case "限售B股(股)":
+				stock.BShareR.Valid = true
+				stock.BShareR.Float64 = fval
+			case "H股总股本(股)":
+				stock.HShareSum.Valid = true
+				stock.HShareSum.Float64 = fval
+			case "流通H股(股)":
+				stock.HShareExch.Valid = true
+				stock.HShareExch.Float64 = fval
+			case "限售H股(股)":
+				stock.HShareR.Valid = true
+				stock.HShareR.Float64 = fval
+			default:
+				log.Panicf("%s unrecognized type: %s, url: %s", stock.Code, typ, url)
+				return
+			}
+		})
+
+	return true, false
 }
 
 func tcIndustry(stock *model.Stock) (ok, retry bool) {
@@ -146,6 +287,59 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	stock.Industry.Valid = true
 	stock.Industry.String = val
 
+	return true, false
+}
+
+func thsIndustry(stock *model.Stock) (ok, retry bool) {
+	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/field.html`, stock.Code)
+	res, e := util.HttpGetResp(url)
+	if e != nil {
+		log.Printf("%s, http failed, giving up %s", stock.Code, url)
+		return false, false
+	}
+	defer res.Body.Close()
+
+	// Convert the designated charset HTML to utf-8 encoded HTML.
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+
+	// parse body using goquery
+	doc, e := goquery.NewDocumentFromReader(utfBody)
+	if e != nil {
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+			stock.Name)
+		return false, true
+	}
+
+	//parse industry value
+	sel := `#fieldstatus div.bd.pr div:nth-child(1) p span`
+	val := doc.Find(sel).Text()
+	if len(val) == 0 {
+		return true, false
+	}
+	sep := " -- "
+	idx := strings.Index(val, sep)
+	if idx <= 0 {
+		log.Printf("%s no industry lv1 data. value: %s, source: %s", stock.Code, val, url)
+		return true, false
+	}
+	stock.IndLv1.Valid = true
+	stock.IndLv1.String = val[:idx]
+	sval := val[idx+4:]
+	idx = strings.Index(sval, sep)
+	if idx <= 0 {
+		log.Printf("%s no industry lv2 data. value: %s, source: %s", stock.Code, val, url)
+		return true, false
+	}
+	stock.IndLv2.Valid = true
+	stock.IndLv2.String = sval[:idx]
+	sval = sval[idx+4:]
+	idx = strings.Index(sval, " ")
+	if idx <= 0 {
+		log.Printf("%s no industry lv3 data. value: %s, source: %s", stock.Code, val, url)
+		return true, false
+	}
+	stock.IndLv3.Valid = true
+	stock.IndLv3.String = sval[:idx]
 	return true, false
 }
 
@@ -243,13 +437,17 @@ func overwrite(allstk []*model.Stock) {
 
 		codes := make([]string, len(allstk))
 		valueStrings := make([]string, 0, len(allstk))
-		valueArgs := make([]interface{}, 0, len(allstk)*18)
+		valueArgs := make([]interface{}, 0, len(allstk)*31)
 		for i, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
+				"?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, stk.Code)
 			valueArgs = append(valueArgs, stk.Name)
 			valueArgs = append(valueArgs, stk.Market)
 			valueArgs = append(valueArgs, stk.Industry)
+			valueArgs = append(valueArgs, stk.IndLv1)
+			valueArgs = append(valueArgs, stk.IndLv2)
+			valueArgs = append(valueArgs, stk.IndLv3)
 			valueArgs = append(valueArgs, stk.Price)
 			valueArgs = append(valueArgs, stk.Varate)
 			valueArgs = append(valueArgs, stk.Var)
@@ -262,6 +460,16 @@ func overwrite(allstk []*model.Stock) {
 			valueArgs = append(valueArgs, stk.Totals)
 			valueArgs = append(valueArgs, stk.CircMarVal)
 			valueArgs = append(valueArgs, stk.TimeToMarket)
+			valueArgs = append(valueArgs, stk.ShareSum)
+			valueArgs = append(valueArgs, stk.AShareSum)
+			valueArgs = append(valueArgs, stk.AShareExch)
+			valueArgs = append(valueArgs, stk.AShareR)
+			valueArgs = append(valueArgs, stk.BShareSum)
+			valueArgs = append(valueArgs, stk.BShareExch)
+			valueArgs = append(valueArgs, stk.BShareR)
+			valueArgs = append(valueArgs, stk.HShareSum)
+			valueArgs = append(valueArgs, stk.HShareExch)
+			valueArgs = append(valueArgs, stk.HShareR)
 			valueArgs = append(valueArgs, stk.UDate)
 			valueArgs = append(valueArgs, stk.UTime)
 			codes[i] = stk.Code
@@ -279,14 +487,18 @@ func overwrite(allstk []*model.Stock) {
 		}
 		log.Printf("%d stale stock record deleted from basics", ra)
 
-		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,price,varate,var,accer,xrate,"+
-			"volratio,ampl,"+
-			"turnover,outstanding,totals,circmarval,timeToMarket,udate,utime) VALUES %s on duplicate key update "+
-			"name=values(name),market=values(market),industry=values(industry),"+
-			"price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
+		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,ind_lv1,ind_lv2,ind_lv3,price,"+
+			"varate,var,accer,xrate,volratio,ampl,turnover,outstanding,totals,circmarval,timeToMarket,"+
+			"share_sum,a_share_sum,a_share_exch,a_share_r,b_share_sum,b_share_exch,b_share_r,"+
+			"h_share_sum,h_share_exch,h_share_r,udate,utime) VALUES %s on duplicate key update "+
+			"name=values(name),market=values(market),industry=values(industry),ind_lv1=values(ind_lv1),ind_lv2=values(ind_lv2),"+
+			"ind_lv3=values(ind_lv3),price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
 			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
 			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+
-			"(timeToMarket),udate=values(udate),utime=values(utime)",
+			"(timeToMarket),share_sum=values(share_sum),a_share_sum=values(a_share_sum),a_share_exch=values(a_share_exch),"+
+			"a_share_r=values(a_share_r),b_share_sum=values(b_share_sum),b_share_exch=values(b_share_exch),"+
+			"b_share_r=values(b_share_r),h_share_sum=values(h_share_sum),h_share_exch=values(h_share_exch),"+
+			"h_share_r=values(h_share_r),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, e = tran.Exec(stmt, valueArgs...)
 		if e != nil {

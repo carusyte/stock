@@ -43,11 +43,15 @@ const (
 	KLINE_60M       DBTab = "kline_60m"
 )
 
+//Stock represents basic stock info.
 type Stock struct {
 	Code             string
 	Name             string
 	Market           sql.NullString
 	Industry         sql.NullString
+	IndLv1           sql.NullString `db:"ind_lv1"`
+	IndLv2           sql.NullString `db:"ind_lv2"`
+	IndLv3           sql.NullString `db:"ind_lv3"`
 	Area             sql.NullString
 	Pe               sql.NullFloat64
 	Pu               sql.NullFloat64
@@ -79,6 +83,16 @@ type Stock struct {
 	Turnover         sql.NullFloat64
 	Accer            sql.NullFloat64
 	CircMarVal       sql.NullFloat64
+	ShareSum         sql.NullFloat64 `db:"share_sum"`
+	AShareSum        sql.NullFloat64 `db:"a_share_sum"`
+	AShareExch       sql.NullFloat64 `db:"a_share_exch"`
+	AShareR          sql.NullFloat64 `db:"a_share_r"`
+	BShareSum        sql.NullFloat64 `db:"b_share_sum"`
+	BShareExch       sql.NullFloat64 `db:"b_share_exch"`
+	BShareR          sql.NullFloat64 `db:"b_share_r"`
+	HShareSum        sql.NullFloat64 `db:"h_share_sum"`
+	HShareExch       sql.NullFloat64 `db:"h_share_exch"`
+	HShareR          sql.NullFloat64 `db:"h_share_r"`
 	UDate            sql.NullString
 	UTime            sql.NullString
 	IsIndex          bool

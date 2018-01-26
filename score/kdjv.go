@@ -2,6 +2,15 @@ package score
 
 import (
 	"fmt"
+	"log"
+	"math"
+	"reflect"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	rm "github.com/carusyte/rima/model"
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/getd"
@@ -12,14 +21,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
 	logr "github.com/sirupsen/logrus"
-	"log"
-	"math"
-	"reflect"
-	"runtime"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 )
 
 // Medium to Long term model.
@@ -101,7 +102,13 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 		item := new(Item)
 		item.Code = s.Code
 		item.Name = s.Name
-		if s.Industry.Valid {
+		if s.IndLv3.Valid {
+			item.Industry = s.IndLv3.String
+		} else if s.IndLv2.Valid {
+			item.Industry = s.IndLv2.String
+		} else if s.IndLv1.Valid {
+			item.Industry = s.IndLv1.String
+		} else if s.Industry.Valid {
 			item.Industry = s.Industry.String
 		}
 		items = append(items, item)
@@ -180,7 +187,7 @@ func (k *KdjV) RenewStats(useRaw bool, code ...string) {
 	logr.Debugf("Parallel Level: %d", pl)
 	logr.Debugf("#Stocks: %d", len(codes))
 	chcde := make(chan string, pl)
-	chkps := make(chan *model.KDJVStat, JOB_CAPACITY)
+	chkps := make(chan *model.KDJVStat, JobCapacity)
 	wgr.Add(1)
 	go func(wgr *sync.WaitGroup) {
 		defer wgr.Done()

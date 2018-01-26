@@ -11,7 +11,6 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/sampler"
-	"github.com/mitchellh/panicwrap"
 	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
@@ -21,28 +20,14 @@ import (
 )
 
 func main() {
-	exitStatus, err := panicwrap.BasicWrap(panicHandler)
-	if err != nil {
-		// Something went wrong setting up the panic wrapper. Unlikely,
-		// but possible.
-		panic(err)
-	}
-
-	// If exitStatus >= 0, then we're the parent process and the panicwrap
-	// re-executed ourselves and completed. Just exit with the proper status.
-	if exitStatus >= 0 {
-		os.Exit(exitStatus)
-	}
-
-	// Otherwise, exitStatus < 0 means we're the child. Continue executing as
-	// normal...
+	defer shutdownHook()
 
 	//logr.SetLevel(logr.DebugLevel)
 
-	// if conf.Args.Scorer.FetchData {
-	// 	getData()
-	// }
-	// hidBlueKdjSt()
+	if conf.Args.Scorer.FetchData {
+		getData()
+	}
+	hidBlueKdjSt()
 
 	//pruneKdjFd(true)
 	//kdjFirst()
@@ -56,7 +41,16 @@ func main() {
 	// testSplitAfter()
 	// fixVarate()
 
-	sampleKeyPoints()
+	// sampleKeyPoints()
+}
+
+func shutdownHook() {
+	if r := recover(); r != nil {
+		if er, hasError := r.(error); hasError {
+			log.Printf("caught error:%+v, trying to cleanup...", er)
+			getd.Cleanup()
+		}
+	}
 }
 
 func sampleKeyPoints() {

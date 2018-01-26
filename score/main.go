@@ -15,9 +15,14 @@ import (
 type mark string
 
 const (
-	JOB_CAPACITY      = global.JOB_CAPACITY
-	StarMark     mark = `☆`
-	WarnMark     mark = `⚠`
+	//JobCapacity a sugguested value for go routine channels.
+	JobCapacity = global.JOB_CAPACITY
+	//StarMark has the representation ☆
+	StarMark mark = `☆`
+	//WarnMark has the representation ⚠
+	WarnMark mark = `⚠`
+	//HMark has the alphabetical H
+	HMark mark = `H`
 )
 
 //TODO TRY 30/60 min ENE
@@ -63,6 +68,11 @@ type Item struct {
 	//Score evaluation aspect
 	Profiles map[string]*Profile
 	Marks    []mark
+}
+
+//AddMark adds a mark to this item.
+func (it *Item) AddMark(m mark) {
+	it.Marks = append(it.Marks, m)
 }
 
 func (it *Item) String() string {

@@ -1,18 +1,20 @@
 package score
 
 import (
+	"database/sql"
+	"fmt"
+	"log"
+	"math"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"fmt"
-	"reflect"
-	"math"
-	"time"
-	"database/sql"
-	"github.com/pkg/errors"
 	"github.com/montanaflynn/stats"
-	"github.com/carusyte/stock/indc"
-	"strings"
-	"log"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,9 +30,9 @@ import (
 type HiD struct {
 	Code        string
 	Name        string
-	Year        string `db:"year"`
-	RegDate     string `db:"reg_date"`
-	XdxrDate    string `db:"xdxr_date"`
+	Year        string          `db:"year"`
+	RegDate     string          `db:"reg_date"`
+	XdxrDate    string          `db:"xdxr_date"`
 	Divi        sql.NullFloat64 `db:"divi"`
 	DiviGrYoy   string
 	SharesAllot sql.NullFloat64 `db:"shares_allot"`
@@ -43,8 +45,8 @@ type HiD struct {
 	DprAvg      float64
 	DprAvgYrs   int
 	Dyr2Dpr     float64
-	Price       float64    `db:"price"`
-	PriceDate   string    `db:"price_date"`
+	Price       float64 `db:"price"`
+	PriceDate   string  `db:"price_date"`
 }
 
 const (
@@ -78,6 +80,12 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		util.CheckErr(e, "failed to query database, sql:\n"+sql)
 	}
 
+	//mark stocks with H shares
+	var hstk []string
+	_, e := dbmap.Select(&hstk, "select code from basics where h_share_sum is not null and h_share_sum > 0")
+	util.CheckErr(e, "failed to query H share stocks from database")
+	sort.Strings(hstk)
+
 	for _, ih := range hids {
 		item := new(Item)
 		r.AddItem(item)
@@ -88,6 +96,10 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		item.Profiles[h.Id()] = ip
 		ip.FieldHolder = ih
 		ip.Score += scoreDyr(ih, SCORE_LATEST_DYR)
+
+		if sort.SearchStrings(hstk, ih.Code) < len(hstk) {
+			item.AddMark(HMark)
+		}
 
 		//supplement latest price
 		lp := &HiD{}
