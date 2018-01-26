@@ -82,9 +82,8 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 
 	//mark stocks with H shares
 	var hstk []string
-	_, e := dbmap.Select(&hstk, "select code from basics where h_share_sum is not null and h_share_sum > 0")
+	_, e := dbmap.Select(&hstk, "select code from basics where h_share_sum is not null and h_share_sum > 0 order by code")
 	util.CheckErr(e, "failed to query H share stocks from database")
-	sort.Strings(hstk)
 
 	for _, ih := range hids {
 		item := new(Item)
@@ -97,7 +96,7 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		ip.FieldHolder = ih
 		ip.Score += scoreDyr(ih, SCORE_LATEST_DYR)
 
-		if sort.SearchStrings(hstk, ih.Code) >= len(hstk) {
+		if i := sort.SearchStrings(hstk, ih.Code); i < len(hstk) && ih.Code == hstk[i] {
 			item.AddMark(HMark)
 		}
 
