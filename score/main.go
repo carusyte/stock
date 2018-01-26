@@ -139,12 +139,12 @@ func (r *Result) Mark(n int, m ...mark) (rr *Result) {
 		return r
 	} else if n > 0 {
 		for i := 0; i < n; i++ {
-			r.Items[i].Marks = m
+			r.Items[i].Marks = append(r.Items[i].Marks, m...)
 		}
 	} else {
 		p := len(r.Items) + n
 		for i := len(r.Items) - 1; i >= p; i-- {
-			r.Items[i].Marks = m
+			r.Items[i].Marks = append(r.Items[i].Marks, m...)
 		}
 	}
 	return r

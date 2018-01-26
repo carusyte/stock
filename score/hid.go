@@ -97,7 +97,7 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		ip.FieldHolder = ih
 		ip.Score += scoreDyr(ih, SCORE_LATEST_DYR)
 
-		if sort.SearchStrings(hstk, ih.Code) < len(hstk) {
+		if sort.SearchStrings(hstk, ih.Code) >= len(hstk) {
 			item.AddMark(HMark)
 		}
 
