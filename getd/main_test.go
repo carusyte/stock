@@ -1,23 +1,24 @@
 package getd
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
 	"github.com/carusyte/stock/model"
 	"github.com/montanaflynn/stats"
-	"fmt"
 )
 
 func TestCalcAllIndcs(t *testing.T) {
 	start := time.Now()
-	defer stop("GETD_TOTAL", start)
+	defer StopWatch("GETD_TOTAL", start)
 	stk := StocksDb()
 	stks := new(model.Stocks)
 	stks.Add(stk...)
 
 	stci := time.Now()
 	CalcIndics(stks)
-	stop("CALC_INDICS", stci)
+	StopWatch("CALC_INDICS", stci)
 }
 
 func TestCalcIndcs(t *testing.T) {

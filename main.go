@@ -27,6 +27,13 @@ func main() {
 	if conf.Args.Scorer.FetchData {
 		getData()
 	}
+	if conf.Args.Sampler.Sample {
+		stkps := time.Now()
+		sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, nil)
+		getd.StopWatch("KEY_POINT_SAMPLING", stkps)
+	} else {
+		log.Println("skipping key point sampling")
+	}
 	hidBlueKdjSt()
 
 	//pruneKdjFd(true)
@@ -40,7 +47,6 @@ func main() {
 	// test()
 	// testSplitAfter()
 	// fixVarate()
-
 	// sampleKeyPoints()
 }
 

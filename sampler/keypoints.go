@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
@@ -19,8 +18,13 @@ var dbmap = global.Dbmap
 //SampAllKeyPoints sample all keypoints using goroutine and save sampled data to kpts table.
 func SampAllKeyPoints(resample, prior int,
 	g func(code string, klhist []*model.Quote) (kpts []*model.KeyPoint, err error)) (e error) {
-	stks := getd.StocksDb()
+	var stks []*model.Stock
+	dbmap.Select(&stks, "select * from basics")
 	log.Printf("%d stocks loaded from db", len(stks))
+	if len(stks) == 0 {
+		log.Printf("no stock available, skipping key point sampling")
+		return nil
+	}
 
 	var wg sync.WaitGroup
 	pl := int(float64(runtime.NumCPU()) * 0.8)

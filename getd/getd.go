@@ -14,9 +14,9 @@ func Get() {
 	var allstks, stks *model.Stocks
 	if !conf.Args.Datasource.SkipStocks {
 		start := time.Now()
-		defer stop("GETD_TOTAL", start)
+		defer StopWatch("GETD_TOTAL", start)
 		allstks = GetStockInfo()
-		stop("STOCK_LIST", start)
+		StopWatch("STOCK_LIST", start)
 	} else {
 		log.Printf("skipped stock data from web")
 		allstks = new(model.Stocks)
@@ -29,24 +29,25 @@ func Get() {
 	if !conf.Args.Datasource.SkipFinance {
 		stgfi := time.Now()
 		stks = GetFinance(allstks)
-		stop("GET_FINANCE", stgfi)
+		StopWatch("GET_FINANCE", stgfi)
 	} else {
 		log.Printf("skipped finance data from web")
 		stks = allstks
 	}
 
-	if !conf.Args.Datasource.SkipKlineDn {
-		stgkdn := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY_NR)
-		stop("GET_KLINES_DN", stgkdn)
+	if !conf.Args.Datasource.SkipKlinePre {
+		stgkpre := time.Now()
+		stks = GetKlines(stks, model.KLINE_DAY_NR, model.KLINE_DAY_B,
+			model.KLINE_WEEK_B, model.KLINE_MONTH_B)
+		StopWatch("GET_KLINES_PRE", stgkpre)
 	} else {
-		log.Printf("skipped non-reinstated daily kline data from web")
+		log.Printf("skipped kline-pre data from web")
 	}
 
 	if !conf.Args.Datasource.SkipFinancePrediction {
 		fipr := time.Now()
 		stks = GetFinPrediction(stks)
-		stop("GET_FIN_PREDICT", fipr)
+		StopWatch("GET_FIN_PREDICT", fipr)
 	} else {
 		log.Printf("skipped financial prediction data from web")
 	}
@@ -54,7 +55,7 @@ func Get() {
 	if !conf.Args.Datasource.SkipXdxr {
 		stgx := time.Now()
 		stks = GetXDXRs(stks)
-		stop("GET_XDXR", stgx)
+		StopWatch("GET_XDXR", stgx)
 	} else {
 		log.Printf("skipped xdxr data from web")
 	}
@@ -64,7 +65,7 @@ func Get() {
 		stks = GetKlines(stks, model.KLINE_DAY,
 			model.KLINE_WEEK, model.KLINE_MONTH,
 			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
-		stop("GET_KLINES", stgkl)
+		StopWatch("GET_KLINES", stgkl)
 	} else {
 		log.Printf("skipped klines data from web")
 	}
@@ -73,7 +74,7 @@ func Get() {
 	if !conf.Args.Datasource.SkipIndices {
 		stidx := time.Now()
 		allIdx, sucIdx = GetIndices()
-		stop("GET_INDICES", stidx)
+		StopWatch("GET_INDICES", stidx)
 		for _, idx := range allIdx {
 			allstks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
 		}
@@ -84,7 +85,7 @@ func Get() {
 	if !conf.Args.Datasource.SkipBasicsUpdate {
 		updb := time.Now()
 		stks = updBasics(stks)
-		stop("UPD_BASICS", updb)
+		StopWatch("UPD_BASICS", updb)
 	} else {
 		log.Printf("skipped updating basics table")
 	}
@@ -96,7 +97,7 @@ func Get() {
 	if !conf.Args.Datasource.SkipIndexCalculation {
 		stci := time.Now()
 		stks = CalcIndics(stks)
-		stop("CALC_INDICS", stci)
+		StopWatch("CALC_INDICS", stci)
 	} else {
 		log.Printf("skipped index calculation")
 	}
@@ -110,7 +111,7 @@ func Get() {
 	rptFailed(allstks, stks)
 }
 
-func stop(code string, start time.Time) {
+func StopWatch(code string, start time.Time) {
 	ss := start.Format("2006-01-02 15:04:05")
 	end := time.Now().Format("2006-01-02 15:04:05")
 	dur := time.Since(start).Seconds()

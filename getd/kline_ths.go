@@ -33,10 +33,13 @@ var (
 	dt2mc = map[model.DBTab]string{
 		model.KLINE_DAY_NR:   "00",
 		model.KLINE_DAY:      "01",
+		model.KLINE_DAY_B:    "02",
 		model.KLINE_WEEK_NR:  "10",
 		model.KLINE_WEEK:     "11",
+		model.KLINE_WEEK_B:   "12",
 		model.KLINE_MONTH_NR: "20",
 		model.KLINE_MONTH:    "21",
+		model.KLINE_MONTH_B:  "22",
 	}
 )
 
@@ -179,7 +182,9 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 			quotes = quotes[1:]
 		}
 		switch klt {
-		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			//skip insert
+		default:
 			binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
@@ -189,8 +194,6 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
 	for t, qs := range qmap {
 		switch t {
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			continue
 		case model.KLINE_DAY:
 			e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
 		case model.KLINE_WEEK:
@@ -198,7 +201,7 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 		case model.KLINE_MONTH:
 			e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
 		default:
-			return fmt.Errorf("%s can't calculate varate_rgl for unsupported type: %v", stk.Code, t)
+			//skip the rest types of kline
 		}
 		if e != nil {
 			log.Println(e)
@@ -360,7 +363,8 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	}
 	// If in IPO week, skip the rest chores
 	switch klt {
-	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_MONTH, model.KLINE_MONTH_NR:
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B,
+		model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
 		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
 			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
 			if e != nil {
@@ -414,12 +418,12 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	}
 
 	switch klt {
-	case model.KLINE_DAY, model.KLINE_DAY_NR:
+	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B:
 		// if ktoday and kls[0] in the same day, remove kls[0]
 		if kls[0].Date == ktoday.Date {
 			kls = kls[1:]
 		}
-	case model.KLINE_WEEK, model.KLINE_WEEK_NR:
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		yToday, wToday := ttd.ISOWeek()
 		tHead, e := time.Parse("2006-01-02", kls[0].Date)
@@ -431,7 +435,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 		if yToday == yLast && wToday == wLast {
 			kls = kls[1:]
 		}
-	case model.KLINE_MONTH, model.KLINE_MONTH_NR:
+	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
 		// if ktoday and kls[0] in the same month, remove kls[0]
 		if kls[0].Date[:8] == ktoday.Date[:8] {
 			kls = kls[1:]
@@ -541,13 +545,18 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		return quotes, true, false
 	}
 
-	if (klt == model.KLINE_DAY || klt == model.KLINE_DAY_NR) && kls[0].Date == ktoday.Date {
-		// if ktoday and kls[0] in the same month, remove kls[0]
-		kls = kls[1:]
-	} else if klt == model.KLINE_MONTH && kls[0].Date[:8] == ktoday.Date[:8] {
-		// if ktoday and kls[0] in the same month, remove kls[0]
-		kls = kls[1:]
-	} else if klt == model.KLINE_WEEK {
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B:
+		if kls[0].Date == ktoday.Date {
+			// if ktoday and kls[0] in the same day, remove kls[0]
+			kls = kls[1:]
+		}
+	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
+		if kls[0].Date[:8] == ktoday.Date[:8] {
+			// if ktoday and kls[0] in the same month, remove kls[0]
+			kls = kls[1:]
+		}
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		tToday, e := time.Parse("2006-01-02", ktoday.Date)
 		if e != nil {
@@ -672,11 +681,11 @@ func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.
 		if strings.Split(string(t), "_")[1] != strings.Split(string(prevTab), "_")[1] {
 			sel := `a[hxc3-data-type^="hxc3Kline"][hxc3-data-type$="%s"]`
 			switch t {
-			case model.KLINE_DAY_NR, model.KLINE_DAY:
+			case model.KLINE_DAY_NR, model.KLINE_DAY, model.KLINE_DAY_B:
 				sel = fmt.Sprintf(sel, "Day")
-			case model.KLINE_WEEK_NR, model.KLINE_WEEK:
+			case model.KLINE_WEEK_NR, model.KLINE_WEEK, model.KLINE_WEEK_B:
 				sel = fmt.Sprintf(sel, "Week")
-			case model.KLINE_MONTH_NR, model.KLINE_MONTH:
+			case model.KLINE_MONTH_NR, model.KLINE_MONTH, model.KLINE_MONTH_B:
 				sel = fmt.Sprintf(sel, "Month")
 			default:
 				log.Panicf("unsupported DBTab: %+v", t)
@@ -690,6 +699,8 @@ func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.
 			fqSel := `a[data-type="%s"]`
 			if t == model.KLINE_DAY_NR || t == model.KLINE_WEEK_NR || t == model.KLINE_MONTH_NR {
 				fqSel = fmt.Sprintf(fqSel, "Bfq")
+			} else if t == model.KLINE_DAY_B || t == model.KLINE_WEEK_B || t == model.KLINE_MONTH_B {
+				fqSel = fmt.Sprintf(fqSel, "Hfq")
 			} else {
 				fqSel = fmt.Sprintf(fqSel, "Qfq")
 			}

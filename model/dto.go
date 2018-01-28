@@ -36,10 +36,13 @@ const (
 	INDICATOR_MONTH DBTab = "indicator_m"
 	KLINE_DAY       DBTab = "kline_d"
 	KLINE_DAY_NR    DBTab = "kline_d_n"
+	KLINE_DAY_B     DBTab = "kline_d_b"
 	KLINE_WEEK      DBTab = "kline_w"
 	KLINE_WEEK_NR   DBTab = "kline_w_n"
+	KLINE_WEEK_B    DBTab = "kline_w_b"
 	KLINE_MONTH     DBTab = "kline_m"
 	KLINE_MONTH_NR  DBTab = "kline_m_n"
+	KLINE_MONTH_B   DBTab = "kline_m_b"
 	KLINE_60M       DBTab = "kline_60m"
 )
 

@@ -58,7 +58,7 @@ type Arguments struct {
 		ThsCookie             string `mapstructure:"ths_cookie"`
 		SkipStocks            bool   `mapstructure:"skip_stocks"`
 		SkipFinance           bool   `mapstructure:"skip_finance"`
-		SkipKlineDn           bool   `mapstructure:"skip_kline_dn"`
+		SkipKlinePre          bool   `mapstructure:"skip_kline_pre"`
 		SkipFinancePrediction bool   `mapstructure:"skip_finance_prediction"`
 		SkipXdxr              bool   `mapstructure:"skip_xdxr"`
 		SkipKlines            bool   `mapstructure:"skip_klines"`
@@ -78,7 +78,8 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		KeyPointEvalFrame int `mapstructure:"key_point_eval_frame"`
+		Sample   bool `mapstructure:"sample"`
+		Resample int  `mapstructure:"resample"`
 	}
 	//TODO logrus log to file
 }
@@ -139,5 +140,6 @@ func setDefaults() {
 	Args.ChromeDP.PoolSize = Args.Concurrency
 	Args.ChromeDP.Headless = true
 	Args.ChromeDP.Timeout = 45
-	Args.Sampler.KeyPointEvalFrame = 10
+	Args.Sampler.Resample = 5
+	Args.Sampler.Sample = true
 }

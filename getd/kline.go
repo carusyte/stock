@@ -406,9 +406,8 @@ func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return nil
-		} else {
-			log.Panicln("failed to run sql", e)
 		}
+		log.Panicln("failed to run sql", e)
 	}
 	return
 }
