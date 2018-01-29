@@ -485,3 +485,39 @@ WHERE
     tn.code = ?
     %s
 ORDER BY tn.klid
+
+-- name: RAND_KPTS_BY_INDUSTRY
+SELECT 
+    mt.*
+FROM
+    kpts mt
+        INNER JOIN
+    (SELECT 
+        code, MIN(klid) klid
+    FROM
+        kpts
+    GROUP BY code) mi USING (code , klid)
+        INNER JOIN
+    (SELECT 
+        code
+    FROM
+        basics
+    WHERE
+        ind_lv3 = ?) b USING (code)
+WHERE
+    mt.flag IS NULL
+ORDER BY RAND()
+LIMIT ?
+
+-- name: COUNT_KPTS_BY_FLAG
+SELECT 
+    COUNT(*)
+FROM
+    kpts
+        INNER JOIN
+    (SELECT DISTINCT
+        code
+    FROM
+        kpts
+    WHERE
+        flag = ?) a USING (code)

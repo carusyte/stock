@@ -263,6 +263,25 @@ CREATE TABLE `kline_d` (
   UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（前复权）';
 
+CREATE TABLE `kline_d_b` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_B_IDX1` (`code`,`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（后复权）';
+
 CREATE TABLE `kline_d_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
@@ -301,6 +320,25 @@ CREATE TABLE `kline_m` (
   UNIQUE KEY `KLINE_M_IDX1` (`Code`,`Date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `kline_m_b` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_M_B_IDX1` (`code`,`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='月K线（后复权）';
+
 CREATE TABLE `kline_m_n` (
   `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
@@ -338,6 +376,25 @@ CREATE TABLE `kline_w` (
   PRIMARY KEY (`Code`,`Klid`),
   UNIQUE KEY `KLINE_W_IDX1` (`Code`,`Date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `kline_w_b` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_W_B_IDX1` (`code`,`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='周K线（后复权）';
 
 CREATE TABLE `kline_w_n` (
   `Code` varchar(8) NOT NULL,

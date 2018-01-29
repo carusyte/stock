@@ -34,6 +34,13 @@ func main() {
 	} else {
 		log.Println("skipping key point sampling")
 	}
+	if conf.Args.Sampler.TagTestSet {
+		log.Printf("tagging keypoint sample data for test set...")
+		e := sampler.TagTestSetByIndustry()
+		if e != nil {
+			log.Println(e)
+		}
+	}
 	if conf.Args.Scorer.RunScorer {
 		hidBlueKdjSt()
 	}

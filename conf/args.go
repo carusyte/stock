@@ -79,8 +79,9 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		Sample   bool `mapstructure:"sample"`
-		Resample int  `mapstructure:"resample"`
+		Sample     bool `mapstructure:"sample"`
+		TagTestSet bool `mapstructure:"tag_test_set"`
+		Resample   int  `mapstructure:"resample"`
 	}
 	//TODO logrus log to file
 }
