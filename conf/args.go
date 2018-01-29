@@ -69,6 +69,7 @@ type Arguments struct {
 		SampleKdjFeature      bool   `mapstructure:"sample_kdj_feature"`
 	}
 	Scorer struct {
+		RunScorer            bool     `mapstructure:"run_scorer"`
 		Highlight            []string `mapstructure:"highlight"`
 		FetchData            bool     `mapstructure:"fetch_data"`
 		BlueWeight           float64  `mapstructure:"blue_weight"`

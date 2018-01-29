@@ -80,7 +80,7 @@ func KeyPoints(code string, resample, prior int,
 		err = dbmap.SelectOne(&lkp, `select klid from kpts where code = ? order by klid desc limit 1`, code)
 	} else if resample > 0 {
 		err = dbmap.SelectOne(&lkp, `select klid from kpts where code = ? `+
-			`order by klid desc offset ? limit 1`, code, resample)
+			`order by klid desc limit 1 offset ?`, code, resample)
 	}
 	if err != nil && sql.ErrNoRows != err {
 		return kpts, errors.WithStack(err)

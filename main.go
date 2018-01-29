@@ -34,7 +34,9 @@ func main() {
 	} else {
 		log.Println("skipping key point sampling")
 	}
-	hidBlueKdjSt()
+	if conf.Args.Scorer.RunScorer {
+		hidBlueKdjSt()
+	}
 
 	//pruneKdjFd(true)
 	//kdjFirst()
