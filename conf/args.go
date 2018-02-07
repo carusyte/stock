@@ -79,9 +79,10 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		Sample     bool `mapstructure:"sample"`
-		TagTestSet bool `mapstructure:"tag_test_set"`
-		Resample   int  `mapstructure:"resample"`
+		Sample            bool `mapstructure:"sample"`
+		Resample          int  `mapstructure:"resample"`
+		TestSetBatchSize  int  `mapstructure:"test_set_batch_size"`
+		TrainSetBatchSize int  `mapstructure:"train_set_batch_size"`
 	}
 	//TODO logrus log to file
 }
@@ -144,4 +145,6 @@ func setDefaults() {
 	Args.ChromeDP.Timeout = 45
 	Args.Sampler.Resample = 5
 	Args.Sampler.Sample = true
+	Args.Sampler.TestSetBatchSize = 3000
+	Args.Sampler.TrainSetBatchSize = 200
 }
