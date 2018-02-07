@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -19,7 +20,14 @@ import (
 	"github.com/carusyte/stock/util"
 )
 
+var (
+	tagTrain       bool
+	trainBatchSize int
+)
+
 func main() {
+	parseArgs()
+
 	defer shutdownHook()
 
 	//logr.SetLevel(logr.DebugLevel)
@@ -41,6 +49,13 @@ func main() {
 			log.Println(e)
 		}
 	}
+	if tagTrain {
+		log.Printf("tagging keypoint sample data for training set, batch size: %d", trainBatchSize)
+		e := sampler.TagTrainingSetByScore(trainBatchSize)
+		if e != nil {
+			log.Println(e)
+		}
+	}
 	if conf.Args.Scorer.RunScorer {
 		hidBlueKdjSt()
 	}
@@ -57,6 +72,12 @@ func main() {
 	// testSplitAfter()
 	// fixVarate()
 	// sampleKeyPoints()
+}
+
+func parseArgs() {
+	flag.BoolVar(&tagTrain, "tagTrain", false, "tag key point sample data for training set.")
+	flag.IntVar(&trainBatchSize, "trainBatchSize", 100, "batch size for key point sample training set.")
+	flag.Parse()
 }
 
 func shutdownHook() {
