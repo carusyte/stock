@@ -475,6 +475,7 @@ SELECT
     tn.xrate,
     tn.varate,
     t.varate_rgl,
+    t.lr,
     tn.udate,
     tn.utime
 FROM

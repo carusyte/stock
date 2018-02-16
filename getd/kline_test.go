@@ -3,10 +3,11 @@ package getd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/carusyte/stock/model"
-	"github.com/carusyte/stock/util"
 	"log"
 	"testing"
+
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
 )
 
 func TestGetDailyKlines(t *testing.T) {
@@ -40,9 +41,14 @@ func TestParseLastJson(t *testing.T) {
 
 func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "000626"
-	s.Name = "远大控股"
+	s.Code = "600093"
+	s.Name = "易见股份"
 	ss := new(model.Stocks)
 	ss.Add(s)
-	GetKlines(ss, model.KLINE_DAY_NR, model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH)
+	GetKlines(ss, model.KLINE_DAY_NR, model.KLINE_DAY_B,
+		model.KLINE_WEEK_B, model.KLINE_MONTH_B)
+	// model.KLINE_DAY,
+	// 		model.KLINE_WEEK, model.KLINE_MONTH,
+	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
+	t.Fail()
 }

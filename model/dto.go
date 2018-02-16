@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -515,10 +516,15 @@ type Quote struct {
 	Xrate     sql.NullFloat64
 	Varate    sql.NullFloat64
 	VarateRgl sql.NullFloat64 `db:"varate_rgl"`
+	Lr        sql.NullFloat64 //Log Returns
+	LrVol     sql.NullFloat64 `db:"lr_vol"` //Log Returns for Volume
 	Ma5       sql.NullFloat64
 	Ma10      sql.NullFloat64
 	Ma20      sql.NullFloat64
 	Ma30      sql.NullFloat64
+	Ma60      sql.NullFloat64
+	Ma120     sql.NullFloat64
+	Ma200     sql.NullFloat64
 	Udate     sql.NullString
 	Utime     sql.NullString
 }
@@ -620,6 +626,15 @@ type KlAll struct {
 }
 
 func (ka *KlAll) UnmarshalJSON(b []byte) (e error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if er, ok := r.(error); ok {
+				log.Printf("%s\n%s", er, string(b))
+				e = errors.Wrap(er, fmt.Sprintf("failed to unmarshal KlAll json: %s", string(b)))
+			}
+		}
+	}()
+
 	var f interface{}
 	json.Unmarshal(b, &f)
 
@@ -723,7 +738,7 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if er, ok := r.(error); ok {
-				log.Println(er)
+				log.Printf("%s\n%s", er, string(b))
 				e = errors.Wrap(er, fmt.Sprintf("failed to unmarshal Ktoday json: %s", string(b)))
 			}
 		}
@@ -1011,29 +1026,48 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 }
 
 func (qj *QQJson) Save(dbmap *gorp.DbMap, table string) {
-	if len(qj.Quotes) > 0 {
-		valueStrings := make([]string, 0, len(qj.Quotes))
-		valueArgs := make([]interface{}, 0, len(qj.Quotes)*10)
-		for _, q := range qj.Quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, q.Code)
-			valueArgs = append(valueArgs, q.Date)
-			valueArgs = append(valueArgs, q.Klid)
-			valueArgs = append(valueArgs, q.Open)
-			valueArgs = append(valueArgs, q.High)
-			valueArgs = append(valueArgs, q.Close)
-			valueArgs = append(valueArgs, q.Low)
-			valueArgs = append(valueArgs, q.Volume)
-			valueArgs = append(valueArgs, q.Udate)
-			valueArgs = append(valueArgs, q.Utime)
+	retry := 10
+	rt := 0
+	code := ""
+	var e error
+	for ; rt < retry; rt++ {
+		if len(qj.Quotes) > 0 {
+			valueStrings := make([]string, 0, len(qj.Quotes))
+			valueArgs := make([]interface{}, 0, len(qj.Quotes)*10)
+			for _, q := range qj.Quotes {
+				code = q.Code
+				valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+				valueArgs = append(valueArgs, q.Code)
+				valueArgs = append(valueArgs, q.Date)
+				valueArgs = append(valueArgs, q.Klid)
+				valueArgs = append(valueArgs, q.Open)
+				valueArgs = append(valueArgs, q.High)
+				valueArgs = append(valueArgs, q.Close)
+				valueArgs = append(valueArgs, q.Low)
+				valueArgs = append(valueArgs, q.Volume)
+				valueArgs = append(valueArgs, q.Udate)
+				valueArgs = append(valueArgs, q.Utime)
+			}
+			stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
+				"volume,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+				"open=values(open),high=values(high),close=values(close),low=values(low),"+
+				"volume=values(volume),udate=values(udate),utime=values(utime)",
+				table, strings.Join(valueStrings, ","))
+			_, e = dbmap.Exec(stmt, valueArgs...)
+			if e != nil {
+				fmt.Println(e)
+				if strings.Contains(e.Error(), "Deadlock") {
+					time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
+					continue
+				} else {
+					log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				}
+			}
+			break
 		}
-		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,udate,utime) VALUES %s on duplicate key update date=values(date),"+
-			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),udate=values(udate),utime=values(utime)",
-			table, strings.Join(valueStrings, ","))
-		_, err := dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, qj.Code+" failed to bulk insert "+table)
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	}
 }
 
@@ -1071,10 +1105,11 @@ type KeyPoint struct {
 	Klid     int
 	Date     string
 	Score    float64
-	SumFall  float64 `db:"sum_fall"`
-	RgnRise  float64 `db:"rgn_rise"`
-	RgnLen   int     `db:"rgn_len"`
-	UnitRise float64 `db:"unit_rise"`
+	SumFall  float64         `db:"sum_fall"`
+	RgnRise  float64         `db:"rgn_rise"`
+	RgnLen   int             `db:"rgn_len"`
+	UnitRise float64         `db:"unit_rise"`
+	Clr      sql.NullFloat64 // Compound Log Return
 	Flag     sql.NullString
 	Udate    string
 	Utime    string

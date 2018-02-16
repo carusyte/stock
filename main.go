@@ -39,7 +39,13 @@ func main() {
 	}
 	if conf.Args.Sampler.Sample {
 		stkps := time.Now()
-		sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, nil)
+		if strings.EqualFold("LrGrader", conf.Args.Sampler.Grader) {
+			log.Println("Sampling key points using LrGrader")
+			sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, sampler.LrGrader)
+		} else {
+			log.Println("Sampling key points using default grader")
+			sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, nil)
+		}
 		getd.StopWatch("KEY_POINT_SAMPLING", stkps)
 	} else {
 		log.Println("skipping key point sampling")

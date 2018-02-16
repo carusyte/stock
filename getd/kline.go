@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
@@ -348,10 +350,10 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	var e error
 	for ; rt < retry; rt++ {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*14)
+		valueArgs := make([]interface{}, 0, len(quotes)*16)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), round(?,3), ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), round(?,3), ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -364,6 +366,8 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			valueArgs = append(valueArgs, q.Xrate)
 			valueArgs = append(valueArgs, q.Varate)
 			valueArgs = append(valueArgs, q.VarateRgl)
+			valueArgs = append(valueArgs, q.Lr)
+			valueArgs = append(valueArgs, q.LrVol)
 			valueArgs = append(valueArgs, q.Udate)
 			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
@@ -377,15 +381,17 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		}
 
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,varate,varate_rgl,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"volume,amount,xrate,varate,varate_rgl,lr,lr_vol,udate,utime) VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
 			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
-			"varate_rgl=values(varate_rgl),udate=values(udate),utime=values(utime)",
+			"varate_rgl=values(varate_rgl),lr=values(lr),lr_vol=values(lr_vol),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
+		// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
+				time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
 				continue
 			} else {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)

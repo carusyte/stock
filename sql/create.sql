@@ -1,3 +1,5 @@
+CREATE DATABASE `secu` /*!40100 DEFAULT CHARACTER SET utf8 */;
+
 CREATE TABLE `basics` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
   `name` varchar(10) DEFAULT NULL COMMENT '名称',
@@ -51,6 +53,13 @@ CREATE TABLE `basics` (
   `utime` varchar(8) DEFAULT NULL COMMENT '最后更新时间',
   PRIMARY KEY (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `cmpool` (
+  `seqno` int(11) NOT NULL AUTO_INCREMENT,
+  `code` varchar(8) NOT NULL,
+  `remarks` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`seqno`,`code`)
+) ENGINE=InnoDB AUTO_INCREMENT=1277 DEFAULT CHARSET=utf8;
 
 CREATE TABLE `finance` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -257,10 +266,13 @@ CREATE TABLE `kline_d` (
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`)
+  UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`),
+  KEY `idx_kline_d_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（前复权）';
 
 CREATE TABLE `kline_d_b` (
@@ -276,10 +288,13 @@ CREATE TABLE `kline_d_b` (
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_B_IDX1` (`code`,`date`)
+  UNIQUE KEY `KLINE_D_B_IDX1` (`code`,`date`),
+  KEY `KLINE_D_B_DATE` (`date`,`klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（后复权）';
 
 CREATE TABLE `kline_d_n` (
@@ -295,6 +310,8 @@ CREATE TABLE `kline_d_n` (
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
@@ -314,6 +331,8 @@ CREATE TABLE `kline_m` (
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
@@ -333,6 +352,8 @@ CREATE TABLE `kline_m_b` (
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
@@ -352,6 +373,8 @@ CREATE TABLE `kline_m_n` (
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
@@ -371,6 +394,8 @@ CREATE TABLE `kline_w` (
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
@@ -390,6 +415,8 @@ CREATE TABLE `kline_w_b` (
   `xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
@@ -409,6 +436,8 @@ CREATE TABLE `kline_w_n` (
   `Xrate` double DEFAULT NULL,
   `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
   `varate_rgl` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `lr_vol` double DEFAULT NULL COMMENT 'Log Return for Volume',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
@@ -425,10 +454,12 @@ CREATE TABLE `kpts` (
   `rgn_rise` decimal(10,3) NOT NULL,
   `rgn_len` int(11) NOT NULL,
   `unit_rise` decimal(10,3) NOT NULL,
-  `flag` varchar(5) DEFAULT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `flag` varchar(25) DEFAULT NULL,
   `udate` varchar(10) NOT NULL,
   `utime` varchar(8) NOT NULL,
   PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
   KEY `kpts_idx2` (`flag`,`uuid`),
   KEY `kpts_idx1` (`score`,`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='key points';

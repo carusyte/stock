@@ -79,10 +79,11 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		Sample            bool `mapstructure:"sample"`
-		Resample          int  `mapstructure:"resample"`
-		TestSetBatchSize  int  `mapstructure:"test_set_batch_size"`
-		TrainSetBatchSize int  `mapstructure:"train_set_batch_size"`
+		Sample            bool   `mapstructure:"sample"`
+		Resample          int    `mapstructure:"resample"`
+		Grader            string `mapstructure:"grader"`
+		TestSetBatchSize  int    `mapstructure:"test_set_batch_size"`
+		TrainSetBatchSize int    `mapstructure:"train_set_batch_size"`
 	}
 	//TODO logrus log to file
 }

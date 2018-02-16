@@ -175,6 +175,7 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 	if e != nil {
 		return qmap, false, false
 	}
+	calcLogReturns(stk, qmap)
 	for klt, quotes := range qmap {
 		if lkmap[klt] != -1 {
 			//skip the first record which is for varate calculation
@@ -189,6 +190,34 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 		}
 	}
 	return qmap, true, false
+}
+
+func calcLogReturns(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
+	for t, qs := range qmap {
+		switch t {
+		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+			for i, q := range qs {
+				q.Lr = sql.NullFloat64{Float64: math.Log(1. + q.VarateRgl.Float64/100.), Valid: true}
+				q.LrVol = sql.NullFloat64{}
+				if !q.Volume.Valid || (i > 0 && !qs[i-1].Volume.Valid) {
+					continue
+				}
+				vol := math.Max(10, q.Volume.Float64)
+				prevol := vol
+				if i > 0 {
+					prevol = math.Max(10, qs[i-1].Volume.Float64)
+				}
+				q.LrVol.Valid = true
+				q.LrVol.Float64 = math.Log(vol / prevol)
+			}
+		default:
+			for _, q := range qs {
+				q.Lr, q.LrVol = sql.NullFloat64{}, sql.NullFloat64{}
+			}
+			continue
+		}
+	}
+	return nil
 }
 
 func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
@@ -245,7 +274,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	}
 	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
 	if nrqs == nil || len(nrqs) < len(tgqs) {
-		//load nrqs from db
+		//load non-reinstated quotes from db
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) < len(tgqs) {
