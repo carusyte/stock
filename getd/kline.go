@@ -350,10 +350,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	var e error
 	for ; rt < retry; rt++ {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*16)
+		valueArgs := make([]interface{}, 0, len(quotes)*25)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), round(?,3), ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
+				"?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -365,8 +366,17 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			valueArgs = append(valueArgs, q.Amount)
 			valueArgs = append(valueArgs, q.Xrate)
 			valueArgs = append(valueArgs, q.Varate)
+			valueArgs = append(valueArgs, q.VarateHigh)
+			valueArgs = append(valueArgs, q.VarateOpen)
+			valueArgs = append(valueArgs, q.VarateLow)
 			valueArgs = append(valueArgs, q.VarateRgl)
+			valueArgs = append(valueArgs, q.VarateRglHigh)
+			valueArgs = append(valueArgs, q.VarateRglOpen)
+			valueArgs = append(valueArgs, q.VarateRglLow)
 			valueArgs = append(valueArgs, q.Lr)
+			valueArgs = append(valueArgs, q.LrHigh)
+			valueArgs = append(valueArgs, q.LrOpen)
+			valueArgs = append(valueArgs, q.LrLow)
 			valueArgs = append(valueArgs, q.LrVol)
 			valueArgs = append(valueArgs, q.Udate)
 			valueArgs = append(valueArgs, q.Utime)
@@ -379,12 +389,18 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
 			panic(e)
 		}
-
+		//TODO adapt new columns
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,varate,varate_rgl,lr,lr_vol,udate,utime) VALUES %s on duplicate key update date=values(date),"+
+			"volume,amount,xrate,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
+			"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,udate,utime) "+
+			"VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
 			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
-			"varate_rgl=values(varate_rgl),lr=values(lr),lr_vol=values(lr_vol),udate=values(udate),utime=values(utime)",
+			"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
+			"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
+			"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
+			"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
+			"lr_vol=values(lr_vol),udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
 		_, e = dbmap.Exec(stmt, valueArgs...)

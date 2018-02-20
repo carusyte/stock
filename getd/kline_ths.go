@@ -198,6 +198,9 @@ func calcLogReturns(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e er
 		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
 			for i, q := range qs {
 				q.Lr = sql.NullFloat64{Float64: math.Log(1. + q.VarateRgl.Float64/100.), Valid: true}
+				q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglHigh.Float64/100.), Valid: true}
+				q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglOpen.Float64/100.), Valid: true}
+				q.LrLow = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglLow.Float64/100.), Valid: true}
 				q.LrVol = sql.NullFloat64{}
 				if !q.Volume.Valid || (i > 0 && !qs[i-1].Volume.Valid) {
 					continue
@@ -211,9 +214,9 @@ func calcLogReturns(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e er
 				q.LrVol.Float64 = math.Log(vol / prevol)
 			}
 		default:
-			for _, q := range qs {
-				q.Lr, q.LrVol = sql.NullFloat64{}, sql.NullFloat64{}
-			}
+			// for _, q := range qs {
+			// 	q.Lr, q.LrVol = sql.NullFloat64{}, sql.NullFloat64{}
+			// }
 			continue
 		}
 	}
@@ -278,7 +281,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) < len(tgqs) {
-		return fmt.Errorf("%s unable to infer varate_rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
+		return fmt.Errorf("%s unable to infer varate rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
 			stk.Code, tab, len(nrqs), len(tgqs))
 	}
 	nrqs, e := matchSlice(nrqs, tgqs)
@@ -298,10 +301,13 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 		nrq := nrqs[i]
 		tgq := tgqs[i]
 		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
-			return fmt.Errorf("%s unable to infer varate_rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
+			return fmt.Errorf("%s unable to infer varate rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
 				code, tab, i, nrq, tgq)
 		}
 		tvar := nrq.Varate.Float64
+		tvarh := nrq.VarateHigh.Float64
+		tvaro := nrq.VarateOpen.Float64
+		tvarl := nrq.VarateLow.Float64
 		if len(xemap) > 0 && i > 0 {
 			xdxr := false
 			var xe *model.Xdxr
@@ -317,11 +323,23 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 			if xdxr {
 				// adjust fore-day price for regulated varate calculation
 				pcl := Reinstate(nrqs[i-1].Close, xe)
+				phg := Reinstate(nrqs[i-1].High, xe)
+				pop := Reinstate(nrqs[i-1].Open, xe)
+				plw := Reinstate(nrqs[i-1].Low, xe)
 				tvar = (nrq.Close - pcl) / pcl * 100.
+				tvarh = (nrq.High - phg) / phg * 100.
+				tvaro = (nrq.Open - pop) / pop * 100.
+				tvarl = (nrq.Low - plw) / plw * 100.
 			}
 		}
 		tgq.VarateRgl.Valid = true
+		tgq.VarateRglOpen.Valid = true
+		tgq.VarateRglHigh.Valid = true
+		tgq.VarateRglLow.Valid = true
 		tgq.VarateRgl.Float64 = tvar
+		tgq.VarateRglOpen.Float64 = tvaro
+		tgq.VarateRglHigh.Float64 = tvarh
+		tgq.VarateRglLow.Float64 = tvarl
 	}
 	return nil
 }
@@ -1573,7 +1591,7 @@ func strip(data []byte) []byte {
 //Assign KLID, calculate Varate, add update datetime
 func supplementMisc(klines []*model.Quote, start int) {
 	d, t := util.TimeStr()
-	preclose := math.NaN()
+	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
 	for i := 0; i < len(klines); i++ {
 		start++
 		klines[i].Klid = start
@@ -1582,22 +1600,36 @@ func supplementMisc(klines []*model.Quote, start int) {
 		klines[i].Udate.String = d
 		klines[i].Utime.String = t
 		klines[i].Varate.Valid = true
+		klines[i].VarateHigh.Valid = true
+		klines[i].VarateOpen.Valid = true
+		klines[i].VarateLow.Valid = true
 		if math.IsNaN(preclose) {
 			klines[i].Varate.Float64 = 0
+			klines[i].VarateHigh.Float64 = 0
+			klines[i].VarateOpen.Float64 = 0
+			klines[i].VarateLow.Float64 = 0
 		} else {
-			cc := klines[i].Close
-			if preclose == 0 && cc == 0 {
-				klines[i].Varate.Float64 = 0
-			} else if preclose == 0 {
-				klines[i].Varate.Float64 = cc / .01 * 100.
-			} else if cc == 0 {
-				klines[i].Varate.Float64 = (-0.01 - preclose) / math.Abs(preclose) * 100.
-			} else {
-				klines[i].Varate.Float64 = (cc - preclose) / math.Abs(preclose) * 100.
-			}
+			klines[i].Varate.Float64 = calcVarate(preclose, klines[i].Close)
+			klines[i].VarateHigh.Float64 = calcVarate(prehigh, klines[i].High)
+			klines[i].VarateOpen.Float64 = calcVarate(preopen, klines[i].Open)
+			klines[i].VarateLow.Float64 = calcVarate(prelow, klines[i].Low)
 		}
 		preclose = klines[i].Close
+		prehigh = klines[i].High
+		preopen = klines[i].Open
+		prelow = klines[i].Low
 	}
+}
+
+func calcVarate(prev, cur float64) float64 {
+	if prev == 0 && cur == 0 {
+		return 0
+	} else if prev == 0 {
+		return cur / .01 * 100.
+	} else if cur == 0 {
+		return (-0.01 - prev) / math.Abs(prev) * 100.
+	}
+	return (cur - prev) / math.Abs(prev) * 100.
 }
 
 func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {

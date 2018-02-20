@@ -503,30 +503,46 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 }
 
 type Quote struct {
-	Code      string `db:",size:6"`
-	Date      string `db:",size:10"`
-	Time      sql.NullString
-	Klid      int
-	Open      float64
-	High      float64
-	Close     float64
-	Low       float64
-	Volume    sql.NullFloat64
-	Amount    sql.NullFloat64
-	Xrate     sql.NullFloat64
-	Varate    sql.NullFloat64
-	VarateRgl sql.NullFloat64 `db:"varate_rgl"`
-	Lr        sql.NullFloat64 //Log Returns
-	LrVol     sql.NullFloat64 `db:"lr_vol"` //Log Returns for Volume
-	Ma5       sql.NullFloat64
-	Ma10      sql.NullFloat64
-	Ma20      sql.NullFloat64
-	Ma30      sql.NullFloat64
-	Ma60      sql.NullFloat64
-	Ma120     sql.NullFloat64
-	Ma200     sql.NullFloat64
-	Udate     sql.NullString
-	Utime     sql.NullString
+	Code          string `db:",size:6"`
+	Date          string `db:",size:10"`
+	Time          sql.NullString
+	Klid          int
+	Open          float64
+	High          float64
+	Close         float64
+	Low           float64
+	Volume        sql.NullFloat64
+	Amount        sql.NullFloat64
+	Xrate         sql.NullFloat64
+	Varate        sql.NullFloat64
+	VarateHigh    sql.NullFloat64 `db:"varate_h"`
+	VarateOpen    sql.NullFloat64 `db:"varate_o"`
+	VarateLow     sql.NullFloat64 `db:"varate_l"`
+	VarateRgl     sql.NullFloat64 `db:"varate_rgl"`
+	VarateRglHigh sql.NullFloat64 `db:"varate_rgl_h"`
+	VarateRglOpen sql.NullFloat64 `db:"varate_rgl_o"`
+	VarateRglLow  sql.NullFloat64 `db:"varate_rgl_l"`
+	Lr            sql.NullFloat64 //Log Returns
+	LrHigh        sql.NullFloat64 `db:"lr_h"`
+	LrOpen        sql.NullFloat64 `db:"lr_o"`
+	LrLow         sql.NullFloat64 `db:"lr_l"`
+	LrVol         sql.NullFloat64 `db:"lr_vol"` //Log Returns for Volume
+	Ma5           sql.NullFloat64
+	Ma10          sql.NullFloat64
+	Ma20          sql.NullFloat64
+	Ma30          sql.NullFloat64
+	Ma60          sql.NullFloat64
+	Ma120         sql.NullFloat64
+	Ma200         sql.NullFloat64
+	LrMa5         sql.NullFloat64 `db:"lr_ma5"`
+	LrMa10        sql.NullFloat64 `db:"lr_ma10"`
+	LrMa20        sql.NullFloat64 `db:"lr_ma20"`
+	LrMa30        sql.NullFloat64 `db:"lr_ma30"`
+	LrMa60        sql.NullFloat64 `db:"lr_ma60"`
+	LrMa120       sql.NullFloat64 `db:"lr_ma120"`
+	LrMa200       sql.NullFloat64 `db:"lr_ma200"`
+	Udate         sql.NullString
+	Utime         sql.NullString
 }
 
 func (q *Quote) String() string {
