@@ -1,6 +1,7 @@
 package getd
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -41,13 +42,33 @@ func TestParseLastJson(t *testing.T) {
 
 func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "600833"
-	s.Name = "第一医药"
+	s.Code = "000021"
+	s.Name = "深科技"
 	ss := new(model.Stocks)
 	ss.Add(s)
-	GetKlines(ss, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR)
+	GetKlines(ss, model.KLINE_DAY)
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,
 	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
+	t.Fail()
+}
+
+func TestGetKlinesFromWht(t *testing.T) {
+	s := &model.Stock{}
+	s.Code = "600016"
+	s.Name = "民生银行"
+	s.Market = sql.NullString{"SH", true}
+	getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
+	// model.KLINE_DAY,
+	// 		model.KLINE_WEEK, model.KLINE_MONTH,
+	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
+	t.Fail()
+}
+
+func TestKlineDayNRFromWht(t *testing.T) {
+	stks := StocksDb()
+	for _, s := range stks {
+		getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
+	}
 	t.Fail()
 }

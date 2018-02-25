@@ -504,7 +504,6 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 type Quote struct {
 	Code          string `db:",size:6"`
 	Date          string `db:",size:10"`
-	Time          sql.NullString
 	Klid          int
 	Open          float64
 	High          float64

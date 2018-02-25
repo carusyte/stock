@@ -474,6 +474,39 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	return
 }
 
+//Assign KLID, calculate Varate, add update datetime
+func supplementMisc(klines []*model.Quote, start int) {
+	d, t := util.TimeStr()
+	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
+	for i := 0; i < len(klines); i++ {
+		start++
+		klines[i].Klid = start
+		klines[i].Udate.Valid = true
+		klines[i].Utime.Valid = true
+		klines[i].Udate.String = d
+		klines[i].Utime.String = t
+		klines[i].Varate.Valid = true
+		klines[i].VarateHigh.Valid = true
+		klines[i].VarateOpen.Valid = true
+		klines[i].VarateLow.Valid = true
+		if math.IsNaN(preclose) {
+			klines[i].Varate.Float64 = 0
+			klines[i].VarateHigh.Float64 = 0
+			klines[i].VarateOpen.Float64 = 0
+			klines[i].VarateLow.Float64 = 0
+		} else {
+			klines[i].Varate.Float64 = CalVarate(preclose, klines[i].Close)
+			klines[i].VarateHigh.Float64 = CalVarate(prehigh, klines[i].High)
+			klines[i].VarateOpen.Float64 = CalVarate(preopen, klines[i].Open)
+			klines[i].VarateLow.Float64 = CalVarate(prelow, klines[i].Low)
+		}
+		preclose = klines[i].Close
+		prehigh = klines[i].High
+		preopen = klines[i].Open
+		prelow = klines[i].Low
+	}
+}
+
 func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 	e := dbmap.SelectOne(&q, fmt.Sprintf("select code, date, klid from %s where code = ? order by klid desc "+
 		"limit 1 offset ?", klt), code, offset)
