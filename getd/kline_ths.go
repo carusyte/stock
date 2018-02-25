@@ -175,7 +175,7 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 	if e != nil {
 		return qmap, false, false
 	}
-	calcLogReturns(stk, qmap)
+	calLogReturnsFor(stk, qmap)
 	for klt, quotes := range qmap {
 		if lkmap[klt] != -1 {
 			//skip the first record which is for varate calculation
@@ -192,32 +192,11 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 	return qmap, true, false
 }
 
-func calcLogReturns(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
+func calLogReturnsFor(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
 	for t, qs := range qmap {
 		switch t {
 		case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
-			for i, q := range qs {
-				q.Lr = sql.NullFloat64{Float64: math.Log(1. + q.VarateRgl.Float64/100.), Valid: true}
-				q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglHigh.Float64/100.), Valid: true}
-				q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglOpen.Float64/100.), Valid: true}
-				q.LrLow = sql.NullFloat64{Float64: math.Log(1. + q.VarateRglLow.Float64/100.), Valid: true}
-				q.LrVol = sql.NullFloat64{}
-				if !q.Volume.Valid || (i > 0 && !qs[i-1].Volume.Valid) {
-					continue
-				}
-				vol := math.Max(10, q.Volume.Float64)
-				prevol := vol
-				if i > 0 {
-					prevol = math.Max(10, qs[i-1].Volume.Float64)
-				}
-				q.LrVol.Valid = true
-				q.LrVol.Float64 = math.Log(vol / prevol)
-			}
-		default:
-			// for _, q := range qs {
-			// 	q.Lr, q.LrVol = sql.NullFloat64{}, sql.NullFloat64{}
-			// }
-			continue
+			CalLogReturns(qs)
 		}
 	}
 	return nil
@@ -1378,7 +1357,26 @@ func parseThsKlinesV6(code string, klt model.DBTab, data *model.KlAll, ldate str
 			kl.Open = kl.Low + util.Str2F64(prices[i*4+1])/pf
 			kl.High = kl.Low + util.Str2F64(prices[i*4+2])/pf
 			kl.Close = kl.Low + util.Str2F64(prices[i*4+3])/pf
-			kl.Volume = sql.NullFloat64{util.Str2F64(vols[i]), true}
+			kl.Volume.Float64 = util.Str2F64(vols[i])
+			kl.Volume.Valid = true
+			switch klt {
+			case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+				if kl.Open == 0 {
+					kl.Open = kl.Close
+				}
+				if kl.Low == 0 {
+					kl.Low = kl.Close
+				}
+				if kl.High == 0 {
+					kl.High = kl.Close
+				}
+			case model.KLINE_DAY:
+				if kl.Open == 0 && kl.Low == 0 && kl.High == 0 && kl.Close != 0 {
+					kl.Open = kl.Close
+					kl.Low = kl.Close
+					kl.High = kl.Close
+				}
+			}
 			kl.Code = code
 			kls = append(kls, kl)
 		}
@@ -1448,8 +1446,8 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 	var (
 		code  = stk.Code
 		typ   string
-		dkeys []string                = make([]string, 0, 16)         // date as keys to sort
-		klmap map[string]*model.Quote = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
+		dkeys = make([]string, 0, 16)         // date as keys to sort
+		klmap = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
 	)
 	switch klt {
 	case model.KLINE_WEEK:
@@ -1609,10 +1607,10 @@ func supplementMisc(klines []*model.Quote, start int) {
 			klines[i].VarateOpen.Float64 = 0
 			klines[i].VarateLow.Float64 = 0
 		} else {
-			klines[i].Varate.Float64 = calcVarate(preclose, klines[i].Close)
-			klines[i].VarateHigh.Float64 = calcVarate(prehigh, klines[i].High)
-			klines[i].VarateOpen.Float64 = calcVarate(preopen, klines[i].Open)
-			klines[i].VarateLow.Float64 = calcVarate(prelow, klines[i].Low)
+			klines[i].Varate.Float64 = CalVarate(preclose, klines[i].Close)
+			klines[i].VarateHigh.Float64 = CalVarate(prehigh, klines[i].High)
+			klines[i].VarateOpen.Float64 = CalVarate(preopen, klines[i].Open)
+			klines[i].VarateLow.Float64 = CalVarate(prelow, klines[i].Low)
 		}
 		preclose = klines[i].Close
 		prehigh = klines[i].High
@@ -1621,20 +1619,9 @@ func supplementMisc(klines []*model.Quote, start int) {
 	}
 }
 
-func calcVarate(prev, cur float64) float64 {
-	if prev == 0 && cur == 0 {
-		return 0
-	} else if prev == 0 {
-		return cur / .01 * 100.
-	} else if cur == 0 {
-		return (-0.01 - prev) / math.Abs(prev) * 100.
-	}
-	return (cur - prev) / math.Abs(prev) * 100.
-}
-
 func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, typ)
-	body, e := util.HttpGetBytesUsingHeaders(url_today,
+	urlToday := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, typ)
+	body, e := util.HttpGetBytesUsingHeaders(urlToday,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.Datasource.ThsCookie})

@@ -154,6 +154,58 @@ func FixVarate() {
 	}
 }
 
+//CalVarate calculates variation rate based on previous value and current value.
+// 0 previous value is adjusted by a scale of 0.01. Returns variation rate at a
+// scale of 100 (as percentage value).
+func CalVarate(prev, cur float64) float64 {
+	if prev == 0 && cur == 0 {
+		return 0
+	} else if prev == 0 {
+		return cur / .01 * 100.
+	} else if cur == 0 {
+		return (-0.01 - prev) / math.Abs(prev) * 100.
+	}
+	return (cur - prev) / math.Abs(prev) * 100.
+}
+
+//CalLogReturns calculates log return for high, open, close, low, and volume
+// variation rates, or regulated variation rates if available.
+func CalLogReturns(qs []*model.Quote) {
+	for i, q := range qs {
+		vcl := q.VarateRgl.Float64
+		vhg := q.VarateRglHigh.Float64
+		vop := q.VarateRglOpen.Float64
+		vlw := q.VarateRglLow.Float64
+		if !q.VarateRgl.Valid {
+			vcl = q.Varate.Float64
+		}
+		if !q.VarateRglHigh.Valid {
+			vhg = q.VarateHigh.Float64
+		}
+		if !q.VarateRglOpen.Valid {
+			vop = q.VarateOpen.Float64
+		}
+		if !q.VarateRglLow.Valid {
+			vlw = q.VarateLow.Float64
+		}
+		q.Lr = sql.NullFloat64{Float64: math.Log(1. + vcl/100.), Valid: true}
+		q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + vhg/100.), Valid: true}
+		q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + vop/100.), Valid: true}
+		q.LrLow = sql.NullFloat64{Float64: math.Log(1. + vlw/100.), Valid: true}
+		q.LrVol = sql.NullFloat64{}
+		if !q.Volume.Valid || (i > 0 && !qs[i-1].Volume.Valid) {
+			continue
+		}
+		vol := math.Max(10, q.Volume.Float64)
+		prevol := vol
+		if i > 0 {
+			prevol = math.Max(10, qs[i-1].Volume.Float64)
+		}
+		q.LrVol.Valid = true
+		q.LrVol.Float64 = math.Log(vol / prevol)
+	}
+}
+
 func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
 	d, t := util.TimeStr()
 	s := fmt.Sprintf("update %v set varate = ?, udate = ?, utime = ? where code = ? and klid = ?", tab)

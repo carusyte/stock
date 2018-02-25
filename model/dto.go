@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -945,7 +944,6 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 // Set Code and Period before unmarshalling json data
 type QQJson struct {
 	Fcode, Code, Period string
-	Sklid               int
 	Quotes              []*Quote
 }
 
@@ -968,123 +966,54 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	retcde = m["code"].(float64)
 	msg = m["msg"].(string)
 	if retcde != 0 || msg != "" {
-		return errors.Errorf("server failed with code %d, msg: %s", retcde, msg)
+		return errors.Errorf("server failed with code %f, msg: %s", retcde, msg)
 	}
-	if cdat, exists := m["data"].(map[string]interface{})[qj.Fcode]; !exists {
+	var (
+		cdat   interface{}
+		exists bool
+	)
+	if cdat, exists = m["data"].(map[string]interface{})[qj.Fcode]; !exists {
 		return errors.Errorf("unrecognized data structure: %+v", f)
-	} else {
-		pdat, exists := cdat.(map[string]interface{})[qj.Period]
+	}
+	pdat, exists := cdat.(map[string]interface{})[qj.Period]
+	if !exists {
+		// for securities
+		pdat, exists = cdat.(map[string]interface{})["qfq"+qj.Period]
 		if !exists {
-			// for securities
-			pdat, exists = cdat.(map[string]interface{})["qfq"+qj.Period]
-			if !exists {
-				return errors.Errorf("unrecognized data structure: %+v", f)
-			}
-		} else {
-			ps := pdat.([]interface{})
-			qj.Quotes = make([]*Quote, len(ps))
-			klid := qj.Sklid
-			dt, tm := util.TimeStr()
-			preclose := math.NaN()
-			for i, pd := range ps {
-				pa := pd.([]interface{})
-				q := new(Quote)
-				q.Code = qj.Code
-				q.Date = pa[0].(string)
-				q.Klid = klid
-				q.Open, e = strconv.ParseFloat(pa[1].(string), 64)
-				if e != nil {
-					return errors.Wrapf(e, "failed to parse OPEN value at index %d", i)
-				}
-				q.Close, e = strconv.ParseFloat(pa[2].(string), 64)
-				if e != nil {
-					return errors.Wrapf(e, "failed to parse CLOSE value at index %d", i)
-				}
-				q.High, e = strconv.ParseFloat(pa[3].(string), 64)
-				if e != nil {
-					return errors.Wrapf(e, "failed to parse HIGH value at index %d", i)
-				}
-				q.Low, e = strconv.ParseFloat(pa[4].(string), 64)
-				if e != nil {
-					return errors.Wrapf(e, "failed to parse LOW value at index %d", i)
-				}
-				q.Volume.Valid = true
-				q.Volume.Float64, e = strconv.ParseFloat(pa[2].(string), 64)
-				if e != nil {
-					return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
-				}
-				q.Varate.Valid = true
-				if math.IsNaN(preclose) {
-					q.Varate.Float64 = 0
-				} else {
-					pc := preclose
-					cc := q.Close
-					if pc == 0 && cc == 0 {
-						q.Varate.Float64 = 0
-					} else if pc == 0 {
-						q.Varate.Float64 = cc / .01 * 100.
-					} else if cc == 0 {
-						q.Varate.Float64 = (-0.01 - pc) / math.Abs(pc) * 100.
-					} else {
-						q.Varate.Float64 = (cc - pc) / math.Abs(pc) * 100.
-					}
-				}
-				q.Udate.Valid = true
-				q.Utime.Valid = true
-				q.Udate.String = dt
-				q.Utime.String = tm
-				klid++
-				qj.Quotes[i] = q
-			}
+			return errors.Errorf("unrecognized data structure: %+v", f)
 		}
+	}
+	ps := pdat.([]interface{})
+	qj.Quotes = make([]*Quote, len(ps))
+	for i, pd := range ps {
+		pa := pd.([]interface{})
+		q := new(Quote)
+		q.Code = qj.Code
+		q.Date = pa[0].(string)
+		q.Open, e = strconv.ParseFloat(pa[1].(string), 64)
+		if e != nil {
+			return errors.Wrapf(e, "failed to parse OPEN value at index %d", i)
+		}
+		q.Close, e = strconv.ParseFloat(pa[2].(string), 64)
+		if e != nil {
+			return errors.Wrapf(e, "failed to parse CLOSE value at index %d", i)
+		}
+		q.High, e = strconv.ParseFloat(pa[3].(string), 64)
+		if e != nil {
+			return errors.Wrapf(e, "failed to parse HIGH value at index %d", i)
+		}
+		q.Low, e = strconv.ParseFloat(pa[4].(string), 64)
+		if e != nil {
+			return errors.Wrapf(e, "failed to parse LOW value at index %d", i)
+		}
+		q.Volume.Valid = true
+		q.Volume.Float64, e = strconv.ParseFloat(pa[2].(string), 64)
+		if e != nil {
+			return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
+		}
+		qj.Quotes[i] = q
 	}
 	return nil
-}
-
-func (qj *QQJson) Save(dbmap *gorp.DbMap, table string) {
-	retry := 10
-	rt := 0
-	code := ""
-	var e error
-	for ; rt < retry; rt++ {
-		if len(qj.Quotes) > 0 {
-			valueStrings := make([]string, 0, len(qj.Quotes))
-			valueArgs := make([]interface{}, 0, len(qj.Quotes)*10)
-			for _, q := range qj.Quotes {
-				code = q.Code
-				valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-				valueArgs = append(valueArgs, q.Code)
-				valueArgs = append(valueArgs, q.Date)
-				valueArgs = append(valueArgs, q.Klid)
-				valueArgs = append(valueArgs, q.Open)
-				valueArgs = append(valueArgs, q.High)
-				valueArgs = append(valueArgs, q.Close)
-				valueArgs = append(valueArgs, q.Low)
-				valueArgs = append(valueArgs, q.Volume)
-				valueArgs = append(valueArgs, q.Udate)
-				valueArgs = append(valueArgs, q.Utime)
-			}
-			stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-				"volume,udate,utime) VALUES %s on duplicate key update date=values(date),"+
-				"open=values(open),high=values(high),close=values(close),low=values(low),"+
-				"volume=values(volume),udate=values(udate),utime=values(utime)",
-				table, strings.Join(valueStrings, ","))
-			_, e = dbmap.Exec(stmt, valueArgs...)
-			if e != nil {
-				fmt.Println(e)
-				if strings.Contains(e.Error(), "Deadlock") {
-					time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
-					continue
-				} else {
-					log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
-				}
-			}
-			break
-		}
-	}
-	if rt >= retry {
-		log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
-	}
 }
 
 // IdxLst Index List

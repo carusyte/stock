@@ -1,14 +1,15 @@
 package getd
 
 import (
-	"github.com/carusyte/stock/model"
-	"time"
-	"log"
 	"encoding/json"
 	"fmt"
-	"github.com/carusyte/stock/util"
-	"strings"
+	"log"
 	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
 )
 
 func klineTc(stk *model.Stock, tab model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
@@ -116,7 +117,6 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 		qj.Code = code
 		qj.Fcode = fcode
 		qj.Period = per
-		qj.Sklid = lklid
 		e = json.Unmarshal(body, qj)
 		if e != nil {
 			log.Printf("failed to parse json from %s\n%+v", url, e)

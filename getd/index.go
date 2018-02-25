@@ -1,19 +1,20 @@
 package getd
 
 import (
-	"github.com/carusyte/stock/util"
-	"github.com/carusyte/stock/conf"
-	"sync"
-	"log"
 	"encoding/json"
 	"fmt"
-	"github.com/carusyte/stock/model"
-	"github.com/pkg/errors"
+	"log"
+	"sync"
 	"time"
+
+	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-func GetIdxLst(code ... string) (idxlst []*model.IdxLst, e error) {
+func GetIdxLst(code ...string) (idxlst []*model.IdxLst, e error) {
 	sql := "select * from idxlst order by code"
 	if len(code) > 0 {
 		sql = fmt.Sprintf("select * from idxlst where code in (%s) order by code", util.Join(code,
@@ -135,10 +136,10 @@ func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
 func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 	var (
 		ldate, per string
-		sklid      int = 0
+		sklid      = -1
 	)
 	// check history from db
-	lq := getLatestKl(code, tab, 5)
+	lq := getLatestKl(code, tab, 5+1) // plus one for varate calculation
 	if lq != nil {
 		sklid = lq.Klid
 		ldate = lq.Date
@@ -164,7 +165,6 @@ func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 	qj.Code = code
 	qj.Fcode = code
 	qj.Period = per
-	qj.Sklid = sklid
 	e = json.Unmarshal(d, qj)
 	if e != nil {
 		log.Printf("failed to parse json from %s\n%+v", url, e)
@@ -174,8 +174,12 @@ func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
 		return false, true
 	}
-	qj.Save(dbmap, string(tab))
-	//saveIndex(qj, sklid, string(tab))
+	supplementMisc(qj.Quotes, sklid)
+	CalLogReturns(qj.Quotes)
+	if sklid != -1 {
+		qj.Quotes = qj.Quotes[1:]
+	}
+	binsert(qj.Quotes, string(tab), sklid)
 	return true, false
 }
 
