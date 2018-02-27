@@ -125,13 +125,13 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	for stock := range chstk {
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			var ok, r bool
-			switch conf.Args.Datasource.Industry {
+			switch conf.Args.DataSource.Industry {
 			case conf.TENCENT_TC, conf.TENCENT_CSRC:
 				ok, r = tcIndustry(stock)
 			case conf.THS:
 				ok, r = thsIndustry(stock)
 			default:
-				panic("unable to get industry, unsupported source: " + conf.Args.Datasource.Industry)
+				panic("unable to get industry, unsupported source: " + conf.Args.DataSource.Industry)
 			}
 			if ok {
 				chrstk <- stock
@@ -275,13 +275,13 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 
 	//parse industry value
 	var sel string
-	switch conf.Args.Datasource.Industry {
+	switch conf.Args.DataSource.Industry {
 	case conf.TENCENT_TC:
 		sel = `body div.page div table.list tbody tr:nth-child(2) td:nth-child(2) a`
 	case conf.TENCENT_CSRC:
 		sel = `body div.page div table.list tbody tr.nobor td:nth-child(2) a`
 	default:
-		log.Panicf("unrecognized industry info source: %s", conf.Args.Datasource.Industry)
+		log.Panicf("unrecognized industry info source: %s", conf.Args.DataSource.Industry)
 	}
 	val := doc.Find(sel).Text()
 	stock.Industry.Valid = true

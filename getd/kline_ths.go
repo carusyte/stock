@@ -1008,7 +1008,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	body, e = util.HttpGetBytesUsingHeaders(url_today,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-			"Cookie":  conf.Args.Datasource.ThsCookie})
+			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_today)
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
@@ -1044,7 +1044,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	body, e = util.HttpGetBytesUsingHeaders(url_last,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-			"Cookie":  conf.Args.Datasource.ThsCookie})
+			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_last)
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_last, e)
@@ -1116,7 +1116,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			body, e = util.HttpGetBytesUsingHeaders(url_hist,
 				map[string]string{
 					"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-					"Cookie":  conf.Args.Datasource.ThsCookie})
+					"Cookie":  conf.Args.DataSource.ThsCookie})
 			//body, e = util.HttpGetBytes(url_hist)
 			if e != nil {
 				log.Printf("%s [%d] error visiting %s: \n%+v", code, tries, url_hist, e)
@@ -1188,7 +1188,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	body, e = util.HttpGetBytesUsingHeaders(url_today,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-			"Cookie":  conf.Args.Datasource.ThsCookie})
+			"Cookie":  conf.Args.DataSource.ThsCookie})
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
 		return quotes, false, false
@@ -1246,7 +1246,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	body, e = util.HttpGetBytesUsingHeaders(url_all,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-			"Cookie":  conf.Args.Datasource.ThsCookie})
+			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_all)
 	if e != nil {
 		log.Printf("%s error visiting %s: \n%+v", code, url_all, e)
@@ -1510,7 +1510,7 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		body, e := util.HttpGetBytesUsingHeaders(url,
 			map[string]string{
 				"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-				"Cookie":  conf.Args.Datasource.ThsCookie})
+				"Cookie":  conf.Args.DataSource.ThsCookie})
 		//body, e := util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("can't get %s for %s. please try again later.", klt, code)
@@ -1590,7 +1590,7 @@ func getToday(code string, typ string) (q *model.Quote, ok, retry bool) {
 	body, e := util.HttpGetBytesUsingHeaders(urlToday,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
-			"Cookie":  conf.Args.Datasource.ThsCookie})
+			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e := util.HttpGetBytes(url_today)
 	if e != nil {
 		return nil, false, false

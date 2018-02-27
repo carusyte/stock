@@ -368,25 +368,25 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 }
 
 func getKlineCytp(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
-	switch conf.Args.Datasource.Kline {
+	switch conf.Args.DataSource.Kline {
 	case conf.THS:
 		return klineThs(stk, klt, incr)
 	case conf.TENCENT:
 		return klineTc(stk, klt, incr)
 	default:
-		log.Panicf("unrecognized datasource: %+v", conf.Args.Datasource.Kline)
+		log.Panicf("unrecognized datasource: %+v", conf.Args.DataSource.Kline)
 	}
 	return
 }
 
 func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
-	switch conf.Args.Datasource.Kline {
+	switch conf.Args.DataSource.Kline {
 	case conf.THS:
 		return klineThs(stk, klt, incr)
 	case conf.TENCENT:
 		return klineTc(stk, klt, incr)
 	default:
-		log.Panicf("unrecognized datasource: %+v", conf.Args.Datasource.Kline)
+		log.Panicf("unrecognized datasource: %+v", conf.Args.DataSource.Kline)
 	}
 	return
 }

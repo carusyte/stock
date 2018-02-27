@@ -55,9 +55,9 @@ func TestGetKlines(t *testing.T) {
 
 func TestGetKlinesFromWht(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "600016"
-	s.Name = "民生银行"
-	s.Market = sql.NullString{"SH", true}
+	s.Code = "399001"
+	s.Name = "深圳成指"
+	s.Market = sql.NullString{"SZ", true}
 	getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,

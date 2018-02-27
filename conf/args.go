@@ -51,11 +51,12 @@ type Arguments struct {
 		Headless bool   `mapstructure:"headless"`
 		Timeout  int64  `mapstructure:"timeout"`
 	}
-	Datasource struct {
+	DataSource struct {
 		Kline                 string `mapstructure:"kline"`
 		Index                 string `mapstructure:"index"`
 		Industry              string `mapstructure:"industry"`
 		ThsCookie             string `mapstructure:"ths_cookie"`
+		WhtURL                string `mapstructure:"wht_url"`
 		SkipStocks            bool   `mapstructure:"skip_stocks"`
 		SkipFinance           bool   `mapstructure:"skip_finance"`
 		SkipKlinePre          bool   `mapstructure:"skip_kline_pre"`
@@ -132,9 +133,9 @@ func setDefaults() {
 	Args.CPUUsageThreshold = 40
 	Args.Kdjv.SampleSizeMin = 5
 	Args.Kdjv.StatsRetroSpan = 600
-	Args.Datasource.Kline = THS
-	Args.Datasource.Index = TENCENT
-	Args.Datasource.Industry = TENCENT_CSRC
+	Args.DataSource.Kline = THS
+	Args.DataSource.Index = TENCENT
+	Args.DataSource.Industry = TENCENT_CSRC
 	Args.Scorer.FetchData = true
 	Args.Scorer.BlueWeight = 0.8
 	Args.Scorer.KdjStWeight = 0.67

@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"time"
 
+	logr "github.com/sirupsen/logrus"
+
 	"golang.org/x/net/proxy"
 )
 
@@ -179,6 +181,7 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 		if err != nil {
 			return nil, err
 		}
+		logr.Debugf("HTTP Post param: %+v", jsonParams)
 		req, err := http.NewRequest(
 			http.MethodPost,
 			url,

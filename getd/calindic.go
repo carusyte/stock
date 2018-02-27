@@ -99,7 +99,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjw, "indicator_w")
 
-	if conf.Args.Datasource.SampleKdjFeature {
+	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
 	}
 }
@@ -129,7 +129,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjm, "indicator_m")
 
-	if conf.Args.Datasource.SampleKdjFeature {
+	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
 	}
 }
@@ -160,7 +160,7 @@ func calcDay(stk *model.Stock, offset int64) {
 
 	binsIndc(kdjd, "indicator_d")
 
-	if conf.Args.Datasource.SampleKdjFeature {
+	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
 	}
 }
