@@ -29,6 +29,7 @@ const (
 	TENCENT      string = "tencent"
 	TENCENT_CSRC string = "tencent.csrc"
 	TENCENT_TC   string = "tencent.tc"
+	WHT          string = "wht"
 )
 
 //Arguments arguments struct type

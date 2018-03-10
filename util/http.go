@@ -181,7 +181,7 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 		if err != nil {
 			return nil, err
 		}
-		logr.Debugf("HTTP Post param: %+v", jsonParams)
+		logr.Debugf("HTTP Post param: %+v", params)
 		req, err := http.NewRequest(
 			http.MethodPost,
 			url,

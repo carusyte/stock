@@ -532,6 +532,7 @@ type Quote struct {
 	Ma60          sql.NullFloat64
 	Ma120         sql.NullFloat64
 	Ma200         sql.NullFloat64
+	Ma250         sql.NullFloat64
 	LrMa5         sql.NullFloat64 `db:"lr_ma5"`
 	LrMa10        sql.NullFloat64 `db:"lr_ma10"`
 	LrMa20        sql.NullFloat64 `db:"lr_ma20"`
@@ -539,6 +540,23 @@ type Quote struct {
 	LrMa60        sql.NullFloat64 `db:"lr_ma60"`
 	LrMa120       sql.NullFloat64 `db:"lr_ma120"`
 	LrMa200       sql.NullFloat64 `db:"lr_ma200"`
+	LrMa250       sql.NullFloat64 `db:"lr_ma250"`
+	Vol5          sql.NullFloat64
+	Vol10         sql.NullFloat64
+	Vol20         sql.NullFloat64
+	Vol30         sql.NullFloat64
+	Vol60         sql.NullFloat64
+	Vol120        sql.NullFloat64
+	Vol200        sql.NullFloat64
+	Vol250        sql.NullFloat64
+	LrVol5        sql.NullFloat64 `db:"lr_vol5"`
+	LrVol10       sql.NullFloat64 `db:"lr_vol10"`
+	LrVol20       sql.NullFloat64 `db:"lr_vol20"`
+	LrVol30       sql.NullFloat64 `db:"lr_vol30"`
+	LrVol60       sql.NullFloat64 `db:"lr_vol60"`
+	LrVol120      sql.NullFloat64 `db:"lr_vol120"`
+	LrVol200      sql.NullFloat64 `db:"lr_vol200"`
+	LrVol250      sql.NullFloat64 `db:"lr_vol250"`
 	Udate         sql.NullString
 	Utime         sql.NullString
 }

@@ -285,7 +285,7 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 			}
 
 			if math.IsNaN(price) {
-				log.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear)
+				log.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear.String)
 			} else if price != 0 {
 				x.Dyr.Float64 = x.Divi.Float64 / price / 10.0
 				x.Dyr.Valid = true

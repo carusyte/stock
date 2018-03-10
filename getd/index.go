@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+//GetIdxLst loads index data from database.
 func GetIdxLst(code ...string) (idxlst []*model.IdxLst, e error) {
 	sql := "select * from idxlst order by code"
 	if len(code) > 0 {
@@ -25,13 +26,13 @@ func GetIdxLst(code ...string) (idxlst []*model.IdxLst, e error) {
 		if "sql: no rows in result set" == e.Error() {
 			logrus.Warnf("no data in idxlst table")
 			return idxlst, nil
-		} else {
-			return idxlst, errors.Wrapf(e, "failed to query idxlst, sql: %s, \n%+v", sql, e)
 		}
+		return idxlst, errors.Wrapf(e, "failed to query idxlst, sql: %s, \n%+v", sql, errors.WithStack(e))
 	}
 	return
 }
 
+//GetIndices fetches index data from configured source.
 func GetIndices() (idxlst, suclst []*model.IdxLst) {
 	var (
 		wg, wgr sync.WaitGroup
@@ -120,6 +121,7 @@ func getIndexFor(idx *model.IdxLst, retry int, tab model.DBTab) error {
 }
 
 func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
+	//TODO fetch index from WHT
 	code := idx.Code
 	log.Printf("Fetching index %s for %s", code, tab)
 	switch idx.Src {
@@ -127,6 +129,11 @@ func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
 		return idxFromXq(code, tab)
 	case "http://web.ifzq.gtimg.cn":
 		return idxFromQQ(code, tab)
+	case "wht":
+		//TODO get index data from wht
+		s := &model.Stock{Code: code}
+		_, suc = getKlineWht(s, []model.DBTab{tab}, true)
+		return
 	default:
 		log.Panicf("%s unknown index src: %s", code, idx.Src)
 	}

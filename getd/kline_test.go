@@ -42,8 +42,8 @@ func TestParseLastJson(t *testing.T) {
 
 func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "000021"
-	s.Name = "深科技"
+	s.Code = "sz399001"
+	s.Name = "深圳成指"
 	ss := new(model.Stocks)
 	ss.Add(s)
 	GetKlines(ss, model.KLINE_DAY)
@@ -55,10 +55,10 @@ func TestGetKlines(t *testing.T) {
 
 func TestGetKlinesFromWht(t *testing.T) {
 	s := &model.Stock{}
-	s.Code = "399001"
-	s.Name = "深圳成指"
-	s.Market = sql.NullString{"SZ", true}
-	getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
+	s.Code = "000585"
+	s.Name = "东北电气"
+	s.Market = sql.NullString{String: "SZ", Valid: true}
+	getKlineWht(s, []model.DBTab{model.KLINE_DAY, model.KLINE_DAY_NR}, true)
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,
 	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
@@ -68,7 +68,7 @@ func TestGetKlinesFromWht(t *testing.T) {
 func TestKlineDayNRFromWht(t *testing.T) {
 	stks := StocksDb()
 	for _, s := range stks {
-		getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
+		getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR}, true)
 	}
 	t.Fail()
 }

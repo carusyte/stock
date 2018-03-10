@@ -123,12 +123,13 @@ func SaveKpts(kpts ...*model.KeyPoint) (err error) {
 	for ; rt < retry; rt++ {
 		code = kpts[0].Code
 		valueStrings := make([]string, 0, len(kpts))
-		valueArgs := make([]interface{}, 0, len(kpts)*13)
+		valueArgs := make([]interface{}, 0, len(kpts)*12)
 		for _, e := range kpts {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, e.Code)
 			valueArgs = append(valueArgs, e.Date)
-			valueArgs = append(valueArgs, e.Flag)
+			// don't overwrite existing flags
+			// valueArgs = append(valueArgs, e.Flag)
 			valueArgs = append(valueArgs, e.Klid)
 			valueArgs = append(valueArgs, e.RgnLen)
 			valueArgs = append(valueArgs, e.RgnRise)
@@ -140,9 +141,9 @@ func SaveKpts(kpts ...*model.KeyPoint) (err error) {
 			valueArgs = append(valueArgs, e.Udate)
 			valueArgs = append(valueArgs, e.Utime)
 		}
-		stmt := fmt.Sprintf("INSERT INTO kpts (code,date,flag,klid,rgn_len,rgn_rise,score,sum_fall,unit_rise,"+
+		stmt := fmt.Sprintf("INSERT INTO kpts (code,date,klid,rgn_len,rgn_rise,score,sum_fall,unit_rise,"+
 			"clr,uuid,udate,utime) VALUES %s "+
-			"on duplicate key update date=values(date),flag=values(flag),rgn_len=values(rgn_len),"+
+			"on duplicate key update date=values(date),rgn_len=values(rgn_len),"+
 			"rgn_rise=values(rgn_rise),score=values(score),sum_fall=values(sum_fall),unit_rise=values(unit_rise),"+
 			"clr=values(clr),uuid=values(uuid),udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))

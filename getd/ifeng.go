@@ -2,11 +2,12 @@ package getd
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"log"
-	"strings"
 )
 
 func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
@@ -41,7 +42,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 				if itd%2 == 0 {
 					field = td
 				} else {
-					if "--" == td && "" == td {
+					if "--" == td || "" == td {
 						return
 					}
 					switch field {

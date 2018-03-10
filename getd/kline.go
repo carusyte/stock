@@ -155,17 +155,24 @@ func FixVarate() {
 }
 
 //CalVarate calculates variation rate based on previous value and current value.
-// 0 previous value is adjusted by a scale of 0.01. Returns variation rate at a
-// scale of 100 (as percentage value).
-func CalVarate(prev, cur float64) float64 {
+// 0 previous value is adjusted by a bias of 0.01. Returns variation rate at a
+// specified scale(e.g 100 as percentage value).
+func CalVarate(prev, cur, scale float64) float64 {
 	if prev == 0 && cur == 0 {
 		return 0
 	} else if prev == 0 {
-		return cur / .01 * 100.
+		return cur / .01 * scale
 	} else if cur == 0 {
-		return (-0.01 - prev) / math.Abs(prev) * 100.
+		return (-0.01 - prev) / math.Abs(prev) * scale
 	}
-	return (cur - prev) / math.Abs(prev) * 100.
+	return (cur - prev) / math.Abs(prev) * scale
+}
+
+func calLogReturnsFor(qmap map[model.DBTab][]*model.Quote) (e error) {
+	for _, qs := range qmap {
+		CalLogReturns(qs)
+	}
+	return nil
 }
 
 //CalLogReturns calculates log return for high, open, close, low, and volume
@@ -192,18 +199,142 @@ func CalLogReturns(qs []*model.Quote) {
 		q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + vhg/100.), Valid: true}
 		q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + vop/100.), Valid: true}
 		q.LrLow = sql.NullFloat64{Float64: math.Log(1. + vlw/100.), Valid: true}
-		q.LrVol = sql.NullFloat64{}
-		if !q.Volume.Valid || (i > 0 && !qs[i-1].Volume.Valid) {
-			continue
-		}
+		// q.LrVol = sql.NullFloat64{}
 		vol := math.Max(10, q.Volume.Float64)
 		prevol := vol
 		if i > 0 {
 			prevol = math.Max(10, qs[i-1].Volume.Float64)
 		}
-		q.LrVol.Valid = true
-		q.LrVol.Float64 = math.Log(vol / prevol)
+		q.LrVol = sql.NullFloat64{Float64: math.Log(vol / prevol), Valid: true}
+		//calculates LR for MA
+		bias := .01
+		if q.Ma5.Valid {
+			q.LrMa5.Valid = true
+			if i > 0 && qs[i-1].Ma5.Valid {
+				q.LrMa5.Float64 = logReturn(qs[i-1].Ma5.Float64, q.Ma5.Float64, bias)
+			}
+		}
+		if q.Ma10.Valid {
+			q.LrMa10.Valid = true
+			if i > 0 && qs[i-1].Ma10.Valid {
+				q.LrMa10.Float64 = logReturn(qs[i-1].Ma10.Float64, q.Ma10.Float64, bias)
+			}
+		}
+		if q.Ma20.Valid {
+			q.LrMa20.Valid = true
+			if i > 0 && qs[i-1].Ma20.Valid {
+				q.LrMa20.Float64 = logReturn(qs[i-1].Ma20.Float64, q.Ma20.Float64, bias)
+			}
+		}
+		if q.Ma30.Valid {
+			q.LrMa30.Valid = true
+			if i > 0 && qs[i-1].Ma30.Valid {
+				q.LrMa30.Float64 = logReturn(qs[i-1].Ma30.Float64, q.Ma30.Float64, bias)
+			}
+		}
+		if q.Ma60.Valid {
+			q.LrMa60.Valid = true
+			if i > 0 && qs[i-1].Ma60.Valid {
+				q.LrMa60.Float64 = logReturn(qs[i-1].Ma60.Float64, q.Ma60.Float64, bias)
+			}
+		}
+		if q.Ma120.Valid {
+			q.LrMa120.Valid = true
+			if i > 0 && qs[i-1].Ma120.Valid {
+				q.LrMa120.Float64 = logReturn(qs[i-1].Ma120.Float64, q.Ma120.Float64, bias)
+			}
+		}
+		if q.Ma200.Valid {
+			q.LrMa200.Valid = true
+			if i > 0 && qs[i-1].Ma200.Valid {
+				q.LrMa200.Float64 = logReturn(qs[i-1].Ma200.Float64, q.Ma200.Float64, bias)
+			}
+		}
+		if q.Ma250.Valid {
+			q.LrMa250.Valid = true
+			if i > 0 && qs[i-1].Ma250.Valid {
+				q.LrMa250.Float64 = logReturn(qs[i-1].Ma250.Float64, q.Ma250.Float64, bias)
+			}
+		}
+		//calculates LR for vol MA
+		bias = 10
+		if q.Vol5.Valid {
+			q.LrVol5.Valid = true
+			if i > 0 && qs[i-1].Vol5.Valid {
+				q.LrVol5.Float64 = logReturn(qs[i-1].Vol5.Float64, q.Vol5.Float64, bias)
+			}
+		}
+		if q.Vol10.Valid {
+			q.LrVol10.Valid = true
+			if i > 0 && qs[i-1].Vol10.Valid {
+				q.LrVol10.Float64 = logReturn(qs[i-1].Vol10.Float64, q.Vol10.Float64, bias)
+			}
+		}
+		if q.Vol20.Valid {
+			q.LrVol20.Valid = true
+			if i > 0 && qs[i-1].Vol20.Valid {
+				q.LrVol20.Float64 = logReturn(qs[i-1].Vol20.Float64, q.Vol20.Float64, bias)
+			}
+		}
+		if q.Vol30.Valid {
+			q.LrVol30.Valid = true
+			if i > 0 && qs[i-1].Vol30.Valid {
+				q.LrVol30.Float64 = logReturn(qs[i-1].Vol30.Float64, q.Vol30.Float64, bias)
+			}
+		}
+		if q.Vol60.Valid {
+			q.LrVol60.Valid = true
+			if i > 0 && qs[i-1].Vol60.Valid {
+				q.LrVol60.Float64 = logReturn(qs[i-1].Vol60.Float64, q.Vol60.Float64, bias)
+			}
+		}
+		if q.Vol120.Valid {
+			q.LrVol120.Valid = true
+			if i > 0 && qs[i-1].Vol120.Valid {
+				q.LrVol120.Float64 = logReturn(qs[i-1].Vol120.Float64, q.Vol120.Float64, bias)
+			}
+		}
+		if q.Vol200.Valid {
+			q.LrVol200.Valid = true
+			if i > 0 && qs[i-1].Vol200.Valid {
+				q.LrVol200.Float64 = logReturn(qs[i-1].Vol200.Float64, q.Vol200.Float64, bias)
+			}
+		}
+		if q.Vol250.Valid {
+			q.LrVol250.Valid = true
+			if i > 0 && qs[i-1].Vol250.Valid {
+				q.LrVol250.Float64 = logReturn(qs[i-1].Vol250.Float64, q.Vol250.Float64, bias)
+			}
+		}
 	}
+}
+
+//logReturn calculates log return based on previous value, current value and bias.
+// bias is only used either previous or current value is not greater than 0.
+func logReturn(prev, cur, bias float64) float64 {
+	if bias <= 0 {
+		log.Panicf("bias %f must be greater than 0.", bias)
+	}
+	if prev == 0 && cur == 0 {
+		return 0
+	} else if prev == 0 {
+		if cur > 0 {
+			return math.Log((cur + bias) / bias)
+		}
+		return math.Log(bias / (math.Abs(cur) + bias))
+	} else if cur == 0 {
+		if prev > 0 {
+			return math.Log(bias / (prev + bias))
+		}
+		return math.Log((math.Abs(prev) + bias) / bias)
+	} else if prev < 0 && cur < 0 {
+		return math.Log(math.Abs(prev) / math.Abs(cur))
+	} else if prev < 0 {
+		return math.Log((cur + math.Abs(prev) + bias) / bias)
+	} else if cur < 0 {
+		return math.Log(bias / (prev + math.Abs(cur) + bias))
+	}
+	return math.Log(cur / prev)
 }
 
 func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
@@ -314,32 +445,16 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		wg.Done()
 		<-*wf
 	}()
-	_, suc := getKlineThs(stk, kltype)
+	suc := false
+	switch conf.Args.DataSource.Kline {
+	case conf.WHT:
+		_, suc = getKlineWht(stk, kltype, true)
+	case conf.THS:
+		_, suc = getKlineThs(stk, kltype)
+	}
 	if suc {
 		outstks <- stk
 	}
-	// xdxr := latestUFRXdxr(stk.Code)
-	// suc := false
-	// for _, t := range kltype {
-	// 	switch t {
-	// 	case model.KLINE_60M:
-	// 		_, suc = getMinuteKlines(stk.Code, t)
-	// 	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
-	// 		_, suc = getKlineCytp(stk, t, xdxr == nil)
-	// 	case model.KLINE_DAY_NR:
-	// 		_, suc = getKlineCytp(stk, t, true)
-	// 	default:
-	// 		log.Panicf("unhandled kltype: %s", t)
-	// 	}
-	// 	if !suc {
-	// 		break
-	// 	} else {
-	// 		logrus.Debugf("%s %+v fetched", stk.Code, t)
-	// 	}
-	// }
-	// if suc {
-	// 	outstks <- stk
-	// }
 }
 
 func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bool) {
@@ -395,18 +510,23 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
+	numFields := 57
 	retry := 10
 	rt := 0
 	lklid++
 	code := ""
+	holders := make([]string, numFields)
+	for i := range holders {
+		holders[i] = "?"
+	}
+	holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 	var e error
 	for ; rt < retry; rt++ {
 		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*25)
+		valueArgs := make([]interface{}, 0, len(quotes)*numFields)
 		var code string
 		for _, q := range quotes {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			valueStrings = append(valueStrings, holderString)
 			valueArgs = append(valueArgs, q.Code)
 			valueArgs = append(valueArgs, q.Date)
 			valueArgs = append(valueArgs, q.Klid)
@@ -430,6 +550,38 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			valueArgs = append(valueArgs, q.LrOpen)
 			valueArgs = append(valueArgs, q.LrLow)
 			valueArgs = append(valueArgs, q.LrVol)
+			valueArgs = append(valueArgs, q.Ma5)
+			valueArgs = append(valueArgs, q.Ma10)
+			valueArgs = append(valueArgs, q.Ma20)
+			valueArgs = append(valueArgs, q.Ma30)
+			valueArgs = append(valueArgs, q.Ma60)
+			valueArgs = append(valueArgs, q.Ma120)
+			valueArgs = append(valueArgs, q.Ma200)
+			valueArgs = append(valueArgs, q.Ma250)
+			valueArgs = append(valueArgs, q.LrMa5)
+			valueArgs = append(valueArgs, q.LrMa10)
+			valueArgs = append(valueArgs, q.LrMa20)
+			valueArgs = append(valueArgs, q.LrMa30)
+			valueArgs = append(valueArgs, q.LrMa60)
+			valueArgs = append(valueArgs, q.LrMa120)
+			valueArgs = append(valueArgs, q.LrMa200)
+			valueArgs = append(valueArgs, q.LrMa250)
+			valueArgs = append(valueArgs, q.Vol5)
+			valueArgs = append(valueArgs, q.Vol10)
+			valueArgs = append(valueArgs, q.Vol20)
+			valueArgs = append(valueArgs, q.Vol30)
+			valueArgs = append(valueArgs, q.Vol60)
+			valueArgs = append(valueArgs, q.Vol120)
+			valueArgs = append(valueArgs, q.Vol200)
+			valueArgs = append(valueArgs, q.Vol250)
+			valueArgs = append(valueArgs, q.LrVol5)
+			valueArgs = append(valueArgs, q.LrVol10)
+			valueArgs = append(valueArgs, q.LrVol20)
+			valueArgs = append(valueArgs, q.LrVol30)
+			valueArgs = append(valueArgs, q.LrVol60)
+			valueArgs = append(valueArgs, q.LrVol120)
+			valueArgs = append(valueArgs, q.LrVol200)
+			valueArgs = append(valueArgs, q.LrVol250)
 			valueArgs = append(valueArgs, q.Udate)
 			valueArgs = append(valueArgs, q.Utime)
 			code = q.Code
@@ -444,7 +596,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		//TODO adapt new columns
 		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 			"volume,amount,xrate,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
-			"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,udate,utime) "+
+			"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
+			"lr_ma5,lr_ma10,lr_ma20,lr_ma30,lr_ma60,lr_ma120,lr_ma200,lr_ma250,"+
+			"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
+			"lr_vol5,lr_vol10,lr_vol20,lr_vol30,lr_vol60,lr_vol120,lr_vol200,lr_vol250,"+
+			"udate,utime) "+
 			"VALUES %s on duplicate key update date=values(date),"+
 			"open=values(open),high=values(high),close=values(close),low=values(low),"+
 			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
@@ -452,7 +608,17 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
 			"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
 			"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
-			"lr_vol=values(lr_vol),udate=values(udate),utime=values(utime)",
+			"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
+			"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
+			"ma250=values(ma250),lr_ma5=values(lr_ma5),lr_ma10=values(lr_ma10),lr_ma20=values(lr_ma20),"+
+			"lr_ma30=values(lr_ma30),lr_ma60=values(lr_ma60),lr_ma120=values(lr_ma120),"+
+			"lr_ma200=values(lr_ma200),lr_ma250=values(lr_ma250),"+
+			"vol5=values(vol5),vol10=values(vol10),vol20=values(vol20),"+
+			"vol30=values(vol30),vol60=values(vol60),vol120=values(vol120),vol200=values(vol200),"+
+			"vol250=values(vol250),lr_vol5=values(lr_vol5),lr_vol10=values(lr_vol10),lr_vol20=values(lr_vol20),"+
+			"lr_vol30=values(lr_vol30),lr_vol60=values(lr_vol60),lr_vol120=values(lr_vol120),"+
+			"lr_vol200=values(lr_vol200),lr_vol250=values(lr_vol250),"+
+			"udate=values(udate),utime=values(utime)",
 			table, strings.Join(valueStrings, ","))
 		// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
 		_, e = dbmap.Exec(stmt, valueArgs...)
@@ -476,7 +642,9 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 
 //Assign KLID, calculate Varate, add update datetime
 func supplementMisc(klines []*model.Quote, start int) {
+	//TODO calculate varate for MA
 	d, t := util.TimeStr()
+	scale := 100.
 	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
 	for i := 0; i < len(klines); i++ {
 		start++
@@ -495,10 +663,10 @@ func supplementMisc(klines []*model.Quote, start int) {
 			klines[i].VarateOpen.Float64 = 0
 			klines[i].VarateLow.Float64 = 0
 		} else {
-			klines[i].Varate.Float64 = CalVarate(preclose, klines[i].Close)
-			klines[i].VarateHigh.Float64 = CalVarate(prehigh, klines[i].High)
-			klines[i].VarateOpen.Float64 = CalVarate(preopen, klines[i].Open)
-			klines[i].VarateLow.Float64 = CalVarate(prelow, klines[i].Low)
+			klines[i].Varate.Float64 = CalVarate(preclose, klines[i].Close, scale)
+			klines[i].VarateHigh.Float64 = CalVarate(prehigh, klines[i].High, scale)
+			klines[i].VarateOpen.Float64 = CalVarate(preopen, klines[i].Open, scale)
+			klines[i].VarateLow.Float64 = CalVarate(prelow, klines[i].Low, scale)
 		}
 		preclose = klines[i].Close
 		prehigh = klines[i].High
@@ -519,4 +687,157 @@ func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 	return
 }
 
-//TODO add function to update regulated varate in non-reinstated kline tables
+func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
+	for t, qs := range qmap {
+		switch t {
+		case model.KLINE_DAY:
+			e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
+		case model.KLINE_WEEK:
+			e = inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
+		case model.KLINE_MONTH:
+			e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
+		default:
+			//skip the rest types of kline
+		}
+		if e != nil {
+			log.Println(e)
+			return e
+		}
+	}
+	return nil
+}
+
+func matchSlice(nrqs, tgqs []*model.Quote) (rqs []*model.Quote, err error) {
+	s, e := -1, -1
+	if len(nrqs) == 1 && len(tgqs) == 1 {
+		if nrqs[0].Klid == tgqs[0].Klid && nrqs[0].Date == tgqs[0].Date {
+			return nrqs, nil
+		}
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
+	}
+	for i := len(nrqs) - 1; i >= 0; i-- {
+		if s < 0 && nrqs[i].Klid == tgqs[0].Klid && nrqs[i].Date == tgqs[0].Date {
+			s = i
+			break
+		} else if e < 0 && nrqs[i].Klid == tgqs[len(tgqs)-1].Klid &&
+			nrqs[i].Date == tgqs[len(tgqs)-1].Date {
+			e = i
+		} else if nrqs[i].Klid < tgqs[0].Klid || nrqs[i].Date < tgqs[0].Date {
+			break
+		}
+	}
+	if s < 0 {
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
+	} else if e < 0 {
+		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[len(tgqs)-1], len(tgqs)-1)
+	}
+	return nrqs[s : e+1], nil
+}
+
+func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote) error {
+	if tgqs == nil || len(tgqs) == 0 {
+		return fmt.Errorf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter",
+			stk.Code, tab)
+	}
+	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
+	if nrqs == nil || len(nrqs) < len(tgqs) {
+		//load non-reinstated quotes from db
+		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
+	}
+	if len(nrqs) < len(tgqs) {
+		return fmt.Errorf("%s unable to infer varate rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
+			stk.Code, tab, len(nrqs), len(tgqs))
+	}
+	nrqs, e := matchSlice(nrqs, tgqs)
+	if e != nil {
+		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+	}
+	xemap, e := XdxrDateBetween(stk.Code, sDate, eDate)
+	if e != nil {
+		return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+	}
+	return transferVarateRgl(stk.Code, tab, nrqs, tgqs, xemap)
+}
+
+func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
+	xemap map[string]*model.Xdxr) (e error) {
+	for i := 0; i < len(tgqs); i++ {
+		nrq := nrqs[i]
+		tgq := tgqs[i]
+		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
+			return fmt.Errorf("%s unable to infer varate rgl from %v. unmatched nrq & tgq at %d: %+v : %+v",
+				code, tab, i, nrq, tgq)
+		}
+		tvar := nrq.Varate.Float64
+		tvarh := nrq.VarateHigh.Float64
+		tvaro := nrq.VarateOpen.Float64
+		tvarl := nrq.VarateLow.Float64
+		if len(xemap) > 0 && i > 0 {
+			xdxr := false
+			var xe *model.Xdxr
+			switch tab {
+			case model.KLINE_DAY_NR:
+				xe, xdxr = xemap[tgq.Date]
+			default:
+				xe, xdxr, e = mergeXdxr(xemap, tgq.Date, tab)
+			}
+			if e != nil {
+				return fmt.Errorf("%s unable to infer varate_rgl from %v. : %+v", code, tab, e)
+			}
+			if xdxr {
+				// adjust fore-day price for regulated varate calculation
+				pcl := Reinstate(nrqs[i-1].Close, xe)
+				phg := Reinstate(nrqs[i-1].High, xe)
+				pop := Reinstate(nrqs[i-1].Open, xe)
+				plw := Reinstate(nrqs[i-1].Low, xe)
+				tvar = (nrq.Close - pcl) / pcl * 100.
+				tvarh = (nrq.High - phg) / phg * 100.
+				tvaro = (nrq.Open - pop) / pop * 100.
+				tvarl = (nrq.Low - plw) / plw * 100.
+			}
+		}
+		tgq.VarateRgl.Valid = true
+		tgq.VarateRglOpen.Valid = true
+		tgq.VarateRglHigh.Valid = true
+		tgq.VarateRglLow.Valid = true
+		tgq.VarateRgl.Float64 = tvar
+		tgq.VarateRglOpen.Float64 = tvaro
+		tgq.VarateRglHigh.Float64 = tvarh
+		tgq.VarateRglLow.Float64 = tvarl
+	}
+	return nil
+}
+
+func mergeXdxr(xemap map[string]*model.Xdxr, date string, tab model.DBTab) (xe *model.Xdxr, in bool, e error) {
+	for dt, x := range xemap {
+		switch tab {
+		case model.KLINE_WEEK_NR:
+			in, e = util.SameWeek(dt, date, "")
+		case model.KLINE_MONTH_NR:
+			in = dt[:8] == date[:8]
+		}
+		if e != nil {
+			return xe, false, e
+		}
+		if in {
+			// in case multiple xdxr events happen within the same period
+			if xe == nil {
+				xe = x
+			} else {
+				if x.Divi.Valid {
+					xe.Divi.Valid = true
+					xe.Divi.Float64 += x.Divi.Float64
+				}
+				if x.SharesAllot.Valid {
+					xe.SharesAllot.Valid = true
+					xe.SharesAllot.Float64 += x.SharesAllot.Float64
+				}
+				if x.SharesCvt.Valid {
+					xe.SharesCvt.Valid = true
+					xe.SharesCvt.Float64 += x.SharesCvt.Float64
+				}
+			}
+		}
+	}
+	return xe, in, e
+}
