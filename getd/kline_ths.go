@@ -131,7 +131,7 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 		}
 	}
 
-	supplementMisc(quotes, lklid)
+	supplementMisc(quotes, klt, lklid)
 	if ldate != "" {
 		//skip the first record which is for varate calculation
 		quotes = quotes[1:]
@@ -157,12 +157,13 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 		lkmap[t] = lklid
 	}
 	for klt, quotes := range qmap {
-		supplementMisc(quotes, lkmap[klt])
+		supplementMisc(quotes, klt, lkmap[klt])
 	}
 	// insert non-reinstated quotes first
 	for klt, quotes := range qmap {
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			CalLogReturns(quotes)
 			if lkmap[klt] != -1 {
 				//skip the first record which is for varate calculation
 				quotes = quotes[1:]
@@ -174,17 +175,17 @@ func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab
 	if e != nil {
 		return qmap, false, true
 	}
-	calLogReturnsFor(qmap)
 	for klt, quotes := range qmap {
-		if lkmap[klt] != -1 {
-			//skip the first record which is for varate calculation
-			qmap[klt] = quotes[1:]
-			quotes = quotes[1:]
-		}
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
 			//skip insert
 		default:
+			CalLogReturns(quotes)
+			if lkmap[klt] != -1 {
+				//skip the first record which is for varate calculation
+				quotes = quotes[1:]
+				qmap[klt] = quotes
+			}
 			binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
@@ -1401,7 +1402,7 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		for i, k := range dkeys {
 			quotes[i] = klmap[k]
 		}
-		supplementMisc(quotes, lklid)
+		supplementMisc(quotes, klt, lklid)
 		if ldate != "" {
 			// skip the first record which is for varate calculation
 			quotes = quotes[1:]

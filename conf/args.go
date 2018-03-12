@@ -54,12 +54,15 @@ type Arguments struct {
 	}
 	DataSource struct {
 		Kline                 string `mapstructure:"kline"`
+		KlineValidateSource   string `mapstructure:"kline_validate_source"`
+		DropInconsistent      bool   `mapstructure:"drop_inconsistent"`
 		Index                 string `mapstructure:"index"`
 		Industry              string `mapstructure:"industry"`
 		ThsCookie             string `mapstructure:"ths_cookie"`
 		WhtURL                string `mapstructure:"wht_url"`
 		SkipStocks            bool   `mapstructure:"skip_stocks"`
 		SkipFinance           bool   `mapstructure:"skip_finance"`
+		SkipKlineVld          bool   `mapstructure:"skip_kline_vld"`
 		SkipKlinePre          bool   `mapstructure:"skip_kline_pre"`
 		SkipFinancePrediction bool   `mapstructure:"skip_finance_prediction"`
 		SkipXdxr              bool   `mapstructure:"skip_xdxr"`

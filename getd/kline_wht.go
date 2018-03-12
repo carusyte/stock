@@ -79,8 +79,8 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 				//skip the first record which is for varate calculation
 				quotes = quotes[1:]
 				qmap[klt] = quotes
-				binsert(quotes, string(klt), lkmap[klt])
 			}
+			binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
 	return qmap, true
@@ -157,7 +157,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	logrus.Debug("return from wht: %+v", string(body))
 	//extract quotes
 	quotes = parseWhtJSONMaps(codeid, ldate, data)
-	supplementMisc(quotes, lklid)
+	supplementMisc(quotes, tab, lklid)
 	return quotes, lklid, true, false
 }
 

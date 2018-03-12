@@ -66,14 +66,14 @@ func TestGetAllPerfPrediction(t *testing.T) {
 	GetFinPrediction(allstk)
 }
 
-func TestSubSlice(t *testing.T){
-	s := []int{1,2,3,4,5}
+func TestSubSlice(t *testing.T) {
+	s := []int{1, 2, 3, 4, 5}
 	t.Errorf("slice: %+v", s)
 	s = subSlice(s)
 	t.Errorf("subslice: %+v", s)
 }
 
-func subSlice(s []int) []int{
-	s = append(s[:1],s[2:]...)
+func subSlice(s []int) []int {
+	s = append(s[:1], s[2:]...)
 	return s
 }

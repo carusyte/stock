@@ -34,7 +34,13 @@ func Get() {
 		log.Printf("skipped finance data from web")
 		stks = allstks
 	}
-
+	if !conf.Args.DataSource.SkipKlineVld {
+		stgkvld := time.Now()
+		stks = GetKlines(stks, model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD)
+		StopWatch("GET_KLINES_VLD", stgkvld)
+	} else {
+		log.Printf("skipped kline-vld data from web")
+	}
 	if !conf.Args.DataSource.SkipKlinePre {
 		stgkpre := time.Now()
 		stks = GetKlines(stks, model.KLINE_DAY_NR, model.KLINE_DAY_B,

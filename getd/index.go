@@ -181,7 +181,7 @@ func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
 		return false, true
 	}
-	supplementMisc(qj.Quotes, sklid)
+	supplementMisc(qj.Quotes, tab, sklid)
 	CalLogReturns(qj.Quotes)
 	if sklid != -1 {
 		qj.Quotes = qj.Quotes[1:]

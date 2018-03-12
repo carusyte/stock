@@ -13,6 +13,7 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -66,6 +67,7 @@ func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*mod
 	return
 }
 
+//GetKlBtwn fetches kline data between dates.
 func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist []*model.Quote) {
 	var (
 		dt1cond, dt2cond string
@@ -94,6 +96,9 @@ func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist [
 		tab, dt1cond, dt2cond, d)
 	_, e := dbmap.Select(&hist, sql, code)
 	util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
+	for _, q := range hist {
+		q.Type = tab
+	}
 	return
 }
 
@@ -446,11 +451,35 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		<-*wf
 	}()
 	suc := false
-	switch conf.Args.DataSource.Kline {
-	case conf.WHT:
-		_, suc = getKlineWht(stk, kltype, true)
-	case conf.THS:
-		_, suc = getKlineThs(stk, kltype)
+	fail := false
+	var kltnv []model.DBTab
+	//process validate request first
+	for _, klt := range kltype {
+		switch klt {
+		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
+			switch conf.Args.DataSource.KlineValidateSource {
+			case conf.TENCENT:
+				_, suc = klineTc(stk, klt, true)
+			default:
+				logrus.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+			}
+			if !suc {
+				fail = true
+			}
+		default:
+			kltnv = append(kltnv, klt)
+		}
+	}
+	if fail {
+		return
+	}
+	if len(kltnv) > 0 {
+		switch conf.Args.DataSource.Kline {
+		case conf.WHT:
+			_, suc = getKlineWht(stk, kltnv, true)
+		case conf.THS:
+			_, suc = getKlineThs(stk, kltnv)
+		}
 	}
 	if suc {
 		outstks <- stk
@@ -641,13 +670,13 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 }
 
 //Assign KLID, calculate Varate, add update datetime
-func supplementMisc(klines []*model.Quote, start int) {
-	//TODO calculate varate for MA
+func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 	d, t := util.TimeStr()
 	scale := 100.
 	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
 	for i := 0; i < len(klines); i++ {
 		start++
+		klines[i].Type = kltype
 		klines[i].Klid = start
 		klines[i].Udate.Valid = true
 		klines[i].Utime.Valid = true
@@ -689,13 +718,14 @@ func getLatestKl(code string, klt model.DBTab, offset int) (q *model.Quote) {
 
 func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e error) {
 	for t, qs := range qmap {
+		var retTgqs []*model.Quote
 		switch t {
 		case model.KLINE_DAY:
-			e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
+			retTgqs, e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
 		case model.KLINE_WEEK:
-			e = inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
+			retTgqs, e = inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
 		case model.KLINE_MONTH:
-			e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
+			retTgqs, e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
 		default:
 			//skip the rest types of kline
 		}
@@ -703,40 +733,104 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 			log.Println(e)
 			return e
 		}
+		if retTgqs != nil {
+			qmap[t] = retTgqs
+		}
 	}
 	return nil
 }
 
-func matchSlice(nrqs, tgqs []*model.Quote) (rqs []*model.Quote, err error) {
-	s, e := -1, -1
-	if len(nrqs) == 1 && len(tgqs) == 1 {
-		if nrqs[0].Klid == tgqs[0].Klid && nrqs[0].Date == tgqs[0].Date {
-			return nrqs, nil
+//matchSlice assumes len(nrqs) >= len(tgqs) in normal cases, takes care of missing data in-between,
+// trying best to make sure len(retNrqs) == len(retTgqs)
+func matchSlice(nrqs, tgqs []*model.Quote) (retNrqs, retTgqs []*model.Quote, err error) {
+	if len(nrqs) < len(tgqs) && !conf.Args.DataSource.DropInconsistent {
+		return retNrqs, retTgqs, fmt.Errorf("len(nrqs)=%d, len(tgqs)=%d, missing data in nrqs", len(nrqs), len(tgqs))
+	}
+	s := 0
+	r := false
+	for _, q := range tgqs {
+		f := false
+		for j := s; j < len(nrqs); j++ {
+			nq := nrqs[j]
+			if nq.Date > q.Date {
+				break
+			} else if nq.Date == q.Date && nq.Klid == q.Klid {
+				retNrqs = append(retNrqs, nq)
+				retTgqs = append(retTgqs, q)
+				s = j + 1
+				r = true
+				f = true
+				break
+			} else if r {
+				break
+			}
 		}
-		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
-	}
-	for i := len(nrqs) - 1; i >= 0; i-- {
-		if s < 0 && nrqs[i].Klid == tgqs[0].Klid && nrqs[i].Date == tgqs[0].Date {
-			s = i
-			break
-		} else if e < 0 && nrqs[i].Klid == tgqs[len(tgqs)-1].Klid &&
-			nrqs[i].Date == tgqs[len(tgqs)-1].Date {
-			e = i
-		} else if nrqs[i].Klid < tgqs[0].Klid || nrqs[i].Date < tgqs[0].Date {
+		if r && !f {
 			break
 		}
 	}
-	if s < 0 {
-		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[0], 0)
-	} else if e < 0 {
-		return rqs, fmt.Errorf("can't find %+v @%d in the source slice", tgqs[len(tgqs)-1], len(tgqs)-1)
+	if conf.Args.DataSource.DropInconsistent {
+		if len(retTgqs) != len(tgqs) {
+			var d int64
+			var e error
+			tab := nrqs[0].Type
+			code := nrqs[0].Code
+			date := tgqs[0].Date
+			if len(retTgqs) != 0 {
+				date = retTgqs[len(retTgqs)-1].Date
+			}
+			d, e = deleteKlineFromDate(tab, code, date)
+			if e != nil {
+				logrus.Warnf("failed to delete kline for %s %v from date %s: %+v", code, tab, date, e)
+				return retNrqs, retTgqs, e
+			}
+			if d != 0 {
+				logrus.Warnf("%s inconsistency found in %v. dropping %d, from date %s", code, tab, d, date)
+			}
+		}
+	} else {
+		if len(retTgqs) != len(tgqs) || len(retTgqs) == 0 {
+			return retNrqs, retTgqs, fmt.Errorf("data inconsistent. nrqs:%+v\ntgqs:%+v", nrqs, tgqs)
+		}
+		lastTg := retTgqs[len(retTgqs)-1]
+		lastNr := nrqs[len(nrqs)-1]
+		if lastTg.Date != lastNr.Date || lastTg.Klid != lastNr.Klid {
+			return retNrqs, retTgqs, fmt.Errorf("data inconsistent. nrqs:%+v\ntgqs:%+v", nrqs, tgqs)
+		}
 	}
-	return nrqs[s : e+1], nil
+	return
 }
 
-func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote) error {
+func deleteKlineFromDate(kltype model.DBTab, code, date string) (d int64, e error) {
+	sql := fmt.Sprintf("delete from %v where code = ? and date >= ?", kltype)
+	retry := 10
+	tried := 0
+	for ; tried < retry; tried++ {
+		r, e := dbmap.Exec(sql, code, date)
+		if e != nil {
+			logrus.Warnf("%s failed to delete %v from %s, database error:%+v", code, kltype, date, e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
+				continue
+			} else {
+				return d, errors.WithStack(e)
+			}
+		}
+		d, e = r.RowsAffected()
+		if e != nil {
+			return d, errors.WithStack(e)
+		}
+		break
+	}
+	return
+}
+
+func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote) (
+	retTgqs []*model.Quote, e error) {
+	var retNrqs []*model.Quote
+	retTgqs = make([]*model.Quote, 0)
 	if tgqs == nil || len(tgqs) == 0 {
-		return fmt.Errorf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter",
+		return retTgqs, fmt.Errorf("%s unable to infer varate_rgl from %v. please provide valid target quotes parameter",
 			stk.Code, tab)
 	}
 	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
@@ -744,19 +838,31 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 		//load non-reinstated quotes from db
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
-	if len(nrqs) < len(tgqs) {
-		return fmt.Errorf("%s unable to infer varate rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
-			stk.Code, tab, len(nrqs), len(tgqs))
+	if len(nrqs) == 0 {
+		logrus.Warnf("%s %v data not available, skipping varate_rgl calculation", stk.Code, tab)
+		return nil, nil
 	}
-	nrqs, e := matchSlice(nrqs, tgqs)
+	if !conf.Args.DataSource.DropInconsistent {
+		if len(nrqs) < len(tgqs) {
+			return retTgqs, fmt.Errorf("%s unable to infer varate rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
+				stk.Code, tab, len(nrqs), len(tgqs))
+		}
+	}
+	retNrqs, retTgqs, e = matchSlice(nrqs, tgqs)
 	if e != nil {
-		return fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+		return retTgqs, fmt.Errorf("%s failed to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
+	if len(retNrqs) == 0 || len(retTgqs) == 0 {
+		return retTgqs, nil
+	}
+	//reset start-date and end-date
+	sDate = retTgqs[0].Date
+	eDate = retTgqs[len(retTgqs)-1].Date
 	xemap, e := XdxrDateBetween(stk.Code, sDate, eDate)
 	if e != nil {
-		return fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
+		return retTgqs, fmt.Errorf("%s unable to infer varate_rgl from %v: %+v", stk.Code, tab, e)
 	}
-	return transferVarateRgl(stk.Code, tab, nrqs, tgqs, xemap)
+	return retTgqs, transferVarateRgl(stk.Code, tab, retNrqs, retTgqs, xemap)
 }
 
 func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
