@@ -85,59 +85,17 @@ func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *mo
 		wg.Done()
 		<-chidx
 	}()
+	stk := &model.Stock{Code: idx.Code, Source: idx.Src}
 	ts := []model.DBTab{
 		model.KLINE_DAY,
 		model.KLINE_WEEK,
 		model.KLINE_MONTH,
 	}
-	//stk := new(model.Stock)
-	//stk.Code = idx.Code
-	//stk.Name = idx.Name
-	//stk.IsIndex = true
-	for _, t := range ts {
-		//_, ok := klineTc(stk, t, true)
-		e := getIndexFor(idx, retry, t)
-		if e != nil {
-			rchs <- ""
-			log.Println(e)
-			return
-		}
+	if getKlineAndSave(stk, ts) {
+		rchs <- idx.Code
+	} else {
+		rchs <- ""
 	}
-	rchs <- idx.Code
-}
-
-func getIndexFor(idx *model.IdxLst, retry int, tab model.DBTab) error {
-	for i := 0; i < retry; i++ {
-		suc, rt := tryGetIndex(idx, tab)
-		if suc {
-			return nil
-		} else if rt {
-			log.Printf("%s[%s] retrying: %d", idx.Code, tab, i+1)
-		} else {
-			return errors.Errorf("Failed to get %s[%s]", idx.Code, tab)
-		}
-	}
-	return errors.Errorf("Failed to get %s[%s]", idx.Code, tab)
-}
-
-func tryGetIndex(idx *model.IdxLst, tab model.DBTab) (suc, rt bool) {
-	//TODO fetch index from WHT
-	code := idx.Code
-	log.Printf("Fetching index %s for %s", code, tab)
-	switch idx.Src {
-	case "https://xueqiu.com":
-		return idxFromXq(code, tab)
-	case "http://web.ifzq.gtimg.cn":
-		return idxFromQQ(code, tab)
-	case "wht":
-		//TODO get index data from wht
-		s := &model.Stock{Code: code}
-		_, suc = getKlineWht(s, []model.DBTab{tab}, true)
-		return
-	default:
-		log.Panicf("%s unknown index src: %s", code, idx.Src)
-	}
-	panic(fmt.Sprintf("%s unknown index src: %s", code, idx.Src))
 }
 
 func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {

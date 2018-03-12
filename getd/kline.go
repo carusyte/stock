@@ -67,6 +67,40 @@ func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*mod
 	return
 }
 
+//GetKlBtwnKlid fetches kline data between specified klids.
+func GetKlBtwnKlid(code string, tab model.DBTab, sklid, eklid string, desc bool) (hist []*model.Quote) {
+	var (
+		k1cond, k2cond string
+	)
+	if sklid != "" {
+		op := ">"
+		if strings.HasPrefix(sklid, "[") {
+			op += "="
+			sklid = sklid[1:]
+		}
+		k1cond = fmt.Sprintf("and klid %s %s", op, sklid)
+	}
+	if eklid != "" {
+		op := "<"
+		if strings.HasSuffix(eklid, "]") {
+			op += "="
+			eklid = eklid[:len(eklid)-1]
+		}
+		k2cond = fmt.Sprintf("and klid %s %s", op, eklid)
+	}
+	d := ""
+	if desc {
+		d = "desc"
+	}
+	sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s", tab, k1cond, k2cond, d)
+	_, e := dbmap.Select(&hist, sql, code)
+	util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
+	for _, q := range hist {
+		q.Type = tab
+	}
+	return
+}
+
 //GetKlBtwn fetches kline data between dates.
 func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist []*model.Quote) {
 	var (
@@ -450,16 +484,25 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		wg.Done()
 		<-*wf
 	}()
+	if getKlineAndSave(stk, kltype) {
+		outstks <- stk
+	}
+}
+
+func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
 	fail := false
 	var kltnv []model.DBTab
+	var qmap map[model.DBTab][]*model.Quote
+	var lkmap map[model.DBTab]int
 	//process validate request first
 	for _, klt := range kltype {
 		switch klt {
 		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
+			panic("validation data is not supported yet.")
 			switch conf.Args.DataSource.KlineValidateSource {
 			case conf.TENCENT:
-				_, suc = klineTc(stk, klt, true)
+				// _, suc = klineTc(stk, klt, true)
 			default:
 				logrus.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
 			}
@@ -471,19 +514,58 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 		}
 	}
 	if fail {
-		return
+		return false
 	}
 	if len(kltnv) > 0 {
 		switch conf.Args.DataSource.Kline {
 		case conf.WHT:
-			_, suc = getKlineWht(stk, kltnv, true)
+			qmap, lkmap, suc = getKlineWht(stk, kltnv, true)
 		case conf.THS:
-			_, suc = getKlineThs(stk, kltnv)
+			qmap, lkmap, suc = getKlineThs(stk, kltnv)
+		case conf.TENCENT:
+			qmap, lkmap, suc = getKlineTc(stk, kltnv)
 		}
 	}
-	if suc {
-		outstks <- stk
+	if !suc {
+		return false
 	}
+	for klt, quotes := range qmap {
+		supplementMisc(quotes, klt, lkmap[klt])
+	}
+	// insert non-reinstated quotes first for regulated varate calculation
+	for klt, quotes := range qmap {
+		switch klt {
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			CalLogReturns(quotes)
+			if lkmap[klt] != -1 {
+				//skip the first record which is for varate calculation
+				quotes = quotes[1:]
+			}
+			binsert(quotes, string(klt), lkmap[klt])
+		}
+	}
+	if !isIndex(stk.Code) {
+		e := calcVarateRgl(stk, qmap)
+		if e != nil {
+			logrus.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
+			return false
+		}
+	}
+	for klt, quotes := range qmap {
+		switch klt {
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			//already inserted
+		default:
+			CalLogReturns(quotes)
+			if lkmap[klt] != -1 {
+				//skip the first record which is for varate calculation
+				quotes = quotes[1:]
+				qmap[klt] = quotes
+			}
+			binsert(quotes, string(klt), lkmap[klt])
+		}
+	}
+	return true
 }
 
 func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bool) {
@@ -511,36 +593,12 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 	panic("implement me ")
 }
 
-func getKlineCytp(stk *model.Stock, klt model.DBTab, incr bool) (kldy []*model.Quote, suc bool) {
-	switch conf.Args.DataSource.Kline {
-	case conf.THS:
-		return klineThs(stk, klt, incr)
-	case conf.TENCENT:
-		return klineTc(stk, klt, incr)
-	default:
-		log.Panicf("unrecognized datasource: %+v", conf.Args.DataSource.Kline)
-	}
-	return
-}
-
-func getLongKlines(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
-	switch conf.Args.DataSource.Kline {
-	case conf.THS:
-		return klineThs(stk, klt, incr)
-	case conf.TENCENT:
-		return klineTc(stk, klt, incr)
-	default:
-		log.Panicf("unrecognized datasource: %+v", conf.Args.DataSource.Kline)
-	}
-	return
-}
-
 func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
 	numFields := 57
-	retry := 10
+	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
 	code := ""
@@ -550,111 +608,110 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	}
 	holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 	var e error
-	for ; rt < retry; rt++ {
-		valueStrings := make([]string, 0, len(quotes))
-		valueArgs := make([]interface{}, 0, len(quotes)*numFields)
-		var code string
-		for _, q := range quotes {
-			valueStrings = append(valueStrings, holderString)
-			valueArgs = append(valueArgs, q.Code)
-			valueArgs = append(valueArgs, q.Date)
-			valueArgs = append(valueArgs, q.Klid)
-			valueArgs = append(valueArgs, q.Open)
-			valueArgs = append(valueArgs, q.High)
-			valueArgs = append(valueArgs, q.Close)
-			valueArgs = append(valueArgs, q.Low)
-			valueArgs = append(valueArgs, q.Volume)
-			valueArgs = append(valueArgs, q.Amount)
-			valueArgs = append(valueArgs, q.Xrate)
-			valueArgs = append(valueArgs, q.Varate)
-			valueArgs = append(valueArgs, q.VarateHigh)
-			valueArgs = append(valueArgs, q.VarateOpen)
-			valueArgs = append(valueArgs, q.VarateLow)
-			valueArgs = append(valueArgs, q.VarateRgl)
-			valueArgs = append(valueArgs, q.VarateRglHigh)
-			valueArgs = append(valueArgs, q.VarateRglOpen)
-			valueArgs = append(valueArgs, q.VarateRglLow)
-			valueArgs = append(valueArgs, q.Lr)
-			valueArgs = append(valueArgs, q.LrHigh)
-			valueArgs = append(valueArgs, q.LrOpen)
-			valueArgs = append(valueArgs, q.LrLow)
-			valueArgs = append(valueArgs, q.LrVol)
-			valueArgs = append(valueArgs, q.Ma5)
-			valueArgs = append(valueArgs, q.Ma10)
-			valueArgs = append(valueArgs, q.Ma20)
-			valueArgs = append(valueArgs, q.Ma30)
-			valueArgs = append(valueArgs, q.Ma60)
-			valueArgs = append(valueArgs, q.Ma120)
-			valueArgs = append(valueArgs, q.Ma200)
-			valueArgs = append(valueArgs, q.Ma250)
-			valueArgs = append(valueArgs, q.LrMa5)
-			valueArgs = append(valueArgs, q.LrMa10)
-			valueArgs = append(valueArgs, q.LrMa20)
-			valueArgs = append(valueArgs, q.LrMa30)
-			valueArgs = append(valueArgs, q.LrMa60)
-			valueArgs = append(valueArgs, q.LrMa120)
-			valueArgs = append(valueArgs, q.LrMa200)
-			valueArgs = append(valueArgs, q.LrMa250)
-			valueArgs = append(valueArgs, q.Vol5)
-			valueArgs = append(valueArgs, q.Vol10)
-			valueArgs = append(valueArgs, q.Vol20)
-			valueArgs = append(valueArgs, q.Vol30)
-			valueArgs = append(valueArgs, q.Vol60)
-			valueArgs = append(valueArgs, q.Vol120)
-			valueArgs = append(valueArgs, q.Vol200)
-			valueArgs = append(valueArgs, q.Vol250)
-			valueArgs = append(valueArgs, q.LrVol5)
-			valueArgs = append(valueArgs, q.LrVol10)
-			valueArgs = append(valueArgs, q.LrVol20)
-			valueArgs = append(valueArgs, q.LrVol30)
-			valueArgs = append(valueArgs, q.LrVol60)
-			valueArgs = append(valueArgs, q.LrVol120)
-			valueArgs = append(valueArgs, q.LrVol200)
-			valueArgs = append(valueArgs, q.LrVol250)
-			valueArgs = append(valueArgs, q.Udate)
-			valueArgs = append(valueArgs, q.Utime)
-			code = q.Code
-		}
+	valueStrings := make([]string, 0, len(quotes))
+	valueArgs := make([]interface{}, 0, len(quotes)*numFields)
+	for _, q := range quotes {
+		valueStrings = append(valueStrings, holderString)
+		valueArgs = append(valueArgs, q.Code)
+		valueArgs = append(valueArgs, q.Date)
+		valueArgs = append(valueArgs, q.Klid)
+		valueArgs = append(valueArgs, q.Open)
+		valueArgs = append(valueArgs, q.High)
+		valueArgs = append(valueArgs, q.Close)
+		valueArgs = append(valueArgs, q.Low)
+		valueArgs = append(valueArgs, q.Volume)
+		valueArgs = append(valueArgs, q.Amount)
+		valueArgs = append(valueArgs, q.Xrate)
+		valueArgs = append(valueArgs, q.Varate)
+		valueArgs = append(valueArgs, q.VarateHigh)
+		valueArgs = append(valueArgs, q.VarateOpen)
+		valueArgs = append(valueArgs, q.VarateLow)
+		valueArgs = append(valueArgs, q.VarateRgl)
+		valueArgs = append(valueArgs, q.VarateRglHigh)
+		valueArgs = append(valueArgs, q.VarateRglOpen)
+		valueArgs = append(valueArgs, q.VarateRglLow)
+		valueArgs = append(valueArgs, q.Lr)
+		valueArgs = append(valueArgs, q.LrHigh)
+		valueArgs = append(valueArgs, q.LrOpen)
+		valueArgs = append(valueArgs, q.LrLow)
+		valueArgs = append(valueArgs, q.LrVol)
+		valueArgs = append(valueArgs, q.Ma5)
+		valueArgs = append(valueArgs, q.Ma10)
+		valueArgs = append(valueArgs, q.Ma20)
+		valueArgs = append(valueArgs, q.Ma30)
+		valueArgs = append(valueArgs, q.Ma60)
+		valueArgs = append(valueArgs, q.Ma120)
+		valueArgs = append(valueArgs, q.Ma200)
+		valueArgs = append(valueArgs, q.Ma250)
+		valueArgs = append(valueArgs, q.LrMa5)
+		valueArgs = append(valueArgs, q.LrMa10)
+		valueArgs = append(valueArgs, q.LrMa20)
+		valueArgs = append(valueArgs, q.LrMa30)
+		valueArgs = append(valueArgs, q.LrMa60)
+		valueArgs = append(valueArgs, q.LrMa120)
+		valueArgs = append(valueArgs, q.LrMa200)
+		valueArgs = append(valueArgs, q.LrMa250)
+		valueArgs = append(valueArgs, q.Vol5)
+		valueArgs = append(valueArgs, q.Vol10)
+		valueArgs = append(valueArgs, q.Vol20)
+		valueArgs = append(valueArgs, q.Vol30)
+		valueArgs = append(valueArgs, q.Vol60)
+		valueArgs = append(valueArgs, q.Vol120)
+		valueArgs = append(valueArgs, q.Vol200)
+		valueArgs = append(valueArgs, q.Vol250)
+		valueArgs = append(valueArgs, q.LrVol5)
+		valueArgs = append(valueArgs, q.LrVol10)
+		valueArgs = append(valueArgs, q.LrVol20)
+		valueArgs = append(valueArgs, q.LrVol30)
+		valueArgs = append(valueArgs, q.LrVol60)
+		valueArgs = append(valueArgs, q.LrVol120)
+		valueArgs = append(valueArgs, q.LrVol200)
+		valueArgs = append(valueArgs, q.LrVol250)
+		valueArgs = append(valueArgs, q.Udate)
+		valueArgs = append(valueArgs, q.Utime)
+		code = q.Code
+	}
 
-		// delete stale records first
-		_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
-		if e != nil {
-			log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
-			panic(e)
-		}
-		//TODO adapt new columns
-		stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-			"volume,amount,xrate,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
-			"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
-			"lr_ma5,lr_ma10,lr_ma20,lr_ma30,lr_ma60,lr_ma120,lr_ma200,lr_ma250,"+
-			"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
-			"lr_vol5,lr_vol10,lr_vol20,lr_vol30,lr_vol60,lr_vol120,lr_vol200,lr_vol250,"+
-			"udate,utime) "+
-			"VALUES %s on duplicate key update date=values(date),"+
-			"open=values(open),high=values(high),close=values(close),low=values(low),"+
-			"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
-			"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
-			"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
-			"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
-			"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
-			"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
-			"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
-			"ma250=values(ma250),lr_ma5=values(lr_ma5),lr_ma10=values(lr_ma10),lr_ma20=values(lr_ma20),"+
-			"lr_ma30=values(lr_ma30),lr_ma60=values(lr_ma60),lr_ma120=values(lr_ma120),"+
-			"lr_ma200=values(lr_ma200),lr_ma250=values(lr_ma250),"+
-			"vol5=values(vol5),vol10=values(vol10),vol20=values(vol20),"+
-			"vol30=values(vol30),vol60=values(vol60),vol120=values(vol120),vol200=values(vol200),"+
-			"vol250=values(vol250),lr_vol5=values(lr_vol5),lr_vol10=values(lr_vol10),lr_vol20=values(lr_vol20),"+
-			"lr_vol30=values(lr_vol30),lr_vol60=values(lr_vol60),lr_vol120=values(lr_vol120),"+
-			"lr_vol200=values(lr_vol200),lr_vol250=values(lr_vol250),"+
-			"udate=values(udate),utime=values(utime)",
-			table, strings.Join(valueStrings, ","))
-		// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
+	// delete stale records first
+	_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+	if e != nil {
+		log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
+		panic(e)
+	}
+	//TODO adapt new columns
+	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
+		"volume,amount,xrate,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
+		"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
+		"lr_ma5,lr_ma10,lr_ma20,lr_ma30,lr_ma60,lr_ma120,lr_ma200,lr_ma250,"+
+		"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
+		"lr_vol5,lr_vol10,lr_vol20,lr_vol30,lr_vol60,lr_vol120,lr_vol200,lr_vol250,"+
+		"udate,utime) "+
+		"VALUES %s on duplicate key update date=values(date),"+
+		"open=values(open),high=values(high),close=values(close),low=values(low),"+
+		"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
+		"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
+		"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
+		"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
+		"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
+		"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
+		"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
+		"ma250=values(ma250),lr_ma5=values(lr_ma5),lr_ma10=values(lr_ma10),lr_ma20=values(lr_ma20),"+
+		"lr_ma30=values(lr_ma30),lr_ma60=values(lr_ma60),lr_ma120=values(lr_ma120),"+
+		"lr_ma200=values(lr_ma200),lr_ma250=values(lr_ma250),"+
+		"vol5=values(vol5),vol10=values(vol10),vol20=values(vol20),"+
+		"vol30=values(vol30),vol60=values(vol60),vol120=values(vol120),vol200=values(vol200),"+
+		"vol250=values(vol250),lr_vol5=values(lr_vol5),lr_vol10=values(lr_vol10),lr_vol20=values(lr_vol20),"+
+		"lr_vol30=values(lr_vol30),lr_vol60=values(lr_vol60),lr_vol120=values(lr_vol120),"+
+		"lr_vol200=values(lr_vol200),lr_vol250=values(lr_vol250),"+
+		"udate=values(udate),utime=values(utime)",
+		table, strings.Join(valueStrings, ","))
+	// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
+	for ; rt < retry; rt++ {
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
-				time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
+				// time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(2500)))
 				continue
 			} else {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
@@ -669,11 +726,59 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	return
 }
 
+//validateKline validates quotes against corresponding validation table, checking dates between two samples.
+func validateKline(stk *model.Stock, t model.DBTab, quotes []*model.Quote, lklid int) bool {
+	var vtab model.DBTab
+	switch t {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR:
+		vtab = model.KLINE_DAY_VLD
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR:
+		vtab = model.KLINE_WEEK_VLD
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR:
+		vtab = model.KLINE_MONTH_VLD
+	default:
+		logrus.Warnf("validation not supported for %v", t)
+		return true
+	}
+	ex := make([]string, 0, 16)
+	vquotes := GetKlBtwnKlid(stk.Code, vtab, "["+string(lklid), "", false)
+	for i := 0; i < len(vquotes); i++ {
+		vq := vquotes[i]
+		if i >= len(quotes) {
+			ex = append(ex, vq.Date)
+		} else {
+			q := quotes[i]
+			if vq.Date != q.Date {
+				ex = append(ex, vq.Date)
+			}
+		}
+	}
+	if len(ex) > 0 {
+		logrus.Warnf("%s %v kline validation exception: %+v", stk.Code, t, ex)
+	}
+	return len(ex) == 0
+}
+
 //Assign KLID, calculate Varate, add update datetime
 func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
+	if len(klines) == 0 {
+		return
+	}
+	q := klines[0]
 	d, t := util.TimeStr()
 	scale := 100.
 	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
+	mas := []int{5, 10, 20, 30, 60, 120, 200, 250}
+	maSrc := make([]*model.Quote, len(klines))
+	for i := range maSrc {
+		maSrc[i] = klines[len(maSrc)-1-i]
+	}
+	//expand maSrc for ma calculation
+	sklid := string(start - 3 - mas[len(mas)-1])
+	eklid := string(start + 1)
+	//maSrc is in descending order, contrary to klines
+	maSrc = append(maSrc, GetKlBtwnKlid(q.Code, kltype, sklid, eklid, true)...)
+	//TODO calculate various ma if nil
 	for i := 0; i < len(klines); i++ {
 		start++
 		klines[i].Type = kltype

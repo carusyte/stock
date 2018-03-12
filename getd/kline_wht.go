@@ -19,11 +19,11 @@ var (
 )
 
 func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
-	qmap map[model.DBTab][]*model.Quote, suc bool) {
+	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc bool) {
 
 	RETRIES := 20
 	qmap = make(map[model.DBTab][]*model.Quote)
-	lkmap := make(map[model.DBTab]int)
+	lkmap = make(map[model.DBTab]int)
 	code := stk.Code
 	xdxr := latestUFRXdxr(stk.Code)
 	for _, klt := range kltype {
@@ -46,44 +46,13 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 					continue
 				} else {
 					log.Printf("%s failed", code)
-					return qmap, false
+					return qmap, lkmap, false
 				}
 			}
 		}
 	}
-	// insert non-reinstated quotes first for regulated varate calculation
-	for klt, quotes := range qmap {
-		switch klt {
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			CalLogReturns(quotes)
-			if lkmap[klt] != -1 {
-				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
-			}
-			binsert(quotes, string(klt), lkmap[klt])
-		}
-	}
-	if !isIndex(stk.Code) {
-		e := calcVarateRgl(stk, qmap)
-		if e != nil {
-			return qmap, false
-		}
-	}
-	for klt, quotes := range qmap {
-		switch klt {
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			//already inserted
-		default:
-			CalLogReturns(quotes)
-			if lkmap[klt] != -1 {
-				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
-				qmap[klt] = quotes
-			}
-			binsert(quotes, string(klt), lkmap[klt])
-		}
-	}
-	return qmap, true
+
+	return qmap, lkmap, true
 }
 
 func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool) (
@@ -157,7 +126,6 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	logrus.Debug("return from wht: %+v", string(body))
 	//extract quotes
 	quotes = parseWhtJSONMaps(codeid, ldate, data)
-	supplementMisc(quotes, tab, lklid)
 	return quotes, lklid, true, false
 }
 

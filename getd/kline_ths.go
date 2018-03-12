@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"sort"
@@ -80,33 +81,50 @@ func AppendVarateRgl(stks ...*model.Stock) (e error) {
 
 // This version trys to run fetch for multiple kline types in a single chrome instance,
 // may improve performance to some degree
-func getKlineThs(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc bool) {
-	RETRIES := 20
+func getKlineThs(stk *model.Stock, kltype []model.DBTab) (
+	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc bool) {
+	RETRIES := conf.Args.DataSource.KlineFailureRetry
+	qmap = make(map[model.DBTab][]*model.Quote)
 	var (
 		code = stk.Code
 	)
-
+	klts := make([]model.DBTab, len(kltype))
+	copy(klts, kltype)
 	for rt := 0; rt < RETRIES; rt++ {
-		klsMap, suc, retry := klineThsCDPv2(stk, kltype)
+		klsMap, lkdmap, suc, retry := klineThsCDPv2(stk, klts)
 		if suc {
 			qmap = klsMap
+			lkmap = lkdmap
 			break
 		} else {
 			if retry && rt+1 < RETRIES {
-				log.Printf("%s retrying [%d]", code, rt+1)
-				time.Sleep(time.Millisecond * 2500)
+				//partial failure
+				for k, v := range klsMap {
+					qmap[k] = v
+				}
+				if len(klsMap) < len(klts) {
+					nklts := make([]model.DBTab, 0, len(klts))
+					for _, t := range klts {
+						if _, ok := klsMap[t]; !ok {
+							nklts = append(nklts, t)
+						}
+					}
+					klts = nklts
+				}
+				log.Printf("%s retrying [%d] for %+v", code, rt+1, klts)
+				time.Sleep(time.Millisecond * time.Duration(1500+rand.Intn(2000)))
 				continue
 			} else {
 				log.Printf("%s failed", code)
-				return qmap, false
+				return qmap, lkmap, false
 			}
 		}
 	}
-	return qmap, true
+	return qmap, lkmap, true
 }
 
 func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
-	RETRIES := 20
+	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	var (
 		ldate string
 		lklid int
@@ -140,56 +158,36 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 	return quotes, true
 }
 
-func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (qmap map[model.DBTab][]*model.Quote, suc, retry bool) {
+func klineThsCDPv2(stk *model.Stock, kltype []model.DBTab) (
+	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc, retry bool) {
 	qmap = make(map[model.DBTab][]*model.Quote)
 	suc, retry, tdmap, hismap := runCdpV2(stk.Code, kltype)
 	if !suc {
-		return qmap, false, retry
+		return nil, nil, false, retry
 	}
 	xdxr := latestUFRXdxr(stk.Code)
-	lkmap := make(map[model.DBTab]int)
+	lkmap = make(map[model.DBTab]int)
 	for t, tdat := range tdmap {
-		quotes, lklid, suc, retry := byte2Quote(stk, t, tdat, hismap[t], xdxr)
+		var quotes []*model.Quote
+		lklid := -1
+		quotes, lklid, suc, retry = byte2Quote(stk, t, tdat, hismap[t], xdxr)
 		if !suc {
-			return qmap, false, retry
+			return nil, nil, false, retry
 		}
-		qmap[t] = quotes
-		lkmap[t] = lklid
-	}
-	for klt, quotes := range qmap {
-		supplementMisc(quotes, klt, lkmap[klt])
-	}
-	// insert non-reinstated quotes first
-	for klt, quotes := range qmap {
-		switch klt {
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			CalLogReturns(quotes)
-			if lkmap[klt] != -1 {
-				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
+		//validate against vld table
+		if validateKline(stk, t, quotes, lklid) {
+			qmap[t] = quotes
+			lkmap[t] = lklid
+		} else {
+			suc = false
+			retry = true
+			//non-reinstated data is pre-requisite
+			if t == model.KLINE_DAY_NR || t == model.KLINE_WEEK_NR || t == model.KLINE_MONTH_NR {
+				return nil, nil, suc, retry
 			}
-			binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
-	e := calcVarateRgl(stk, qmap)
-	if e != nil {
-		return qmap, false, true
-	}
-	for klt, quotes := range qmap {
-		switch klt {
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			//skip insert
-		default:
-			CalLogReturns(quotes)
-			if lkmap[klt] != -1 {
-				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
-				qmap[klt] = quotes
-			}
-			binsert(quotes, string(klt), lkmap[klt])
-		}
-	}
-	return qmap, true, false
+	return
 }
 
 func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *model.Xdxr) (

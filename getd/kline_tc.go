@@ -14,52 +14,47 @@ import (
 	"github.com/carusyte/stock/util"
 )
 
-func klineTc(stk *model.Stock, tab model.DBTab, incr bool) (quotes []*model.Quote, suc bool) {
-	RETRIES := 20
-	var (
-		kls   []*model.Quote
-		retry bool
-		lklid int
-		code  = stk.Code
-	)
+func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
+	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc bool) {
 
-	for rt := 0; rt < RETRIES; rt++ {
-		kls, suc, retry, lklid = tryKlineTc(stk, tab, incr)
-		if suc {
-			quotes = kls
-			break
-		} else {
-			if retry && rt+1 < RETRIES {
-				log.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
-				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1500)))
-				continue
+	RETRIES := 20
+	qmap = make(map[model.DBTab][]*model.Quote)
+	lkmap = make(map[model.DBTab]int)
+	code := stk.Code
+	incr := latestUFRXdxr(stk.Code) == nil
+	for _, klt := range tabs {
+		for rt := 0; rt < RETRIES; rt++ {
+			quotes, lklid, ok, retry := tryKlineTc(stk, klt, incr)
+			if ok {
+				logrus.Infof("%s %v fetched: %d", code, klt, len(quotes))
+				qmap[klt] = quotes
+				lkmap[klt] = lklid
+				break
 			} else {
-				log.Printf("%s failed to get %s", code, tab)
-				return quotes, false
+				if retry && rt+1 < RETRIES {
+					log.Printf("%s retrying [%d]", code, rt+1)
+					time.Sleep(time.Millisecond * 2500)
+					continue
+				} else {
+					log.Printf("%s failed", code)
+					return qmap, lkmap, false
+				}
 			}
 		}
 	}
 
-	supplementMisc(quotes, tab, lklid)
-
-	if lklid >= 0 {
-		//skip the first record which is for varate calculation
-		quotes = quotes[1:]
-	}
-	binsert(quotes, string(tab), lklid)
-	return quotes, true
+	return qmap, lkmap, true
 }
 
-func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model.Quote, ok, retry bool, sklid int) {
+func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model.Quote, sklid int, ok, retry bool) {
 	var (
-		fcode    = strings.ToLower(stock.Market.String) + stock.Code
-		code     = stock.Code
-		body     []byte
-		e        error
-		url, per string
-		sDate    = ""
-		eDate    = ""
-		nrec     = 800 // for non-index, reinstated data, at most 800 records at a time
+		code  = stock.Code
+		body  []byte
+		e     error
+		url   string
+		sDate = ""
+		eDate = ""
+		nrec  = 800 // for non-index, reinstated data, at most 800 records at a time
 	)
 
 	sklid = -1
@@ -81,52 +76,60 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 		log.Printf("%s %s data will be fully refreshed", code, tab)
 	}
 
-	if tab == model.KLINE_DAY_NR || tab == model.KLINE_WEEK_NR || tab == model.KLINE_MONTH_NR || stock.IsIndex {
+	if tab == model.KLINE_DAY_NR || tab == model.KLINE_WEEK_NR || tab == model.KLINE_MONTH_NR || isIndex(stock.Code) {
 		nrec = 7000 + rand.Intn(2000)
 	}
-
+	qj := &model.QQJson{}
+	qj.Code = code
+	qj.Fcode = strings.ToLower(stock.Market.String) + stock.Code
 	// [1]: reinstatement-fqkline/get, no reinstatement-kline/kline
 	// [2]: lower case market id + stock code, e.g. sz000001
 	// [3]: cycle type: day, week, month, year
-	// [4]: end date
-	// [5]: number of records to return
-	// [6]: for reinstatement, use 'qfq'
+	// [4]: start date
+	// [5]: end date
+	// [6]: number of records to return
+	// [7]: for forward reinstatement, use 'qfq', for backward reinstatement, use 'hfq'
 	urlt := `http://web.ifzq.gtimg.cn/appstock/app/%[1]s?param=%[2]s,%[3]s,%[4]s,%[5]s,%[6]d,%[7]s`
 	eDate = time.Now().Format("2006-01-02")
+	action := ""
 	for {
-		//fetch klines backward
 		switch tab {
-		case model.KLINE_DAY, model.KLINE_DAY_VLD:
-			per = "day"
-			url = fmt.Sprintf(urlt, "fqkline/get", fcode, per, "", eDate, nrec, "qfq")
-		case model.KLINE_DAY_NR:
-			per = "day"
-			url = fmt.Sprintf(urlt, "kline/kline", fcode, per, "", eDate, nrec, "")
-		case model.KLINE_WEEK, model.KLINE_WEEK_VLD:
-			per = "week"
-			url = fmt.Sprintf(urlt, "fqkline/get", fcode, per, "", eDate, nrec, "qfq")
-		case model.KLINE_MONTH, model.KLINE_MONTH_VLD:
-			per = "month"
-			url = fmt.Sprintf(urlt, "fqkline/get", fcode, per, "", eDate, nrec, "qfq")
+		case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
+			qj.Period = "day"
+		case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
+			qj.Period = "week"
+		case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
+			qj.Period = "month"
 		default:
-			log.Panicf("unhandled kltype: %s", tab)
+			logrus.Errorf("unhandled kline type: %v", tab)
+			return
+		}
+		switch tab {
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			action = "kline/kline"
+		default:
+			action = "fqkline/get"
+		}
+		switch tab {
+		case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+			qj.Reinstate = "hfq"
+		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+			qj.Reinstate = ""
+		default:
+			qj.Reinstate = "qfq"
 		}
 
+		url = fmt.Sprintf(urlt, action, qj.Fcode, qj.Period, "", eDate, nrec, qj.Reinstate)
 		//get kline data
 		body, e = util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("%s error visiting %s: \n%+v", code, url, e)
-			return quotes, false, true, sklid
+			return quotes, sklid, false, true
 		}
-
-		qj := &model.QQJson{}
-		qj.Code = code
-		qj.Fcode = fcode
-		qj.Period = per
 		e = json.Unmarshal(body, qj)
 		if e != nil {
 			log.Printf("failed to parse json from %s\n%+v", url, e)
-			return quotes, false, true, sklid
+			return quotes, sklid, false, true
 		}
 		fin := false
 		if len(qj.Quotes) > 0 {
@@ -157,5 +160,5 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 	for i, j := 0, len(quotes)-1; i < j; i, j = i+1, j-1 {
 		quotes[i], quotes[j] = quotes[j], quotes[i]
 	}
-	return quotes, true, false, sklid
+	return quotes, sklid, true, false
 }

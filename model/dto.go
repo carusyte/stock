@@ -101,7 +101,8 @@ type Stock struct {
 	HShareR          sql.NullFloat64 `db:"h_share_r"`
 	UDate            sql.NullString
 	UTime            sql.NullString
-	IsIndex          bool
+	// source of index
+	Source string
 }
 
 func (s *Stock) String() string {
@@ -964,8 +965,8 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 
 // Set Code and Period before unmarshalling json data
 type QQJson struct {
-	Fcode, Code, Period string
-	Quotes              []*Quote
+	Fcode, Code, Period, Reinstate string
+	Quotes                         []*Quote
 }
 
 func (qj *QQJson) UnmarshalJSON(b []byte) error {
@@ -996,13 +997,9 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	if cdat, exists = m["data"].(map[string]interface{})[qj.Fcode]; !exists {
 		return errors.Errorf("unrecognized data structure: %+v", f)
 	}
-	pdat, exists := cdat.(map[string]interface{})[qj.Period]
+	pdat, exists := cdat.(map[string]interface{})[qj.Reinstate+qj.Period]
 	if !exists {
-		// for securities
-		pdat, exists = cdat.(map[string]interface{})["qfq"+qj.Period]
-		if !exists {
-			return errors.Errorf("unrecognized data structure: %+v", f)
-		}
+		return errors.Errorf("unrecognized data structure: %+v", f)
 	}
 	ps := pdat.([]interface{})
 	qj.Quotes = make([]*Quote, len(ps))

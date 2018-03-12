@@ -41,6 +41,7 @@ type Arguments struct {
 	CPUUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string   `mapstructure:"log_level"`
 	SQLFileLocation   string   `mapstructure:"sql_file_location"`
+	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
 	Kdjv              struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
@@ -56,6 +57,7 @@ type Arguments struct {
 		Kline                 string `mapstructure:"kline"`
 		KlineValidateSource   string `mapstructure:"kline_validate_source"`
 		DropInconsistent      bool   `mapstructure:"drop_inconsistent"`
+		KlineFailureRetry     int    `mapstructure:"kline_failure_retry"`
 		Index                 string `mapstructure:"index"`
 		Industry              string `mapstructure:"industry"`
 		ThsCookie             string `mapstructure:"ths_cookie"`
