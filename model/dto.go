@@ -516,7 +516,9 @@ type Quote struct {
 	Low           float64
 	Volume        sql.NullFloat64
 	Amount        sql.NullFloat64
+	LrAmt         sql.NullFloat64 `db:"lr_amt"`
 	Xrate         sql.NullFloat64
+	LrXr          sql.NullFloat64 `db:"lr_xr"`
 	Varate        sql.NullFloat64
 	VarateHigh    sql.NullFloat64 `db:"varate_h"`
 	VarateOpen    sql.NullFloat64 `db:"varate_o"`
@@ -1025,10 +1027,11 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 			return errors.Wrapf(e, "failed to parse LOW value at index %d", i)
 		}
 		q.Volume.Valid = true
-		q.Volume.Float64, e = strconv.ParseFloat(pa[2].(string), 64)
+		q.Volume.Float64, e = strconv.ParseFloat(pa[5].(string), 64)
 		if e != nil {
 			return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
 		}
+		q.Volume.Float64 *= 100.
 		qj.Quotes[i] = q
 	}
 	return nil

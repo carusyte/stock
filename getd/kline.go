@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,12 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	defer Cleanup()
 	log.Printf("begin to fetch kline data: %+v", kltype)
 	var wg sync.WaitGroup
-	wf := make(chan int, conf.Args.ChromeDP.PoolSize)
+	parallel := conf.Args.ChromeDP.PoolSize
+	switch conf.Args.DataSource.Kline {
+	case conf.TENCENT:
+		parallel = conf.Args.Concurrency
+	}
+	wf := make(chan int, parallel)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
@@ -94,7 +100,7 @@ func GetKlBtwnKlid(code string, tab model.DBTab, sklid, eklid string, desc bool)
 	}
 	sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s", tab, k1cond, k2cond, d)
 	_, e := dbmap.Select(&hist, sql, code)
-	util.CheckErr(e, "failed to query "+string(tab)+" for "+code)
+	util.CheckErr(e, "failed to query "+string(tab)+" for "+code+", sql: "+sql)
 	for _, q := range hist {
 		q.Type = tab
 	}
@@ -238,13 +244,24 @@ func CalLogReturns(qs []*model.Quote) {
 		q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + vhg/100.), Valid: true}
 		q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + vop/100.), Valid: true}
 		q.LrLow = sql.NullFloat64{Float64: math.Log(1. + vlw/100.), Valid: true}
-		// q.LrVol = sql.NullFloat64{}
 		vol := math.Max(10, q.Volume.Float64)
 		prevol := vol
 		if i > 0 {
 			prevol = math.Max(10, qs[i-1].Volume.Float64)
 		}
 		q.LrVol = sql.NullFloat64{Float64: math.Log(vol / prevol), Valid: true}
+		amt := math.Max(10, q.Amount.Float64)
+		preamt := amt
+		if i > 0 {
+			preamt = math.Max(10, qs[i-1].Volume.Float64)
+		}
+		q.LrAmt = sql.NullFloat64{Float64: math.Log(amt / preamt), Valid: true}
+		xr := math.Max(0.01, q.Xrate.Float64)
+		prexr := xr
+		if i > 0 {
+			prexr = math.Max(0.01, qs[i-1].Xrate.Float64)
+		}
+		q.LrXr = sql.NullFloat64{Float64: math.Log(xr / prexr), Valid: true}
 		//calculates LR for MA
 		bias := .01
 		if q.Ma5.Valid {
@@ -517,7 +534,11 @@ func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		return false
 	}
 	if len(kltnv) > 0 {
-		switch conf.Args.DataSource.Kline {
+		src := conf.Args.DataSource.Kline
+		if stk.Source != "" {
+			src = stk.Source
+		}
+		switch src {
 		case conf.WHT:
 			qmap, lkmap, suc = getKlineWht(stk, kltnv, true)
 		case conf.THS:
@@ -597,7 +618,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
-	numFields := 57
+	numFields := 59
 	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
@@ -621,7 +642,9 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		valueArgs = append(valueArgs, q.Low)
 		valueArgs = append(valueArgs, q.Volume)
 		valueArgs = append(valueArgs, q.Amount)
+		valueArgs = append(valueArgs, q.LrAmt)
 		valueArgs = append(valueArgs, q.Xrate)
+		valueArgs = append(valueArgs, q.LrXr)
 		valueArgs = append(valueArgs, q.Varate)
 		valueArgs = append(valueArgs, q.VarateHigh)
 		valueArgs = append(valueArgs, q.VarateOpen)
@@ -678,9 +701,8 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
 		panic(e)
 	}
-	//TODO adapt new columns
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
-		"volume,amount,xrate,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
+		"volume,amount,lr_amt,xrate,lr_xr,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
 		"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
 		"lr_ma5,lr_ma10,lr_ma20,lr_ma30,lr_ma60,lr_ma120,lr_ma200,lr_ma250,"+
 		"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
@@ -688,7 +710,8 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		"udate,utime) "+
 		"VALUES %s on duplicate key update date=values(date),"+
 		"open=values(open),high=values(high),close=values(close),low=values(low),"+
-		"volume=values(volume),amount=values(amount),xrate=values(xrate),varate=values(varate),"+
+		"volume=values(volume),amount=values(amount),lr_amt=values(lr_amt),xrate=values(xrate),"+
+		"lr_xr=values(lr_xr),varate=values(varate),"+
 		"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
 		"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
 		"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
@@ -774,38 +797,129 @@ func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 		maSrc[i] = klines[len(maSrc)-1-i]
 	}
 	//expand maSrc for ma calculation
-	sklid := string(start - 3 - mas[len(mas)-1])
-	eklid := string(start + 1)
+	sklid := strconv.Itoa(start + 1 - mas[len(mas)-1])
+	eklid := strconv.Itoa(start + 1)
 	//maSrc is in descending order, contrary to klines
 	maSrc = append(maSrc, GetKlBtwnKlid(q.Code, kltype, sklid, eklid, true)...)
-	//TODO calculate various ma if nil
 	for i := 0; i < len(klines); i++ {
 		start++
-		klines[i].Type = kltype
-		klines[i].Klid = start
-		klines[i].Udate.Valid = true
-		klines[i].Utime.Valid = true
-		klines[i].Udate.String = d
-		klines[i].Utime.String = t
-		klines[i].Varate.Valid = true
-		klines[i].VarateHigh.Valid = true
-		klines[i].VarateOpen.Valid = true
-		klines[i].VarateLow.Valid = true
+		k := klines[i]
+		k.Type = kltype
+		k.Klid = start
+		k.Udate.Valid = true
+		k.Utime.Valid = true
+		k.Udate.String = d
+		k.Utime.String = t
+		k.Varate.Valid = true
+		k.VarateHigh.Valid = true
+		k.VarateOpen.Valid = true
+		k.VarateLow.Valid = true
 		if math.IsNaN(preclose) {
-			klines[i].Varate.Float64 = 0
-			klines[i].VarateHigh.Float64 = 0
-			klines[i].VarateOpen.Float64 = 0
-			klines[i].VarateLow.Float64 = 0
+			k.Varate.Float64 = 0
+			k.VarateHigh.Float64 = 0
+			k.VarateOpen.Float64 = 0
+			k.VarateLow.Float64 = 0
 		} else {
-			klines[i].Varate.Float64 = CalVarate(preclose, klines[i].Close, scale)
-			klines[i].VarateHigh.Float64 = CalVarate(prehigh, klines[i].High, scale)
-			klines[i].VarateOpen.Float64 = CalVarate(preopen, klines[i].Open, scale)
-			klines[i].VarateLow.Float64 = CalVarate(prelow, klines[i].Low, scale)
+			k.Varate.Float64 = CalVarate(preclose, k.Close, scale)
+			k.VarateHigh.Float64 = CalVarate(prehigh, k.High, scale)
+			k.VarateOpen.Float64 = CalVarate(preopen, k.Open, scale)
+			k.VarateLow.Float64 = CalVarate(prelow, k.Low, scale)
 		}
-		preclose = klines[i].Close
-		prehigh = klines[i].High
-		preopen = klines[i].Open
-		prelow = klines[i].Low
+		preclose = k.Close
+		prehigh = k.High
+		preopen = k.Open
+		prelow = k.Low
+		//calculate various ma if nil
+		start := len(klines) - 1 - i
+		for _, m := range mas {
+			ma := 0.
+			mavol := 0.
+			if start+m-1 < len(maSrc) {
+				for j := 0; j < m; j++ {
+					idx := start + j
+					ma += maSrc[idx].Close
+					mavol += maSrc[idx].Volume.Float64
+				}
+				ma /= float64(m)
+				mavol /= float64(m)
+			}
+			switch m {
+			case 5:
+				if !k.Ma5.Valid {
+					k.Ma5.Valid = true
+					k.Ma5.Float64 = ma
+				}
+				if !k.Vol5.Valid {
+					k.Vol5.Valid = true
+					k.Vol5.Float64 = mavol
+				}
+			case 10:
+				if !k.Ma10.Valid {
+					k.Ma10.Valid = true
+					k.Ma10.Float64 = ma
+				}
+				if !k.Vol10.Valid {
+					k.Vol10.Valid = true
+					k.Vol10.Float64 = mavol
+				}
+			case 20:
+				if !k.Ma20.Valid {
+					k.Ma20.Valid = true
+					k.Ma20.Float64 = ma
+				}
+				if !k.Vol20.Valid {
+					k.Vol20.Valid = true
+					k.Vol20.Float64 = mavol
+				}
+			case 30:
+				if !k.Ma30.Valid {
+					k.Ma30.Valid = true
+					k.Ma30.Float64 = ma
+				}
+				if !k.Vol30.Valid {
+					k.Vol30.Valid = true
+					k.Vol30.Float64 = mavol
+				}
+			case 60:
+				if !k.Ma60.Valid {
+					k.Ma60.Valid = true
+					k.Ma60.Float64 = ma
+				}
+				if !k.Vol60.Valid {
+					k.Vol60.Valid = true
+					k.Vol60.Float64 = mavol
+				}
+			case 120:
+				if !k.Ma120.Valid {
+					k.Ma120.Valid = true
+					k.Ma120.Float64 = ma
+				}
+				if !k.Vol120.Valid {
+					k.Vol120.Valid = true
+					k.Vol120.Float64 = mavol
+				}
+			case 200:
+				if !k.Ma200.Valid {
+					k.Ma200.Valid = true
+					k.Ma200.Float64 = ma
+				}
+				if !k.Vol200.Valid {
+					k.Vol200.Valid = true
+					k.Vol200.Float64 = mavol
+				}
+			case 250:
+				if !k.Ma250.Valid {
+					k.Ma250.Valid = true
+					k.Ma250.Float64 = ma
+				}
+				if !k.Vol250.Valid {
+					k.Vol250.Valid = true
+					k.Vol250.Float64 = mavol
+				}
+			default:
+				log.Panicf("unsupported MA value: %d", m)
+			}
+		}
 	}
 }
 
