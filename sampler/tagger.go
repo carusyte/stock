@@ -79,7 +79,7 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 	}
 	// tag with TEST_### flag amongst TEST stocks, evenly across each score
 	var scores []int
-	_, e = dbmap.Select(&scores, `select distinct score from kpts`)
+	_, e = dbmap.Select(&scores, `select distinct score from kpts order by score`)
 	if e != nil {
 		log.Println(e)
 		return errors.WithStack(e)
@@ -143,7 +143,7 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 			uuids = append(uuids, nus...)
 		}
 		flag := fmt.Sprintf("TEST_%v", bno)
-		log.Printf("Tagging [%s]: %+v", flag, qmap)
+		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
 		updSQL := fmt.Sprintf(`update kpts set flag = ? where uuid in (%s)`,
 			util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)
@@ -176,7 +176,7 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 //at the mean time trying to keep a balanced portion of each class (score).
 func TagTrainingSetByScore(batchSize int) (e error) {
 	var scores []int
-	_, e = dbmap.Select(&scores, `select distinct score from kpts`)
+	_, e = dbmap.Select(&scores, `select distinct score from kpts order by score`)
 	if e != nil {
 		log.Println(e)
 		return errors.WithStack(e)
@@ -241,7 +241,7 @@ func TagTrainingSetByScore(batchSize int) (e error) {
 			uuids = append(uuids, nus...)
 		}
 		flag := fmt.Sprintf("TRN_%v", bno)
-		log.Printf("Tagging [%s]: %+v", flag, qmap)
+		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
 		updSQL := fmt.Sprintf(`update kpts set flag = ? where uuid in (%s)`,
 			util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)
@@ -264,4 +264,12 @@ func findMin(smap map[int][]string) (mins, minl int) {
 		}
 	}
 	return
+}
+
+func strQmap(scores []int, qmap map[int]string) string {
+	s := ""
+	for _, score := range scores {
+		s = fmt.Sprintf("%s %d:%s", s, score, qmap[score])
+	}
+	return fmt.Sprintf("[%s]", s)
 }

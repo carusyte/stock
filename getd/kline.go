@@ -18,6 +18,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type dbJob struct {
+	quotes []*model.Quote
+	table  model.DBTab
+	klid   int
+}
+
+var (
+	chDbjob map[model.DBTab]chan *dbJob
+	dbTabs  = []model.DBTab{
+		model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_VLD,
+		model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_VLD,
+		model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_VLD,
+	}
+)
+
 //GetKlines Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
@@ -31,8 +46,10 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	}
 	wf := make(chan int, parallel)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
+	chDbjob = createDbJobQueues()
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
+	wgdb := saveQuotes()
 	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
@@ -42,12 +59,45 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	close(wf)
 	close(outstks)
 	wgr.Wait()
+	waitDbjob(wgdb)
 	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
 	if stks.Size() != rstks.Size() {
 		same, skp := stks.Diff(rstks)
 		if !same {
 			log.Printf("Failed: %+v", skp)
 		}
+	}
+	return
+}
+
+func waitDbjob(wgs []*sync.WaitGroup) {
+	for _, ch := range chDbjob {
+		close(ch)
+	}
+	for _, wg := range wgs {
+		wg.Wait()
+	}
+}
+
+func createDbJobQueues() (qmap map[model.DBTab]chan *dbJob) {
+	qmap = make(map[model.DBTab]chan *dbJob)
+	for _, t := range dbTabs {
+		qmap[t] = make(chan *dbJob, JOB_CAPACITY)
+	}
+	return
+}
+
+func saveQuotes() (wgs []*sync.WaitGroup) {
+	for _, ch := range chDbjob {
+		wg := new(sync.WaitGroup)
+		wgs = append(wgs, wg)
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ch chan *dbJob) {
+			defer wg.Done()
+			for j := range ch {
+				binsert(j.quotes, string(j.table), j.klid)
+			}
+		}(wg, ch)
 	}
 	return
 }
@@ -244,26 +294,15 @@ func CalLogReturns(qs []*model.Quote) {
 		q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + vhg/100.), Valid: true}
 		q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + vop/100.), Valid: true}
 		q.LrLow = sql.NullFloat64{Float64: math.Log(1. + vlw/100.), Valid: true}
-		vol := math.Max(10, q.Volume.Float64)
-		prevol := vol
-		if i > 0 {
-			prevol = math.Max(10, qs[i-1].Volume.Float64)
-		}
-		q.LrVol = sql.NullFloat64{Float64: math.Log(vol / prevol), Valid: true}
-		amt := math.Max(10, q.Amount.Float64)
-		preamt := amt
-		if i > 0 {
-			preamt = math.Max(10, qs[i-1].Volume.Float64)
-		}
-		q.LrAmt = sql.NullFloat64{Float64: math.Log(amt / preamt), Valid: true}
-		xr := math.Max(0.01, q.Xrate.Float64)
-		prexr := xr
-		if i > 0 {
-			prexr = math.Max(0.01, qs[i-1].Xrate.Float64)
-		}
-		q.LrXr = sql.NullFloat64{Float64: math.Log(xr / prexr), Valid: true}
-		//calculates LR for MA
+
 		bias := .01
+		if q.Xrate.Valid {
+			q.LrXr.Valid = true
+			if i > 0 && qs[i-1].Xrate.Valid {
+				q.LrXr.Float64 = logReturn(qs[i-1].Xrate.Float64, q.Xrate.Float64, bias)
+			}
+		}
+		//calculates LR for MA
 		if q.Ma5.Valid {
 			q.LrMa5.Valid = true
 			if i > 0 && qs[i-1].Ma5.Valid {
@@ -312,8 +351,20 @@ func CalLogReturns(qs []*model.Quote) {
 				q.LrMa250.Float64 = logReturn(qs[i-1].Ma250.Float64, q.Ma250.Float64, bias)
 			}
 		}
-		//calculates LR for vol MA
 		bias = 10
+		if q.Volume.Valid {
+			q.LrVol.Valid = true
+			if i > 0 && qs[i-1].Volume.Valid {
+				q.LrVol.Float64 = logReturn(qs[i-1].Volume.Float64, q.Volume.Float64, bias)
+			}
+		}
+		if q.Amount.Valid {
+			q.LrAmt.Valid = true
+			if i > 0 && qs[i-1].Amount.Valid {
+				q.LrAmt.Float64 = logReturn(qs[i-1].Amount.Float64, q.Amount.Float64, bias)
+			}
+		}
+		//calculates LR for vol MA
 		if q.Vol5.Valid {
 			q.LrVol5.Valid = true
 			if i > 0 && qs[i-1].Vol5.Valid {
@@ -371,13 +422,15 @@ func logReturn(prev, cur, bias float64) float64 {
 	if bias <= 0 {
 		log.Panicf("bias %f must be greater than 0.", bias)
 	}
-	if prev == 0 && cur == 0 {
+	if prev == 0 {
 		return 0
-	} else if prev == 0 {
-		if cur > 0 {
-			return math.Log((cur + bias) / bias)
-		}
-		return math.Log(bias / (math.Abs(cur) + bias))
+		// if prev == 0 && cur == 0 {
+		// 	return 0
+		// } else if prev == 0 {
+		// 	if cur > 0 {
+		// 		return math.Log((cur + bias) / bias)
+		// 	}
+		// 	return math.Log(bias / (math.Abs(cur) + bias))
 	} else if cur == 0 {
 		if prev > 0 {
 			return math.Log(bias / (prev + bias))
@@ -583,7 +636,12 @@ func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 				quotes = quotes[1:]
 				qmap[klt] = quotes
 			}
-			binsert(quotes, string(klt), lkmap[klt])
+			chDbjob[klt] <- &dbJob{
+				quotes: quotes,
+				table:  klt,
+				klid:   lkmap[klt],
+			}
+			// binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
 	return true
@@ -595,14 +653,13 @@ func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bo
 		kls, suc, retry := tryMinuteKlines(code, tab)
 		if suc {
 			return kls, true
+		}
+		if retry && rt+1 < RETRIES {
+			log.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
+			continue
 		} else {
-			if retry && rt+1 < RETRIES {
-				log.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
-				continue
-			} else {
-				log.Printf("%s failed getting %s", code, tab)
-				return klmin, false
-			}
+			log.Printf("%s failed getting %s", code, tab)
+			return klmin, false
 		}
 	}
 	return klmin, false
@@ -694,13 +751,25 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		valueArgs = append(valueArgs, q.Utime)
 		code = q.Code
 	}
-
 	// delete stale records first
-	_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
-	if e != nil {
-		log.Printf("%s failed to delete %s where klid > %d", code, table, lklid)
-		panic(e)
+	for ; rt < retry; rt++ {
+		_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				// time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(2500)))
+				continue
+			} else {
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+			}
+		}
+		c = len(quotes)
+		break
 	}
+	if rt >= retry {
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
+	}
+	rt = 0
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 		"volume,amount,lr_amt,xrate,lr_xr,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
 		"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+

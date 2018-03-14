@@ -28,7 +28,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 	xdxr := latestUFRXdxr(stk.Code)
 	for _, klt := range kltype {
 		switch klt {
-		//TODO waiting support for backward re-instatement
+		// TODO waiting support for backward re-instatement
 		case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
 			continue
 		}
