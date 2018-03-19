@@ -113,6 +113,18 @@ CREATE TABLE `fin_predict` (
   PRIMARY KEY (`code`,`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
 
+CREATE TABLE `grader_stats` (
+  `grader` varchar(20) NOT NULL,
+  `frame` int(11) NOT NULL,
+  `score` double NOT NULL,
+  `threshold` double DEFAULT NULL,
+  `uuid` varchar(50) DEFAULT NULL,
+  `size` int(11) NOT NULL,
+  `udate` varchar(10) DEFAULT NULL,
+  `utime` varchar(8) DEFAULT NULL,
+  PRIMARY KEY (`grader`,`frame`,`score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE `idxlst` (
   `code` varchar(8) NOT NULL COMMENT '代码',
   `name` varchar(10) NOT NULL COMMENT '指数名称',
@@ -1046,13 +1058,131 @@ CREATE TABLE `kpts` (
   KEY `kpts_idx1` (`score`,`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='key points';
 
-CREATE TABLE `stats` (
-  `code` varchar(6) NOT NULL,
-  `start` varchar(20) DEFAULT NULL,
-  `end` varchar(20) DEFAULT NULL,
-  `dur` decimal(10,5) DEFAULT NULL,
-  PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+CREATE TABLE `kpts10` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts10_idx2` (`flag`,`uuid`),
+  KEY `kpts10_idx1` (`score`,`date`),
+  KEY `kpts10_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='10-days key points';
+
+CREATE TABLE `kpts120` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts120_idx2` (`flag`,`uuid`),
+  KEY `kpts120_idx1` (`score`,`date`),
+  KEY `kpts120_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='120-days key points';
+
+CREATE TABLE `kpts20` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts20_idx2` (`flag`,`uuid`),
+  KEY `kpts20_idx1` (`score`,`date`),
+  KEY `kpts20_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='20-days key points';
+
+CREATE TABLE `kpts30` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts30_idx2` (`flag`,`uuid`),
+  KEY `kpts30_idx1` (`score`,`date`),
+  KEY `kpts30_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='30-days key points';
+
+CREATE TABLE `kpts5` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts5_idx2` (`flag`,`uuid`),
+  KEY `kpts5_idx1` (`score`,`date`),
+  KEY `kpts5_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='5-days key points';
+
+CREATE TABLE `kpts60` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `score` decimal(6,0) NOT NULL,
+  `sum_fall` decimal(10,3) NOT NULL,
+  `rgn_rise` decimal(10,3) NOT NULL,
+  `unit_rise` decimal(10,3) NOT NULL,
+  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
+  `rema_lr` double DEFAULT NULL COMMENT 'Reversal EMA Log Return',
+  `flag` varchar(25) DEFAULT NULL,
+  `udate` varchar(10) NOT NULL,
+  `utime` varchar(8) NOT NULL,
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
+  KEY `kpts60_idx2` (`flag`,`uuid`),
+  KEY `kpts60_idx1` (`score`,`date`),
+  KEY `kpts60_lr_rema` (`rema_lr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60-days key points';
 
 CREATE TABLE `tradecal` (
   `index` bigint(20) DEFAULT NULL,
