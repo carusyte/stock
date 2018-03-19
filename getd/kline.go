@@ -104,7 +104,7 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 			for j := range ch {
 				c := binsert(j.quotes, string(j.table), j.klid)
 				if c == len(j.quotes) {
-					if cnt, _ := snmap.LoadOrStore(j.stock.Code, 0); cnt == total {
+					if cnt, _ := snmap.LoadOrStore(j.stock.Code, 0); cnt == total-1 {
 						outstks <- j.stock
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
