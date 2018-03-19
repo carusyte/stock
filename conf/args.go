@@ -42,6 +42,7 @@ type Arguments struct {
 	LogLevel          string   `mapstructure:"log_level"`
 	SQLFileLocation   string   `mapstructure:"sql_file_location"`
 	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
+	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
 	Kdjv              struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
@@ -86,11 +87,15 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		Sample            bool   `mapstructure:"sample"`
-		Resample          int    `mapstructure:"resample"`
-		Grader            string `mapstructure:"grader"`
-		TestSetBatchSize  int    `mapstructure:"test_set_batch_size"`
-		TrainSetBatchSize int    `mapstructure:"train_set_batch_size"`
+		Sample             bool   `mapstructure:"sample"`
+		PriorLength        int    `mapstructure:"prior_length"`
+		Resample           int    `mapstructure:"resample"`
+		Grader             string `mapstructure:"grader"`
+		GraderTimeFrames   []int  `mapstructure:"grader_time_frames"`
+		GraderScoreClass   int    `mapstructure:"grader_score_class"`
+		RefreshGraderStats bool   `mapstructure:"refresh_grader_stats"`
+		TestSetBatchSize   int    `mapstructure:"test_set_batch_size"`
+		TrainSetBatchSize  int    `mapstructure:"train_set_batch_size"`
 	}
 	//TODO logrus log to file
 }

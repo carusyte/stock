@@ -19,6 +19,7 @@ import (
 )
 
 type dbJob struct {
+	stock  *model.Stock
 	quotes []*model.Quote
 	table  model.DBTab
 	klid   int
@@ -33,6 +34,10 @@ var (
 	}
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 //GetKlines Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
@@ -46,20 +51,20 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	}
 	wf := make(chan int, parallel)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
-	chDbjob = createDbJobQueues()
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
-	wgdb := saveQuotes()
+	chDbjob = createDbJobQueues()
+	wgdb := saveQuotes(outstks)
 	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
-		go getKline(stk, kltype, &wg, &wf, outstks)
+		go getKline(stk, kltype, &wg, &wf)
 	}
 	wg.Wait()
 	close(wf)
+	waitDbjob(wgdb)
 	close(outstks)
 	wgr.Wait()
-	waitDbjob(wgdb)
 	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
 	if stks.Size() != rstks.Size() {
 		same, skp := stks.Diff(rstks)
@@ -82,26 +87,36 @@ func waitDbjob(wgs []*sync.WaitGroup) {
 func createDbJobQueues() (qmap map[model.DBTab]chan *dbJob) {
 	qmap = make(map[model.DBTab]chan *dbJob)
 	for _, t := range dbTabs {
-		qmap[t] = make(chan *dbJob, JOB_CAPACITY)
+		qmap[t] = make(chan *dbJob, conf.Args.DBQueueCapacity)
 	}
 	return
 }
 
-func saveQuotes() (wgs []*sync.WaitGroup) {
+func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
+	var snmap sync.Map
+	total := len(chDbjob)
 	for _, ch := range chDbjob {
 		wg := new(sync.WaitGroup)
 		wgs = append(wgs, wg)
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ch chan *dbJob) {
+		go func(wg *sync.WaitGroup, ch chan *dbJob, outstks chan *model.Stock, snmap *sync.Map) {
 			defer wg.Done()
 			for j := range ch {
-				binsert(j.quotes, string(j.table), j.klid)
+				c := binsert(j.quotes, string(j.table), j.klid)
+				if c == len(j.quotes) {
+					if cnt, _ := snmap.LoadOrStore(j.stock.Code, 0); cnt == total {
+						outstks <- j.stock
+					} else {
+						snmap.Store(j.stock.Code, cnt.(int)+1)
+					}
+				}
 			}
-		}(wg, ch)
+		}(wg, ch, outstks, &snmap)
 	}
 	return
 }
 
+//GetKlineDb get specified type of kline data from database.
 func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*model.Quote) {
 	if limit <= 0 {
 		sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
@@ -549,17 +564,15 @@ func kt2strs(kltype []model.DBTab) (s []string) {
 	return
 }
 
-func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *chan int, outstks chan *model.Stock) {
+func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *chan int) {
 	defer func() {
 		wg.Done()
 		<-*wf
 	}()
-	if getKlineAndSave(stk, kltype) {
-		outstks <- stk
-	}
+	fetchRemoteKline(stk, kltype)
 }
 
-func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
+func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
 	fail := false
 	var kltnv []model.DBTab
@@ -628,7 +641,13 @@ func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	for klt, quotes := range qmap {
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			//already inserted
+			//already inserted, publish empty quote to db job channel
+			chDbjob[klt] <- &dbJob{
+				stock:  stk,
+				quotes: nil,
+				table:  klt,
+				klid:   lkmap[klt],
+			}
 		default:
 			CalLogReturns(quotes)
 			if lkmap[klt] != -1 {
@@ -637,11 +656,11 @@ func getKlineAndSave(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 				qmap[klt] = quotes
 			}
 			chDbjob[klt] <- &dbJob{
+				stock:  stk,
 				quotes: quotes,
 				table:  klt,
 				klid:   lkmap[klt],
 			}
-			// binsert(quotes, string(klt), lkmap[klt])
 		}
 	}
 	return true
@@ -757,13 +776,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
-				// time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(2500)))
 				continue
 			} else {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
-		c = len(quotes)
 		break
 	}
 	if rt >= retry {
@@ -797,13 +814,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		"lr_vol200=values(lr_vol200),lr_vol250=values(lr_vol250),"+
 		"udate=values(udate),utime=values(utime)",
 		table, strings.Join(valueStrings, ","))
-	// log.Printf("statememt:\n%+v\nargs:\n%+v", stmt, valueArgs)
 	for ; rt < retry; rt++ {
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
-				// time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(2500)))
 				continue
 			} else {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
@@ -1166,19 +1181,10 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 		tvarh := nrq.VarateHigh.Float64
 		tvaro := nrq.VarateOpen.Float64
 		tvarl := nrq.VarateLow.Float64
+		// first element is assumed to be dropped, so its values are irrelevant
 		if len(xemap) > 0 && i > 0 {
-			xdxr := false
-			var xe *model.Xdxr
-			switch tab {
-			case model.KLINE_DAY_NR:
-				xe, xdxr = xemap[tgq.Date]
-			default:
-				xe, xdxr, e = mergeXdxr(xemap, tgq.Date, tab)
-			}
-			if e != nil {
-				return fmt.Errorf("%s unable to infer varate_rgl from %v. : %+v", code, tab, e)
-			}
-			if xdxr {
+			xe := MergeXdxrBetween(tgqs[i-1].Date, tgq.Date, xemap)
+			if xe != nil {
 				// adjust fore-day price for regulated varate calculation
 				pcl := Reinstate(nrqs[i-1].Close, xe)
 				phg := Reinstate(nrqs[i-1].High, xe)
@@ -1200,6 +1206,38 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 		tgq.VarateRglLow.Float64 = tvarl
 	}
 	return nil
+}
+
+//MergeXdxrBetween merges financial values of xdxr events between specified start date(excluding) and end date(including).
+func MergeXdxrBetween(start, end string, xemap map[string]*model.Xdxr) (rx *model.Xdxr) {
+	//FIXME: sometimes xdxr occurs in non-trading date, 002600, 2017-08-09
+	for dt, x := range xemap {
+		// loop through the map in case multiple xdxr events happen within the same period
+		if dt <= start || dt > end {
+			continue
+		}
+		// merge xdxr event data
+		if rx == nil {
+			rx = &model.Xdxr{
+				Code: x.Code,
+				Name: x.Name,
+				Idx:  x.Idx,
+			}
+		}
+		if x.Divi.Valid {
+			rx.Divi.Valid = true
+			rx.Divi.Float64 += x.Divi.Float64
+		}
+		if x.SharesAllot.Valid {
+			rx.SharesAllot.Valid = true
+			rx.SharesAllot.Float64 += x.SharesAllot.Float64
+		}
+		if x.SharesCvt.Valid {
+			rx.SharesCvt.Valid = true
+			rx.SharesCvt.Float64 += x.SharesCvt.Float64
+		}
+	}
+	return
 }
 
 func mergeXdxr(xemap map[string]*model.Xdxr, date string, tab model.DBTab) (xe *model.Xdxr, in bool, e error) {

@@ -39,13 +39,7 @@ func main() {
 	}
 	if conf.Args.Sampler.Sample {
 		stkps := time.Now()
-		if strings.EqualFold("LrGrader", conf.Args.Sampler.Grader) {
-			log.Println("Sampling key points using LrGrader")
-			sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, sampler.LrGrader)
-		} else {
-			log.Println("Sampling key points using default grader")
-			sampler.SampAllKeyPoints(conf.Args.Sampler.Resample, 120, nil)
-		}
+		sampler.SampAllKeyPoints()
 		getd.StopWatch("KEY_POINT_SAMPLING", stkps)
 	} else {
 		log.Println("skipping key point sampling")
@@ -99,12 +93,6 @@ func shutdownHook() {
 			getd.Cleanup()
 		}
 	}
-}
-
-func sampleKeyPoints() {
-	start := time.Now()
-	sampler.SampAllKeyPoints(-1, 120, nil)
-	log.Printf("time cost: %.2f", time.Since(start).Seconds())
 }
 
 func panicHandler(output string) {

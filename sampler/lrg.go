@@ -3,7 +3,6 @@ package sampler
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/model"
@@ -12,16 +11,15 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// LrGrader is a Log Return Grader. Principal grading policy:
-// Evaluate regional performance on a 60 day basis
+const graderLr = "Lr"
+
+// lrGrader is a Log Return Grader. Principal grading policy:
+// Evaluate regional performance on a time frame basis
 // Score according to the close price log return.
-var LrGrader = func(code string, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
-	frame := 60
-	if len(klhist) < frame {
-		log.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
-			code, len(klhist), frame)
-		return
-	}
+type lrGrader struct {
+}
+
+func (g *lrGrader) sample(code string, frame int, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
 	for refIdx, refQt := range klhist {
 		if refIdx >= len(klhist)-frame {
 			return
@@ -72,6 +70,16 @@ var LrGrader = func(code string, klhist []*model.Quote) (kpts []*model.KeyPoint,
 		kpts = append(kpts, kp)
 	}
 	return
+}
+
+func (g *lrGrader) stats(frame int) (e error) {
+	//TODO collect stats dynamically
+	return nil
+}
+
+func (g *lrGrader) score(frame int) (e error) {
+	//TODO score according to stats
+	return nil
 }
 
 func calCompoundLogReturn(code string, klhist []*model.Quote,

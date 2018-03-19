@@ -30,7 +30,8 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 		switch klt {
 		// TODO waiting support for backward re-instatement
 		case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
-			continue
+			qmap[klt] = make([]*model.Quote, 0)
+			lkmap[klt] = -1
 		}
 		for rt := 0; rt < RETRIES; rt++ {
 			quotes, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)

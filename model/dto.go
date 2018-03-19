@@ -1076,7 +1076,20 @@ type KeyPoint struct {
 	RgnLen   int             `db:"rgn_len"`
 	UnitRise float64         `db:"unit_rise"`
 	Clr      sql.NullFloat64 // Compound Log Return
+	RemaLr   sql.NullFloat64 `db:"rema_lr"` // Reversal EMA Log Return
 	Flag     sql.NullString
 	Udate    string
 	Utime    string
+}
+
+//GraderStats represents grader statistics of specific time frame.
+type GraderStats struct {
+	Grader    string
+	Frame     int
+	Score     float64
+	Threshold sql.NullFloat64
+	UUID      sql.NullString
+	Size      int
+	Udate     sql.NullString
+	Utime     sql.NullString
 }

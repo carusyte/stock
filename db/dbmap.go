@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+
 	"github.com/DejaMi/mymysql-pool"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -11,8 +12,8 @@ import (
 )
 
 var p, e = pool.New(pool.Config{Address: "127.0.0.1:3306", Protocol: "tcp", Username: "mysql", Password: "123456",
-Database: "secu", MaxConnections: 100, MaxConnectionAge: 60, ConnectTimeout: 60, RequestTimeout: 60,
-KeepConnectionsAlive: true})
+	Database: "secu", MaxConnections: 100, MaxConnectionAge: 60, ConnectTimeout: 60, RequestTimeout: 60,
+	KeepConnectionsAlive: true})
 
 func Get(create, truncate bool) *gorp.DbMap {
 	// connect to db using standard Go database/sql API
@@ -32,6 +33,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 	dbmap.AddTableWithName(model.IndicatorW{}, "indicator_w").SetKeys(false, "Code", "Date", "Klid")
 	dbmap.AddTableWithName(model.IndicatorM{}, "indicator_m").SetKeys(false, "Code", "Date", "Klid")
 	dbmap.AddTableWithName(model.IndcFeatRaw{}, "indc_feat_raw").SetKeys(false, "Code", "Indc", "Fid")
+	dbmap.AddTableWithName(model.GraderStats{}, "grader_stats").SetKeys(false, "Grader", "Frame", "Score")
 	if create {
 		err = dbmap.CreateTablesIfNotExists()
 		util.CheckErr(err, "Create tables failed,")
@@ -47,7 +49,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 }
 
 func GetMySql() (c *pool.Conn) {
-	c,e := p.Get()
-	util.CheckErrNop(e,"failed to get connection from pool")
+	c, e := p.Get()
+	util.CheckErrNop(e, "failed to get connection from pool")
 	return
 }

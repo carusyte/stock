@@ -47,17 +47,15 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 		idxMap[idx.Code] = idx
 	}
 	chidx := make(chan *model.IdxLst, conf.Args.Concurrency)
-	rchs := make(chan string, conf.Args.Concurrency)
+	rchs := make(chan *model.Stock, conf.Args.Concurrency)
 	wgr.Add(1)
 	go func() {
 		defer wgr.Done()
 		rcodes := make([]string, 0, 16)
 		for rc := range rchs {
-			if rc != "" {
-				rcodes = append(rcodes, rc)
-				p := float64(len(rcodes)) / float64(len(idxlst)) * 100
-				log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
-			}
+			rcodes = append(rcodes, rc.Code)
+			p := float64(len(rcodes)) / float64(len(idxlst)) * 100
+			log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 		}
 		for _, sc := range rcodes {
 			suclst = append(suclst, idxMap[sc])
@@ -68,19 +66,22 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 			log.Printf("Failed indices: %+v", fs)
 		}
 	}()
+	chDbjob = createDbJobQueues()
+	wgdb := saveQuotes(rchs)
 	for _, idx := range idxlst {
 		wg.Add(1)
 		chidx <- idx
-		go doGetIndex(idx, 3, &wg, chidx, rchs)
+		go doGetIndex(idx, &wg, chidx)
 	}
 	wg.Wait()
 	close(chidx)
+	waitDbjob(wgdb)
 	close(rchs)
 	wgr.Wait()
 	return
 }
 
-func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *model.IdxLst, rchs chan string) {
+func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst) {
 	defer func() {
 		wg.Done()
 		<-chidx
@@ -91,11 +92,7 @@ func doGetIndex(idx *model.IdxLst, retry int, wg *sync.WaitGroup, chidx chan *mo
 		model.KLINE_WEEK,
 		model.KLINE_MONTH,
 	}
-	if getKlineAndSave(stk, ts) {
-		rchs <- idx.Code
-	} else {
-		rchs <- ""
-	}
+	fetchRemoteKline(stk, ts)
 }
 
 func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {

@@ -1,21 +1,30 @@
 package sampler
 
 import (
-	"log"
+	"fmt"
 	"testing"
+
+	"github.com/carusyte/stock/global"
+	"github.com/carusyte/stock/model"
 )
 
-func TestSingle(t *testing.T) {
-	code := "600104"
-	kpts, e := KeyPoints(code, -1, 120, nil)
+func TestLremaSample(t *testing.T) {
+	t.Fail()
+	code := "002600"
+	qryKlid := ""
+	qryKlid = fmt.Sprintf(" and klid >= %d", 1219)
+	query, e := global.Dot.Raw("QUERY_NR_DAILY")
 	if e != nil {
-		log.Println(e)
-		t.FailNow()
+		panic(e)
 	}
-	e = SaveKpts(kpts...)
+	query = fmt.Sprintf(query, qryKlid)
+	var klhist []*model.Quote
+	_, e = dbmap.Select(&klhist, query, code)
 	if e != nil {
-		log.Println(e)
-		t.FailNow()
+		panic(e)
 	}
-	log.Printf("%s kpts data saved. size=%d", code, len(kpts))
+
+	g := new(remaLrGrader)
+	g.sample(code, 5, klhist)
+
 }

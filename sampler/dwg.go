@@ -15,14 +15,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const frame = 10
-
 // Double Wave grader principal grading policy:
 // Evaluate regional performance on a 10 day basis
 // Accumulate Fall (af) ∈ (-∞, 0], ζ(af) ∈ [-10, 3]; ζ(-5)=0;
 // Regional Rise (rr) ∈ [0, +∞), φ(rr) ∈ [-3, +∞]; φ(3)=0, φ(10)≈7;
 // Final Grade Ψ(af,rr) = max(-10, min(10, ζ(af) + φ(rr)))
-var dwGrader = func(code string, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
+type dwGrader struct{}
+
+func (g *dwGrader) sample(code string, frame int, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
 	if len(klhist) < frame {
 		log.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
 			code, len(klhist), frame)
@@ -68,6 +68,10 @@ var dwGrader = func(code string, klhist []*model.Quote) (kpts []*model.KeyPoint,
 	return
 }
 
+func (g *dwGrader) stats(frame int) (e error) {
+	return nil
+}
+
 func zeta(af float64) float64 {
 	if af <= -15 {
 		return -10
@@ -103,7 +107,7 @@ func phi(rr float64) float64 {
 
 func calcAFRR(code string, base float64, klhist []*model.Quote,
 	start, frame int, xmap map[string]*model.Xdxr) (af, rr float64, ok bool) {
-	var x *model.Xdxr
+	x := getd.MergeXdxrBetween(klhist[start+1].Date, klhist[start+frame].Date, xmap)
 	for i := start + 1; i <= start+frame; i++ {
 		cmpQt := klhist[i]
 		if !cmpQt.VarateRgl.Valid {
@@ -114,8 +118,7 @@ func calcAFRR(code string, base float64, klhist []*model.Quote,
 		if cmpQt.VarateRgl.Float64 < 0 {
 			af += cmpQt.VarateRgl.Float64
 		}
-		checkXdxr(cmpQt, x, xmap)
-		if i == start+frame-1 {
+		if i == start+frame {
 			if cmpQt.Close <= 0 {
 				break
 			}
@@ -128,28 +131,4 @@ func calcAFRR(code string, base float64, klhist []*model.Quote,
 		}
 	}
 	return af, rr, true
-}
-
-func checkXdxr(q *model.Quote, x *model.Xdxr, xmap map[string]*model.Xdxr) bool {
-	if xe, ok := xmap[q.Date]; ok {
-		if x == nil {
-			x = xe
-		} else {
-			// merge xdxr event data into x
-			if xe.Divi.Valid {
-				x.Divi.Valid = true
-				x.Divi.Float64 += xe.Divi.Float64
-			}
-			if xe.SharesAllot.Valid {
-				x.SharesAllot.Valid = true
-				x.SharesAllot.Float64 += xe.SharesAllot.Float64
-			}
-			if xe.SharesCvt.Valid {
-				x.SharesCvt.Valid = true
-				x.SharesCvt.Float64 += xe.SharesCvt.Float64
-			}
-		}
-		return true
-	}
-	return false
 }

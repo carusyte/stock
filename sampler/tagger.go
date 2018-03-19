@@ -271,5 +271,5 @@ func strQmap(scores []int, qmap map[int]string) string {
 	for _, score := range scores {
 		s = fmt.Sprintf("%s %d:%s", s, score, qmap[score])
 	}
-	return fmt.Sprintf("[%s]", s)
+	return fmt.Sprintf("%s", s)
 }
