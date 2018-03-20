@@ -26,12 +26,12 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 	lkmap = make(map[model.DBTab]int)
 	code := stk.Code
 	xdxr := latestUFRXdxr(stk.Code)
+	var alts []model.DBTab
 	for _, klt := range kltype {
 		switch klt {
 		// TODO waiting support for backward re-instatement
 		case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
-			qmap[klt] = make([]*model.Quote, 0)
-			lkmap[klt] = -1
+			alts = append(alts, klt)
 		}
 		for rt := 0; rt < RETRIES; rt++ {
 			quotes, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)
@@ -52,7 +52,15 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 			}
 		}
 	}
-
+	if len(alts) > 0 {
+		altmap, altklid, suc := getKlineTc(stk, alts)
+		if suc {
+			for klt, qs := range altmap {
+				qmap[klt] = qs
+				lkmap[klt] = altklid[klt]
+			}
+		}
+	}
 	return qmap, lkmap, true
 }
 
@@ -195,4 +203,31 @@ func isIndex(code string) bool {
 		}
 	}
 	return false
+}
+
+// recover volume, amount and xrate related values in backward reinstated table
+func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
+	rstks = new(model.Stocks)
+	tabs := []model.DBTab{model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B}
+	stabs := []model.DBTab{model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH}
+	log.Printf("post processing klines: %+v", tabs)
+	for code, s := range stks.Map {
+		suc := true
+		for i, tab := range tabs {
+			usql := fmt.Sprintf("update %v t inner join %v s using(code, date, klid) set "+
+				"t.volume = s.volume, t.amount = s.amount, t.xrate = s.xrate, t.lr_vol = s.lr_vol, "+
+				"t.lr_amt = s.lr_amt, t.lr_xr = x.lr_xr where t.code = ? and "+
+				"(t.volume is null or t.amount is null or t.xrate is null or "+
+				"t.lr_vol is null or t.lr_amt is null or t.lr_xr is null)", tab, stabs[i])
+			_, e := dbmap.Exec(usql, code)
+			if e != nil {
+				log.Printf("%v failed to post process %v:%+v", code, tab, e)
+				suc = false
+			}
+		}
+		if suc {
+			rstks.Add(s)
+		}
+	}
+	return
 }

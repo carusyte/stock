@@ -125,7 +125,7 @@ func sampKeyPoints(code string, wg *sync.WaitGroup, wf *chan int, fail chan stri
 
 }
 
-//KeyPoints sample key points against non-reinstated daily kline of the specified stock.
+//KeyPoints sample key points against backward-reinstated daily kline of the specified stock.
 // if resample is 0, only sample new key points (existing data will not be resampled).
 // if resample is -1, resample all the key points.
 func KeyPoints(code string, resample, prior int) (err error) {
@@ -150,7 +150,8 @@ func KeyPoints(code string, resample, prior int) (err error) {
 		} else if prior > 0 {
 			qryKlid = fmt.Sprintf(" and klid >= %d", prior)
 		}
-		query, e := global.Dot.Raw("QUERY_NR_DAILY")
+		// use backward reinstated kline
+		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
 		if e != nil {
 			return errors.WithStack(e)
 		}

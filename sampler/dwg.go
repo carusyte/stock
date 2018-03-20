@@ -107,7 +107,7 @@ func phi(rr float64) float64 {
 
 func calcAFRR(code string, base float64, klhist []*model.Quote,
 	start, frame int, xmap map[string]*model.Xdxr) (af, rr float64, ok bool) {
-	x := getd.MergeXdxrBetween(klhist[start+1].Date, klhist[start+frame].Date, xmap)
+	x := getd.MergeXdxrBetween(klhist[start].Date, klhist[start+frame].Date, xmap)
 	for i := start + 1; i <= start+frame; i++ {
 		cmpQt := klhist[i]
 		if !cmpQt.VarateRgl.Valid {

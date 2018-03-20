@@ -105,6 +105,7 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 				c := binsert(j.quotes, string(j.table), j.klid)
 				if c == len(j.quotes) {
 					if cnt, _ := snmap.LoadOrStore(j.stock.Code, 0); cnt == total-1 {
+						snmap.Delete(j.stock.Code)
 						outstks <- j.stock
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
@@ -112,6 +113,18 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 				}
 			}
 		}(wg, ch, outstks, &snmap)
+	}
+	return
+}
+
+//KlinePostProcess manipulates kline data stored in database
+//after all newly data are fetched from remote source.
+func KlinePostProcess(stks *model.Stocks) (rstks *model.Stocks) {
+	switch conf.Args.DataSource.Kline {
+	case conf.WHT:
+		rstks = whtPostProcessKline(stks)
+	default:
+		rstks = stks
 	}
 	return
 }
@@ -1210,7 +1223,9 @@ func transferVarateRgl(code string, tab model.DBTab, nrqs, tgqs []*model.Quote,
 
 //MergeXdxrBetween merges financial values of xdxr events between specified start date(excluding) and end date(including).
 func MergeXdxrBetween(start, end string, xemap map[string]*model.Xdxr) (rx *model.Xdxr) {
-	//FIXME: sometimes xdxr occurs in non-trading date, 002600, 2017-08-09
+	if xemap == nil {
+		return
+	}
 	for dt, x := range xemap {
 		// loop through the map in case multiple xdxr events happen within the same period
 		if dt <= start || dt > end {

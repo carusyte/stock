@@ -8,7 +8,6 @@ import (
 	"math/rand"
 
 	"github.com/carusyte/stock/conf"
-	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
@@ -35,12 +34,12 @@ func (g *remaLrGrader) sample(code string, frame int, klhist []*model.Quote) (kp
 		if err != nil {
 			return nil, err
 		}
-		xmap, err := getd.XdxrDateBetween(code, klhist[0].Date, klhist[len(klhist)-1].Date)
-		if err != nil {
-			err = errors.WithStack(err)
-			return kpts, err
-		}
-		af, rr, ok := calcAFRR(code, refQt.Close, klhist, refIdx, frame, xmap)
+		// xmap, err := getd.XdxrDateBetween(code, klhist[0].Date, klhist[len(klhist)-1].Date)
+		// if err != nil {
+		// 	err = errors.WithStack(err)
+		// 	return kpts, err
+		// }
+		af, rr, ok := calcAFRR(code, refQt.Close, klhist, refIdx, frame, nil)
 		if !ok {
 			continue
 		}

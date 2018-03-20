@@ -487,6 +487,30 @@ WHERE
     %s
 ORDER BY tn.klid
 
+-- name: QUERY_BWR_DAILY
+SELECT 
+    t.code,
+    t.date,
+    t.klid,
+    t.open,
+    t.high,
+    t.close,
+    t.low,
+    t.volume,
+    t.amount,
+    t.xrate,
+    t.varate,
+    t.varate_rgl,
+    t.lr,
+    t.udate,
+    t.utime
+FROM
+    kline_d_b t
+WHERE
+    t.code = ?
+    %s
+ORDER BY t.klid
+
 -- name: RAND_KPTS_BY_INDUSTRY
 SELECT 
     mt.*

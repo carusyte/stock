@@ -43,8 +43,8 @@ func Get() {
 	}
 	if !conf.Args.DataSource.SkipKlinePre {
 		stgkpre := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY_NR, model.KLINE_DAY_B,
-			model.KLINE_WEEK_B, model.KLINE_MONTH_B)
+		stks = GetKlines(stks, model.KLINE_DAY_NR,
+			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
 		StopWatch("GET_KLINES_PRE", stgkpre)
 	} else {
 		log.Printf("skipped kline-pre data from web")
@@ -70,7 +70,9 @@ func Get() {
 		stgkl := time.Now()
 		stks = GetKlines(stks, model.KLINE_DAY,
 			model.KLINE_WEEK, model.KLINE_MONTH,
-			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
+			model.KLINE_MONTH_B, model.KLINE_DAY_B,
+			model.KLINE_WEEK_B)
+		stks = KlinePostProcess(stks)
 		StopWatch("GET_KLINES", stgkl)
 	} else {
 		log.Printf("skipped klines data from web")
