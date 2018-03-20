@@ -27,11 +27,6 @@ type dbJob struct {
 
 var (
 	chDbjob map[model.DBTab]chan *dbJob
-	dbTabs  = []model.DBTab{
-		model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_VLD,
-		model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_VLD,
-		model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_VLD,
-	}
 )
 
 func init() {
@@ -53,7 +48,7 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
-	chDbjob = createDbJobQueues()
+	chDbjob = createDbJobQueues(kltype...)
 	wgdb := saveQuotes(outstks)
 	for _, stk := range stks.List {
 		wg.Add(1)
@@ -84,35 +79,41 @@ func waitDbjob(wgs []*sync.WaitGroup) {
 	}
 }
 
-func createDbJobQueues() (qmap map[model.DBTab]chan *dbJob) {
+func createDbJobQueues(kltype ...model.DBTab) (qmap map[model.DBTab]chan *dbJob) {
 	qmap = make(map[model.DBTab]chan *dbJob)
-	for _, t := range dbTabs {
+	for _, t := range kltype {
 		qmap[t] = make(chan *dbJob, conf.Args.DBQueueCapacity)
 	}
 	return
 }
 
 func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
-	var snmap sync.Map
+	snmap := new(sync.Map)
 	total := len(chDbjob)
-	for _, ch := range chDbjob {
+	lock := new(sync.RWMutex)
+	for tab, ch := range chDbjob {
 		wg := new(sync.WaitGroup)
 		wgs = append(wgs, wg)
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ch chan *dbJob, outstks chan *model.Stock, snmap *sync.Map) {
+		go func(wg *sync.WaitGroup, ch chan *dbJob, outstks chan *model.Stock,
+			snmap *sync.Map, lock *sync.RWMutex, tab model.DBTab) {
 			defer wg.Done()
 			for j := range ch {
 				c := binsert(j.quotes, string(j.table), j.klid)
 				if c == len(j.quotes) {
-					if cnt, _ := snmap.LoadOrStore(j.stock.Code, 0); cnt == total-1 {
+					lock.Lock()
+					var cnt interface{}
+					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
 						snmap.Delete(j.stock.Code)
 						outstks <- j.stock
+						log.Printf("%s all requested klines fetched", j.stock.Code)
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
 					}
+					lock.Unlock()
 				}
 			}
-		}(wg, ch, outstks, &snmap)
+		}(wg, ch, outstks, snmap, lock, tab)
 	}
 	return
 }

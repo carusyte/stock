@@ -66,7 +66,11 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 			log.Printf("Failed indices: %+v", fs)
 		}
 	}()
-	chDbjob = createDbJobQueues()
+	chDbjob = createDbJobQueues(
+		model.KLINE_DAY,
+		model.KLINE_WEEK,
+		model.KLINE_MONTH,
+	)
 	wgdb := saveQuotes(rchs)
 	for _, idx := range idxlst {
 		wg.Add(1)
