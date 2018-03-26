@@ -113,6 +113,17 @@ CREATE TABLE `fin_predict` (
   PRIMARY KEY (`code`,`year`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
 
+CREATE TABLE `fs_stats` (
+  `method` varchar(45) NOT NULL,
+  `tab` varchar(45) DEFAULT NULL,
+  `fields` varchar(500) DEFAULT NULL,
+  `mean` double DEFAULT NULL,
+  `std` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL,
+  `utime` varchar(8) DEFAULT NULL,
+  PRIMARY KEY (`method`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Feature Scaling Statistics';
+
 CREATE TABLE `grader_stats` (
   `grader` varchar(20) NOT NULL,
   `frame` int(11) NOT NULL,
@@ -1038,26 +1049,6 @@ CREATE TABLE `kline_w_v` (
   KEY `idx_kline_d_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='周K线校验数据（前复权）';
 
-CREATE TABLE `kpts` (
-  `uuid` varchar(50) NOT NULL,
-  `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `date` varchar(10) NOT NULL,
-  `score` decimal(6,0) NOT NULL,
-  `sum_fall` decimal(10,3) NOT NULL,
-  `rgn_rise` decimal(10,3) NOT NULL,
-  `rgn_len` int(11) NOT NULL,
-  `unit_rise` decimal(10,3) NOT NULL,
-  `clr` double DEFAULT NULL COMMENT 'Compound Log Return',
-  `flag` varchar(25) DEFAULT NULL,
-  `udate` varchar(10) NOT NULL,
-  `utime` varchar(8) NOT NULL,
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `idx_kpts_uuid` (`uuid`),
-  KEY `kpts_idx2` (`flag`,`uuid`),
-  KEY `kpts_idx1` (`score`,`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='key points';
-
 CREATE TABLE `kpts10` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
@@ -1183,6 +1174,14 @@ CREATE TABLE `kpts60` (
   KEY `kpts60_idx1` (`score`,`date`),
   KEY `kpts60_lr_rema` (`rema_lr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60-days key points';
+
+CREATE TABLE `stats` (
+  `code` varchar(6) NOT NULL,
+  `start` varchar(20) DEFAULT NULL,
+  `end` varchar(20) DEFAULT NULL,
+  `dur` decimal(10,5) DEFAULT NULL,
+  PRIMARY KEY (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `tradecal` (
   `index` bigint(20) DEFAULT NULL,

@@ -110,13 +110,20 @@ func calcAFRR(code string, base float64, klhist []*model.Quote,
 	x := getd.MergeXdxrBetween(klhist[start].Date, klhist[start+frame].Date, xmap)
 	for i := start + 1; i <= start+frame; i++ {
 		cmpQt := klhist[i]
-		if !cmpQt.VarateRgl.Valid {
-			logrus.Warnf("%s nil varate_rgl, skip this point [%d, %s]",
-				code, cmpQt.Klid, cmpQt.Date)
-			return af, rr, false
-		}
-		if cmpQt.VarateRgl.Float64 < 0 {
-			af += cmpQt.VarateRgl.Float64
+		if cmpQt.VarateRgl.Valid {
+			if cmpQt.VarateRgl.Float64 < 0 {
+				af += cmpQt.VarateRgl.Float64
+			}
+		} else {
+			if cmpQt.Varate.Valid {
+				if cmpQt.Varate.Float64 < 0 {
+					af += cmpQt.Varate.Float64
+				}
+			} else {
+				logrus.Warnf("%s nil varate and varate_rgl, skip this point [%d, %s]",
+					code, cmpQt.Klid, cmpQt.Date)
+				return af, rr, false
+			}
 		}
 		if i == start+frame {
 			if cmpQt.Close <= 0 {

@@ -78,6 +78,14 @@ func Get() {
 		log.Printf("skipped klines data from web")
 	}
 
+	if !conf.Args.DataSource.SkipFsStats {
+		stfss := time.Now()
+		CollectFsStats()
+		StopWatch("FS_STATS", stfss)
+	} else {
+		log.Printf("skipped feature scaling stats")
+	}
+
 	var allIdx, sucIdx []*model.IdxLst
 	if !conf.Args.DataSource.SkipIndices {
 		stidx := time.Now()

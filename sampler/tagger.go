@@ -29,7 +29,7 @@ var (
 // will be tagged. Retagging will erase those already tagged as "TEST" and
 // reselect target stocks without any flag, trying to find as much as 10%
 // out of each industry.
-func TagTestSetByIndustry(batchSize int) (e error) {
+func TagTestSetByIndustry(frame, batchSize int) (e error) {
 	// query number of stocks for each industry
 	type stat struct {
 		Industry string `db:"ind_lv3"`
@@ -50,7 +50,8 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 		s.Count = int(float32(s.Count) * float32(0.1))
 	}
 	// clear already "TEST" tagged data
-	_, e = dbmap.Exec(`update kpts set flag = null where flag = ?`, TestFlag)
+	usql := fmt.Sprintf(`update kpts%d set flag = null where flag = ?`, frame)
+	_, e = dbmap.Exec(usql, TestFlag)
 	if e != nil {
 		return errors.WithStack(e)
 	}
@@ -59,6 +60,7 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 	if e != nil {
 		return errors.WithStack(e)
 	}
+	qry = fmt.Sprintf(qry, frame)
 	var toTag []*model.KeyPoint
 	for _, s := range stats {
 		var kpts []*model.KeyPoint
@@ -70,27 +72,28 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 		toTag = append(toTag, kpts...)
 	}
 	// tag head record with 'TEST' flag
+	usql = fmt.Sprintf("update kpts%d set flag = ? where code = ? and klid = ?", frame)
 	for _, k := range toTag {
-		_, e = dbmap.Exec("update kpts set flag = ? where code = ? and klid = ?",
-			TestFlag, k.Code, k.Klid)
+		_, e = dbmap.Exec(usql, TestFlag, k.Code, k.Klid)
 		if e != nil {
 			return errors.WithStack(e)
 		}
 	}
 	// tag with TEST_### flag amongst TEST stocks, evenly across each score
 	var scores []int
-	_, e = dbmap.Select(&scores, `select distinct score from kpts order by score`)
+	_, e = dbmap.Select(&scores, fmt.Sprintf(`select distinct score from kpts%d order by score`, frame))
 	if e != nil {
 		log.Println(e)
 		return errors.WithStack(e)
 	}
 	smap := make(map[int][]string)
+	qry = fmt.Sprintf(`select uuid from kpts%[1]d where score = ? `+
+		`and code in (select code from kpts%[1]d where flag = ?) `+
+		`and flag is null ORDER BY RAND()`, frame)
 	for i, s := range scores {
 		var uuids []string
 		log.Printf("fetching sample data for score %v", s)
-		_, e = dbmap.Select(&uuids, `select uuid from kpts where score = ? `+
-			`and code in (select code from kpts where flag = ?) `+
-			`and flag is null ORDER BY RAND()`, s, TestFlag)
+		_, e = dbmap.Select(&uuids, qry, s, TestFlag)
 		if e != nil {
 			log.Println(e)
 			return errors.WithStack(e)
@@ -144,8 +147,8 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 		}
 		flag := fmt.Sprintf("TEST_%v", bno)
 		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
-		updSQL := fmt.Sprintf(`update kpts set flag = ? where uuid in (%s)`,
-			util.Join(uuids, ",", true))
+		updSQL := fmt.Sprintf(`update kpts%d set flag = ? where uuid in (%s)`,
+			frame, util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)
 		if e != nil {
 			return errors.WithStack(e)
@@ -159,35 +162,37 @@ func TagTestSetByIndustry(batchSize int) (e error) {
 	if e != nil {
 		return errors.WithStack(e)
 	}
+	qry = fmt.Sprintf(qry, frame)
 	nTest, e := dbmap.SelectFloat(qry, TestFlag)
 	if e != nil {
 		return errors.WithStack(e)
 	}
-	nTotal, e := dbmap.SelectFloat("select count(*) from kpts")
+	nTotal, e := dbmap.SelectFloat(fmt.Sprintf("select count(*) from kpts%d", frame))
 	if e != nil {
 		return errors.WithStack(e)
 	}
-	log.Printf("Test Set Summary:\t%d stocks, %.2f%% sampled data",
+	log.Printf("kpts%d Test Set Summary:\t%d stocks, %.2f%% sampled data", frame,
 		len(toTag), nTest/nTotal*100.)
 	return nil
 }
 
 //TagTrainingSetByScore tags the key point sample data with batch number randomly,
 //at the mean time trying to keep a balanced portion of each class (score).
-func TagTrainingSetByScore(batchSize int) (e error) {
+func TagTrainingSetByScore(frame, batchSize int) (e error) {
 	var scores []int
-	_, e = dbmap.Select(&scores, `select distinct score from kpts order by score`)
+	_, e = dbmap.Select(&scores, fmt.Sprintf(`select distinct score from kpts%d order by score`, frame))
 	if e != nil {
 		log.Println(e)
 		return errors.WithStack(e)
 	}
 	smap := make(map[int][]string)
+	qry := fmt.Sprintf(`select uuid from kpts%[1]d where score = ? `+
+		`and code not in (select code from kpts%[1]d where flag = 'TEST') `+
+		`and flag is null ORDER BY RAND()`, frame)
 	for i, s := range scores {
 		var uuids []string
 		log.Printf("fetching sample data for score %v", s)
-		_, e = dbmap.Select(&uuids, `select uuid from kpts where score = ? `+
-			`and code not in (select code from kpts where flag = 'TEST') `+
-			`and flag is null ORDER BY RAND()`, s)
+		_, e = dbmap.Select(&uuids, qry, s)
 		if e != nil {
 			log.Println(e)
 			return errors.WithStack(e)
@@ -242,8 +247,8 @@ func TagTrainingSetByScore(batchSize int) (e error) {
 		}
 		flag := fmt.Sprintf("TRN_%v", bno)
 		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
-		updSQL := fmt.Sprintf(`update kpts set flag = ? where uuid in (%s)`,
-			util.Join(uuids, ",", true))
+		updSQL := fmt.Sprintf(`update kpts%d set flag = ? where uuid in (%s)`,
+			frame, util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)
 		if e != nil {
 			return errors.WithStack(e)

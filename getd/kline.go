@@ -319,10 +319,44 @@ func CalLogReturns(qs []*model.Quote) {
 		if !q.VarateRglLow.Valid {
 			vlw = q.VarateLow.Float64
 		}
-		q.Lr = sql.NullFloat64{Float64: math.Log(1. + vcl/100.), Valid: true}
-		q.LrHigh = sql.NullFloat64{Float64: math.Log(1. + vhg/100.), Valid: true}
-		q.LrOpen = sql.NullFloat64{Float64: math.Log(1. + vop/100.), Valid: true}
-		q.LrLow = sql.NullFloat64{Float64: math.Log(1. + vlw/100.), Valid: true}
+		q.Lr = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
+		q.LrHigh = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
+		q.LrOpen = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
+		q.LrLow = sql.NullFloat64{Float64: math.Log(vlw/100. + 1.), Valid: true}
+
+		if (q.Type == model.KLINE_DAY || q.Type == model.KLINE_DAY_B || q.Type == model.KLINE_DAY_NR || q.Type == model.KLINE_DAY_VLD) &&
+			len(conf.Args.DataSource.LimitPriceDayLr) > 0 {
+			limit := conf.Args.DataSource.LimitPriceDayLr
+			b, t := limit[0], limit[1]
+			if q.Lr.Float64 < b {
+				log.Printf("%s %v %s %d lr below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				q.Lr.Float64 = b
+			} else if q.Lr.Float64 > t {
+				log.Printf("%s %v %s %d lr exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				q.Lr.Float64 = t
+			}
+			if q.LrHigh.Float64 < b {
+				log.Printf("%s %v %s %d lr_h below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				q.LrHigh.Float64 = b
+			} else if q.LrHigh.Float64 > t {
+				log.Printf("%s %v %s %d lr_h exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				q.LrHigh.Float64 = t
+			}
+			if q.LrOpen.Float64 < b {
+				log.Printf("%s %v %s %d lr_o below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				q.LrOpen.Float64 = b
+			} else if q.LrOpen.Float64 > t {
+				log.Printf("%s %v %s %d lr_o exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				q.LrOpen.Float64 = t
+			}
+			if q.LrLow.Float64 < b {
+				log.Printf("%s %v %s %d lr_l below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				q.LrLow.Float64 = b
+			} else if q.LrLow.Float64 > t {
+				log.Printf("%s %v %s %d lr_l exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				q.LrLow.Float64 = t
+			}
+		}
 
 		bias := .01
 		if q.Xrate.Valid {

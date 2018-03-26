@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	tagTest        bool
-	tagTrain       bool
+	tagTest        int
+	tagTrain       int
 	trainBatchSize int
 	testBatchSize  int
 )
@@ -44,16 +44,16 @@ func main() {
 	} else {
 		log.Println("skipping key point sampling")
 	}
-	if tagTest {
-		log.Printf("tagging keypoint sample data for test set...")
-		e := sampler.TagTestSetByIndustry(testBatchSize)
+	if tagTest > 0 {
+		log.Printf("tagging kpts%d data for test set...", tagTest)
+		e := sampler.TagTestSetByIndustry(tagTest, testBatchSize)
 		if e != nil {
 			log.Println(e)
 		}
 	}
-	if tagTrain {
-		log.Printf("tagging keypoint sample data for training set, batch size: %d", trainBatchSize)
-		e := sampler.TagTrainingSetByScore(trainBatchSize)
+	if tagTrain > 0 {
+		log.Printf("tagging kpts%d data for training set, batch size: %d", tagTrain, trainBatchSize)
+		e := sampler.TagTrainingSetByScore(tagTrain, trainBatchSize)
 		if e != nil {
 			log.Println(e)
 		}
@@ -77,8 +77,8 @@ func main() {
 }
 
 func parseArgs() {
-	flag.BoolVar(&tagTest, "tagTest", false, "tag key point sample data for test set.")
-	flag.BoolVar(&tagTrain, "tagTrain", false, "tag key point sample data for training set.")
+	flag.IntVar(&tagTest, "tagTest", 0, "tag key point sample data for test set.")
+	flag.IntVar(&tagTrain, "tagTrain", 0, "tag key point sample data for training set.")
 	flag.IntVar(&trainBatchSize, "trainBatchSize", conf.Args.Sampler.TrainSetBatchSize,
 		"batch size for key point sample training set.")
 	flag.IntVar(&testBatchSize, "testBatchSize", conf.Args.Sampler.TestSetBatchSize,

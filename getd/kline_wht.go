@@ -207,6 +207,7 @@ func isIndex(code string) bool {
 
 // recover volume, amount and xrate related values in backward reinstated table
 func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
+	//FIXME: resolve inconsistency
 	rstks = new(model.Stocks)
 	tabs := []model.DBTab{model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B}
 	stabs := []model.DBTab{model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH}
@@ -214,9 +215,9 @@ func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
 	for code, s := range stks.Map {
 		suc := true
 		for i, tab := range tabs {
-			usql := fmt.Sprintf("update %v t inner join %v s using(code, date, klid) set "+
+			usql := fmt.Sprintf("update %v t inner join %v s using(code, date) set "+
 				"t.volume = s.volume, t.amount = s.amount, t.xrate = s.xrate, t.lr_vol = s.lr_vol, "+
-				"t.lr_amt = s.lr_amt, t.lr_xr = x.lr_xr where t.code = ? and "+
+				"t.lr_amt = s.lr_amt, t.lr_xr = s.lr_xr where t.code = ? and "+
 				"(t.volume is null or t.amount is null or t.xrate is null or "+
 				"t.lr_vol is null or t.lr_amt is null or t.lr_xr is null)", tab, stabs[i])
 			_, e := dbmap.Exec(usql, code)

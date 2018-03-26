@@ -985,7 +985,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 		return errors.Wrapf(e, "%s %s failed to unmarshal json data", qj.Code, qj.Period)
 	}
 	if m, ok = f.(map[string]interface{}); !ok {
-		return errors.Errorf("unrecognized data structure: %+v", f)
+		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
 	}
 	retcde = m["code"].(float64)
 	msg = m["msg"].(string)
@@ -997,11 +997,15 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 		exists bool
 	)
 	if cdat, exists = m["data"].(map[string]interface{})[qj.Fcode]; !exists {
-		return errors.Errorf("unrecognized data structure: %+v", f)
+		return errors.Errorf("unrecognized data structure, can't find 'data' node or '%s': %+v", qj.Fcode, f)
 	}
 	pdat, exists := cdat.(map[string]interface{})[qj.Reinstate+qj.Period]
 	if !exists {
-		return errors.Errorf("unrecognized data structure: %+v", f)
+		// for newly stocks no reinstatement type as prefix
+		pdat, exists = cdat.(map[string]interface{})[qj.Period]
+		if !exists {
+			return errors.Errorf("unrecognized data structure, can't find %s %s: %+v", qj.Reinstate, qj.Period, f)
+		}
 	}
 	ps := pdat.([]interface{})
 	qj.Quotes = make([]*Quote, len(ps))
