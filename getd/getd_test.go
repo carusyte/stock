@@ -20,6 +20,10 @@ import (
 	"github.com/chromedp/chromedp/runner"
 )
 
+func TestCollectFsStats(t *testing.T) {
+	t.Fail()
+	CollectFsStats()
+}
 func TestTimeoutContext(t *testing.T) {
 	ctxt, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

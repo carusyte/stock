@@ -556,46 +556,15 @@ FROM
 -- name: COLLECT_STANDARDIZATION_STATS
 INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
 SELECT 
-    'standardization', null, null, AVG(col), STD(col), DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S')
+    'standardization', null, field, AVG(col), STD(col), DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
 FROM
     (SELECT 
-        lr col
+        '%[1]s' field, %[1]s col
     FROM
-        kline_d_b UNION ALL SELECT 
-        lr_h col
-    FROM
-        kline_d_b UNION ALL SELECT 
-        lr_o col
-    FROM
-        kline_d_b UNION ALL SELECT 
-        lr_l col
-    FROM
-        kline_d_b UNION ALL SELECT 
-        lr_vol col
-    FROM
-        kline_d_b UNION ALL SELECT 
-        lr col
-    FROM
-        kline_d
-    WHERE
-        code IN ('sz399001' , 'sh000001') UNION ALL SELECT 
-        lr_h col
-    FROM
-        kline_d
-    WHERE
-        code IN ('sz399001' , 'sh000001') UNION ALL SELECT 
-        lr_o col
-    FROM
-        kline_d
-    WHERE
-        code IN ('sz399001' , 'sh000001') UNION ALL SELECT 
-        lr_l col
-    FROM
-        kline_d
-    WHERE
-        code IN ('sz399001' , 'sh000001') UNION ALL SELECT 
-        lr_vol col
-    FROM
-        kline_d
-    WHERE
-        code IN ('sz399001' , 'sh000001')) t
+        kline_d_b 
+        UNION ALL SELECT 
+            '%[1]s' field, %[1]s col
+        FROM
+            kline_d
+        WHERE
+            code IN ('sz399001' , 'sh000001')) t1
