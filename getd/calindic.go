@@ -107,12 +107,23 @@ func calcWeek(stk *model.Stock, offset int64) {
 	}
 
 	indicators := indc.DeftKDJ(qw)
-
 	macd := indc.DeftMACD(qw)
 	for i, idc := range indicators {
 		idc.MACD = macd[i].MACD
 		idc.MACD_diff = macd[i].MACD_diff
 		idc.MACD_dea = macd[i].MACD_dea
+	}
+	rsi := indc.DeftRSI(qw)
+	for i, idc := range indicators {
+		idc.RSI1 = rsi[i].RSI1
+		idc.RSI2 = rsi[i].RSI2
+		idc.RSI3 = rsi[i].RSI3
+	}
+	bias := indc.DeftBIAS(qw)
+	for i, idc := range indicators {
+		idc.BIAS1 = bias[i].BIAS1
+		idc.BIAS2 = bias[i].BIAS2
+		idc.BIAS3 = bias[i].BIAS3
 	}
 
 	binsIndc(indicators, "indicator_w")
@@ -154,12 +165,23 @@ func calcMonth(stk *model.Stock, offset int64) {
 	}
 
 	indicators := indc.DeftKDJ(qm)
-
 	macd := indc.DeftMACD(qm)
 	for i, idc := range indicators {
 		idc.MACD = macd[i].MACD
 		idc.MACD_diff = macd[i].MACD_diff
 		idc.MACD_dea = macd[i].MACD_dea
+	}
+	rsi := indc.DeftRSI(qm)
+	for i, idc := range indicators {
+		idc.RSI1 = rsi[i].RSI1
+		idc.RSI2 = rsi[i].RSI2
+		idc.RSI3 = rsi[i].RSI3
+	}
+	bias := indc.DeftBIAS(qm)
+	for i, idc := range indicators {
+		idc.BIAS1 = bias[i].BIAS1
+		idc.BIAS2 = bias[i].BIAS2
+		idc.BIAS3 = bias[i].BIAS3
 	}
 
 	binsIndc(indicators, "indicator_m")
@@ -202,12 +224,23 @@ func calcDay(stk *model.Stock, offset int64) {
 	}
 
 	indicators := indc.DeftKDJ(qd)
-
 	macd := indc.DeftMACD(qd)
 	for i, idc := range indicators {
 		idc.MACD = macd[i].MACD
 		idc.MACD_diff = macd[i].MACD_diff
 		idc.MACD_dea = macd[i].MACD_dea
+	}
+	rsi := indc.DeftRSI(qd)
+	for i, idc := range indicators {
+		idc.RSI1 = rsi[i].RSI1
+		idc.RSI2 = rsi[i].RSI2
+		idc.RSI3 = rsi[i].RSI3
+	}
+	bias := indc.DeftBIAS(qd)
+	for i, idc := range indicators {
+		idc.BIAS1 = bias[i].BIAS1
+		idc.BIAS2 = bias[i].BIAS2
+		idc.BIAS3 = bias[i].BIAS3
 	}
 
 	binsIndc(indicators, "indicator_d")
@@ -223,9 +256,14 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	}
 	retry := conf.Args.DeadlockRetry
 	rt := 0
-
+	numFields := 17
+	holders := make([]string, numFields)
+	for i := range holders {
+		holders[i] = "?"
+	}
+	holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 	valueStrings := make([]string, 0, len(indc))
-	valueArgs := make([]interface{}, 0, len(indc)*11)
+	valueArgs := make([]interface{}, 0, len(indc)*numFields)
 	var code string
 	var e error
 	for _, i := range indc {
@@ -234,7 +272,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		i.Utime.Valid = true
 		i.Udate.String = d
 		i.Utime.String = t
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, holderString)
 		valueArgs = append(valueArgs, i.Code)
 		valueArgs = append(valueArgs, i.Date)
 		valueArgs = append(valueArgs, i.Klid)
@@ -244,6 +282,12 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		valueArgs = append(valueArgs, i.MACD)
 		valueArgs = append(valueArgs, i.MACD_diff)
 		valueArgs = append(valueArgs, i.MACD_dea)
+		valueArgs = append(valueArgs, i.RSI1)
+		valueArgs = append(valueArgs, i.RSI2)
+		valueArgs = append(valueArgs, i.RSI3)
+		valueArgs = append(valueArgs, i.BIAS1)
+		valueArgs = append(valueArgs, i.BIAS2)
+		valueArgs = append(valueArgs, i.BIAS3)
 		valueArgs = append(valueArgs, i.Udate)
 		valueArgs = append(valueArgs, i.Utime)
 		code = i.Code
@@ -270,9 +314,12 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
 	}
 	rt = 0
-	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,macd,macd_diff,macd_dea,udate,utime) VALUES %s on "+
+	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,macd,macd_diff,macd_dea,"+
+		"rsi1,rsi2,rsi3,bias1,bias2,bias3,udate,utime) VALUES %s on "+
 		"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 		"(kdj_j),macd=values(macd),macd_diff=values(macd_diff),macd_dea=values(macd_dea),"+
+		"rsi1=values(rsi1),rsi2=values(rsi2),rsi3=values(rsi3),"+
+		"bias1=values(bias1),bias2=values(bias2),bias3=values(bias3),"+
 		"udate=values(udate),utime=values(utime)",
 		table, strings.Join(valueStrings, ","))
 	for ; rt < retry; rt++ {

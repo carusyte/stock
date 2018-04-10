@@ -612,6 +612,12 @@ type Indicator struct {
 	MACD      float64
 	MACD_diff float64
 	MACD_dea  float64
+	RSI1      float64
+	RSI2      float64
+	RSI3      float64
+	BIAS1     float64
+	BIAS2     float64
+	BIAS3     float64
 	//最后更新日期
 	Udate sql.NullString
 	//最后更新时间
