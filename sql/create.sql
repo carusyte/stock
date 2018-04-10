@@ -182,6 +182,9 @@ CREATE TABLE `indicator_d` (
   `KDJ_K` decimal(6,3) DEFAULT NULL,
   `KDJ_D` decimal(6,3) DEFAULT NULL,
   `KDJ_J` decimal(6,3) DEFAULT NULL,
+  `MACD` decimal(6,3) DEFAULT NULL,
+  `MACD_diff` decimal(6,3) DEFAULT NULL,
+  `MACD_dea` decimal(6,3) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
@@ -194,6 +197,9 @@ CREATE TABLE `indicator_m` (
   `KDJ_K` decimal(6,3) DEFAULT NULL,
   `KDJ_D` decimal(6,3) DEFAULT NULL,
   `KDJ_J` decimal(6,3) DEFAULT NULL,
+  `MACD` decimal(6,3) DEFAULT NULL,
+  `MACD_diff` decimal(6,3) DEFAULT NULL,
+  `MACD_dea` decimal(6,3) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
@@ -206,6 +212,9 @@ CREATE TABLE `indicator_w` (
   `KDJ_K` decimal(6,3) DEFAULT NULL,
   `KDJ_D` decimal(6,3) DEFAULT NULL,
   `KDJ_J` decimal(6,3) DEFAULT NULL,
+  `MACD` decimal(6,3) DEFAULT NULL,
+  `MACD_diff` decimal(6,3) DEFAULT NULL,
+  `MACD_dea` decimal(6,3) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)

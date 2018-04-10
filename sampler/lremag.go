@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/carusyte/stock/indc"
+
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -198,7 +200,7 @@ func remaLr(code string, klhist []*model.Quote, start, frame int) (remalr float6
 	for i := start + frame; i > start; i-- {
 		dn := math.Min(n, float64(start+frame+1-i))
 		if k := klhist[i]; k.Lr.Valid {
-			remalr = (2.*k.Lr.Float64 + (dn-1.)*remalr) / (dn + 1.)
+			remalr = indc.EMA(k.Lr.Float64, remalr, dn)
 		}
 	}
 	return

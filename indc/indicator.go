@@ -1,12 +1,15 @@
 package indc
 
 import (
-	"github.com/carusyte/stock/model"
 	"log"
 	"math"
 	"reflect"
+
+	"github.com/carusyte/stock/model"
 )
 
+//SMA calculates Simple Moving Average for given values.
+//formula: Y = [M * X + (N-M) * Y'] / N
 func SMA(src []float64, n, m int) []float64 {
 	r := make([]float64, len(src))
 	for x, i := range src {
@@ -25,6 +28,13 @@ func SMA(src []float64, n, m int) []float64 {
 	return r
 }
 
+//EMA calculates exponential moving average for given values.
+//formula: Y = [2*X + (N-1)*Y']/(N+1)
+func EMA(x, pre, n float64) float64 {
+	return (2.*x + (n-1.)*pre) / (n + 1.)
+}
+
+//LLV returns lowest value of given field
 func LLV(src []*model.Quote, field string) float64 {
 	var t reflect.Value
 	for i, s := range src {
@@ -55,6 +65,7 @@ func LLV(src []*model.Quote, field string) float64 {
 	}
 }
 
+//HHV returns highest value of given field
 func HHV(src []*model.Quote, field string) float64 {
 	var t reflect.Value
 	for i, s := range src {

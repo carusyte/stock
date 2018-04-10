@@ -603,12 +603,15 @@ type KlineM struct {
 }
 
 type Indicator struct {
-	Code  string `db:",size:6"`
-	Date  string `db:",size:10"`
-	Klid  int
-	KDJ_K float64
-	KDJ_D float64
-	KDJ_J float64
+	Code      string `db:",size:6"`
+	Date      string `db:",size:10"`
+	Klid      int
+	KDJ_K     float64
+	KDJ_D     float64
+	KDJ_J     float64
+	MACD      float64
+	MACD_diff float64
+	MACD_dea  float64
 	//最后更新日期
 	Udate sql.NullString
 	//最后更新时间

@@ -27,6 +27,7 @@ var (
 	dot   = global.Dot
 )
 
+//CalcIndics calculates various indicators for given stocks.
 func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("calculating indices...")
 	var wg sync.WaitGroup
@@ -105,9 +106,16 @@ func calcWeek(stk *model.Stock, offset int64) {
 		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
-	kdjw := indc.DeftKDJ(qw)
+	indicators := indc.DeftKDJ(qw)
 
-	binsIndc(kdjw, "indicator_w")
+	macd := indc.DeftMACD(qw)
+	for i, idc := range indicators {
+		idc.MACD = macd[i].MACD
+		idc.MACD_diff = macd[i].MACD_diff
+		idc.MACD_dea = macd[i].MACD_dea
+	}
+
+	binsIndc(indicators, "indicator_w")
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
@@ -145,9 +153,16 @@ func calcMonth(stk *model.Stock, offset int64) {
 		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
-	kdjm := indc.DeftKDJ(qm)
+	indicators := indc.DeftKDJ(qm)
 
-	binsIndc(kdjm, "indicator_m")
+	macd := indc.DeftMACD(qm)
+	for i, idc := range indicators {
+		idc.MACD = macd[i].MACD
+		idc.MACD_diff = macd[i].MACD_diff
+		idc.MACD_dea = macd[i].MACD_dea
+	}
+
+	binsIndc(indicators, "indicator_m")
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
@@ -186,9 +201,16 @@ func calcDay(stk *model.Stock, offset int64) {
 		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
-	kdjd := indc.DeftKDJ(qd)
+	indicators := indc.DeftKDJ(qd)
 
-	binsIndc(kdjd, "indicator_d")
+	macd := indc.DeftMACD(qd)
+	for i, idc := range indicators {
+		idc.MACD = macd[i].MACD
+		idc.MACD_diff = macd[i].MACD_diff
+		idc.MACD_dea = macd[i].MACD_dea
+	}
+
+	binsIndc(indicators, "indicator_d")
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
@@ -196,46 +218,79 @@ func calcDay(stk *model.Stock, offset int64) {
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {
-	//FIXME: avoid mysql deadlock issue
-	if len(indc) > 0 {
-		valueStrings := make([]string, 0, len(indc))
-		valueArgs := make([]interface{}, 0, len(indc)*8)
-		var code string
-		for _, i := range indc {
-			d, t := util.TimeStr()
-			i.Udate.Valid = true
-			i.Utime.Valid = true
-			i.Udate.String = d
-			i.Utime.String = t
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, i.Code)
-			valueArgs = append(valueArgs, i.Date)
-			valueArgs = append(valueArgs, i.Klid)
-			valueArgs = append(valueArgs, i.KDJ_K)
-			valueArgs = append(valueArgs, i.KDJ_D)
-			valueArgs = append(valueArgs, i.KDJ_J)
-			valueArgs = append(valueArgs, i.Udate)
-			valueArgs = append(valueArgs, i.Utime)
-			code = i.Code
-		}
-		sklid := indc[0].Klid
-		if len(indc) > 5 {
-			sklid = indc[len(indc)-5].Klid
-		}
+	if len(indc) == 0 {
+		return
+	}
+	retry := conf.Args.DeadlockRetry
+	rt := 0
+
+	valueStrings := make([]string, 0, len(indc))
+	valueArgs := make([]interface{}, 0, len(indc)*11)
+	var code string
+	var e error
+	for _, i := range indc {
+		d, t := util.TimeStr()
+		i.Udate.Valid = true
+		i.Utime.Valid = true
+		i.Udate.String = d
+		i.Utime.String = t
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueArgs = append(valueArgs, i.Code)
+		valueArgs = append(valueArgs, i.Date)
+		valueArgs = append(valueArgs, i.Klid)
+		valueArgs = append(valueArgs, i.KDJ_K)
+		valueArgs = append(valueArgs, i.KDJ_D)
+		valueArgs = append(valueArgs, i.KDJ_J)
+		valueArgs = append(valueArgs, i.MACD)
+		valueArgs = append(valueArgs, i.MACD_diff)
+		valueArgs = append(valueArgs, i.MACD_dea)
+		valueArgs = append(valueArgs, i.Udate)
+		valueArgs = append(valueArgs, i.Utime)
+		code = i.Code
+	}
+	sklid := indc[0].Klid
+	if len(indc) > 5 {
+		sklid = indc[len(indc)-5].Klid
+	}
+
+	for ; rt < retry; rt++ {
 		stmt := fmt.Sprintf("delete from %s where code = ? and klid >= ?", table)
-		_, e := dbmap.Exec(stmt, code, sklid)
+		_, e = dbmap.Exec(stmt, code, sklid)
 		if e != nil {
-			log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
+			}
 		}
-		stmt = fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,udate,utime) VALUES %s on "+
-			"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
-			"(kdj_j),udate=values(udate),utime=values(utime)",
-			table, strings.Join(valueStrings, ","))
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
+	}
+	rt = 0
+	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,macd,macd_diff,macd_dea,udate,utime) VALUES %s on "+
+		"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
+		"(kdj_j),macd=values(macd),macd_diff=values(macd_diff),macd_dea=values(macd_dea),"+
+		"udate=values(udate),utime=values(utime)",
+		table, strings.Join(valueStrings, ","))
+	for ; rt < retry; rt++ {
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
-			log.Panicf("%s failed to overwrite %s\n%+v", code, table, e)
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+			}
 		}
 		c = len(indc)
+		break
 	}
+	if rt >= retry {
+		log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+	}
+
 	return
 }

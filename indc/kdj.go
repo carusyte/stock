@@ -1,10 +1,12 @@
 package indc
 
 import (
-	"github.com/carusyte/stock/model"
 	"math"
+
+	"github.com/carusyte/stock/model"
 )
 
+//KDJ calculates KDJ indicator for the given parameters
 func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	rsv := make([]float64, len(src))
@@ -18,7 +20,7 @@ func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 		hhv := HHV(src[bg:i+1], "High")
 		if llv != hhv {
 			rsv[i] = (s.Close - llv) / (hhv - llv) * 100
-		}else{
+		} else {
 			rsv[i] = 1
 		}
 	}
@@ -32,6 +34,7 @@ func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 	return r
 }
 
+//DeftKDJ calculates KDJ indicator using default parameters (9,3,3)
 func DeftKDJ(src []*model.Quote) []*model.Indicator {
 	return KDJ(src, 9, 3, 3)
 }
