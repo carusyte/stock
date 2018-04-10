@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"github.com/carusyte/stock/model"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -55,29 +56,30 @@ type Arguments struct {
 		Timeout  int64  `mapstructure:"timeout"`
 	}
 	DataSource struct {
-		Kline                 string    `mapstructure:"kline"`
-		KlineValidateSource   string    `mapstructure:"kline_validate_source"`
-		DropInconsistent      bool      `mapstructure:"drop_inconsistent"`
-		KlineFailureRetry     int       `mapstructure:"kline_failure_retry"`
-		Index                 string    `mapstructure:"index"`
-		Industry              string    `mapstructure:"industry"`
-		ThsCookie             string    `mapstructure:"ths_cookie"`
-		WhtURL                string    `mapstructure:"wht_url"`
-		SkipStocks            bool      `mapstructure:"skip_stocks"`
-		SkipFinance           bool      `mapstructure:"skip_finance"`
-		SkipKlineVld          bool      `mapstructure:"skip_kline_vld"`
-		SkipKlinePre          bool      `mapstructure:"skip_kline_pre"`
-		SkipFinancePrediction bool      `mapstructure:"skip_finance_prediction"`
-		SkipXdxr              bool      `mapstructure:"skip_xdxr"`
-		SkipKlines            bool      `mapstructure:"skip_klines"`
-		SkipFsStats           bool      `mapstructure:"skip_fs_stats"`
-		SkipIndices           bool      `mapstructure:"skip_indices"`
-		SkipBasicsUpdate      bool      `mapstructure:"skip_basics_update"`
-		SkipIndexCalculation  bool      `mapstructure:"skip_index_calculation"`
-		SkipFinMark           bool      `mapstructure:"skip_fin_mark"`
-		SampleKdjFeature      bool      `mapstructure:"sample_kdj_feature"`
-		LimitPriceDayLr       []float64 `mapstructure:"limit_price_day_lr"`
-		FeatureScaling        string    `mapstructure:"feature_scaling"`
+		Kline                 string      `mapstructure:"kline"`
+		KlineValidateSource   string      `mapstructure:"kline_validate_source"`
+		DropInconsistent      bool        `mapstructure:"drop_inconsistent"`
+		KlineFailureRetry     int         `mapstructure:"kline_failure_retry"`
+		Index                 string      `mapstructure:"index"`
+		Industry              string      `mapstructure:"industry"`
+		ThsCookie             string      `mapstructure:"ths_cookie"`
+		WhtURL                string      `mapstructure:"wht_url"`
+		SkipStocks            bool        `mapstructure:"skip_stocks"`
+		SkipFinance           bool        `mapstructure:"skip_finance"`
+		SkipKlineVld          bool        `mapstructure:"skip_kline_vld"`
+		SkipKlinePre          bool        `mapstructure:"skip_kline_pre"`
+		SkipFinancePrediction bool        `mapstructure:"skip_finance_prediction"`
+		SkipXdxr              bool        `mapstructure:"skip_xdxr"`
+		SkipKlines            bool        `mapstructure:"skip_klines"`
+		SkipFsStats           bool        `mapstructure:"skip_fs_stats"`
+		SkipIndices           bool        `mapstructure:"skip_indices"`
+		SkipBasicsUpdate      bool        `mapstructure:"skip_basics_update"`
+		SkipIndexCalculation  bool        `mapstructure:"skip_index_calculation"`
+		SkipFinMark           bool        `mapstructure:"skip_fin_mark"`
+		SampleKdjFeature      bool        `mapstructure:"sample_kdj_feature"`
+		KdjSource             model.Rtype `mapstructure:"kdj_source"`
+		LimitPriceDayLr       []float64   `mapstructure:"limit_price_day_lr"`
+		FeatureScaling        string      `mapstructure:"feature_scaling"`
 	}
 	Scorer struct {
 		RunScorer            bool     `mapstructure:"run_scorer"`

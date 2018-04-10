@@ -115,13 +115,13 @@ CREATE TABLE `fin_predict` (
 
 CREATE TABLE `fs_stats` (
   `method` varchar(45) NOT NULL,
+  `fields` varchar(20) NOT NULL,
   `tab` varchar(45) DEFAULT NULL,
-  `fields` varchar(500) DEFAULT NULL,
   `mean` double DEFAULT NULL,
   `std` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`method`)
+  PRIMARY KEY (`method`,`fields`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Feature Scaling Statistics';
 
 CREATE TABLE `grader_stats` (
@@ -1192,6 +1192,18 @@ CREATE TABLE `tradecal` (
   KEY `ix_tradecal_index` (`index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `worst_rec` (
+  `model` varchar(45) NOT NULL,
+  `start_time` varchar(20) NOT NULL,
+  `phase` varchar(10) NOT NULL,
+  `step` int(11) NOT NULL,
+  `uuid` varchar(50) DEFAULT NULL,
+  `xentropy` double DEFAULT NULL,
+  `predict` decimal(6,0) DEFAULT NULL,
+  `truth` decimal(6,0) DEFAULT NULL,
+  PRIMARY KEY (`model`,`start_time`,`step`,`phase`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE `xdxr` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
   `name` varchar(10) DEFAULT NULL COMMENT '股票名称',
@@ -1224,3 +1236,4 @@ CREATE TABLE `xdxr` (
   PRIMARY KEY (`code`,`idx`),
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+

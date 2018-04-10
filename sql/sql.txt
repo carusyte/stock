@@ -568,3 +568,14 @@ FROM
             kline_d
         WHERE
             code IN ('sz399001' , 'sh000001')) t1
+
+-- name: COLLECT_INDICATOR_STANDARDIZATION_STATS
+INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
+SELECT 
+    'standardization', '%[1]s', field, AVG(col), STD(col), DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
+FROM
+    (SELECT 
+        '%[2]s' field, %[2]s col
+    FROM
+        %[1]s 
+	) t1

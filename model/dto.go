@@ -18,6 +18,9 @@ import (
 type DBTab string
 type CYTP string
 
+//Rtype represents reinstatement type
+type Rtype string
+
 const (
 	DAY   CYTP = "D"
 	WEEK  CYTP = "W"
@@ -47,6 +50,12 @@ const (
 	KLINE_MONTH_NR  DBTab = "kline_m_n"
 	KLINE_MONTH_B   DBTab = "kline_m_b"
 	KLINE_60M       DBTab = "kline_60m"
+)
+
+const (
+	Forward  Rtype = "forward"
+	Backward Rtype = "backward"
+	None     Rtype = "none"
 )
 
 //Stock represents basic stock info.

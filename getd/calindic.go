@@ -85,14 +85,24 @@ func calcWeek(stk *model.Stock, offset int64) {
 		util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
 	}
 
+	tab := "kline_w"
+	switch conf.Args.DataSource.KdjSource {
+	case model.Backward:
+		tab = "kline_w_b"
+	case model.None:
+		tab = "kline_w_n"
+	default:
+		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+	}
+
 	var qw []*model.Quote
 	if offset < 0 || !mxw.Valid || mxw.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qw, "select * from kline_w where code = ? order by klid", code)
-		util.CheckErr(err, "Failed to query kline_w for "+code)
+		_, err := dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	} else {
-		_, err := dbmap.Select(&qw, "select * from kline_w where code = ? and klid >= ? "+
-			"order by klid", code, mxw.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, "Failed to query kline_w for "+code)
+		_, err := dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? and klid >= ? "+
+			"order by klid", tab), code, mxw.Int64-HIST_DATA_SIZE-offset)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
 	kdjw := indc.DeftKDJ(qw)
@@ -115,14 +125,24 @@ func calcMonth(stk *model.Stock, offset int64) {
 		util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
 	}
 
+	tab := "kline_m"
+	switch conf.Args.DataSource.KdjSource {
+	case model.Backward:
+		tab = "kline_m_b"
+	case model.None:
+		tab = "kline_m_n"
+	default:
+		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+	}
+
 	var qm []*model.Quote
 	if offset < 0 || !mxm.Valid || mxm.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qm, "select * from kline_m where code = ? order by klid", code)
-		util.CheckErr(err, "Failed to query kline_m for "+code)
+		_, err := dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	} else {
-		_, err := dbmap.Select(&qm, "select * from kline_m where code = ? and klid >= ? "+
-			"order by klid", code, mxm.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, "Failed to query kline_m for "+code)
+		_, err := dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? and klid >= ? "+
+			"order by klid", tab), code, mxm.Int64-HIST_DATA_SIZE-offset)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
 	kdjm := indc.DeftKDJ(qm)
@@ -145,15 +165,25 @@ func calcDay(stk *model.Stock, offset int64) {
 		util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
 	}
 
+	tab := "kline_d"
+	switch conf.Args.DataSource.KdjSource {
+	case model.Backward:
+		tab = "kline_d_b"
+	case model.None:
+		tab = "kline_d_n"
+	default:
+		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+	}
+
 	var qd []*model.Quote
 	if offset < 0 || !mxd.Valid || mxd.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qd, "select code,date,klid,open,high,close,low,volume,amount,xrate from "+
-			"kline_d where code = ? order by klid", code)
-		util.CheckErr(err, "Failed to query kline_d for "+code)
+		_, err := dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
+			"%s where code = ? order by klid", tab), code)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	} else {
-		_, err := dbmap.Select(&qd, "select code,date,klid,open,high,close,low,volume,amount,xrate from "+
-			"kline_d where code = ? and klid >= ? order by klid", code, mxd.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, "Failed to query kline_d for "+code)
+		_, err := dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
+			"%s where code = ? and klid >= ? order by klid", tab), code, mxd.Int64-HIST_DATA_SIZE-offset)
+		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 	}
 
 	kdjd := indc.DeftKDJ(qd)
@@ -166,6 +196,7 @@ func calcDay(stk *model.Stock, offset int64) {
 }
 
 func binsIndc(indc []*model.Indicator, table string) (c int) {
+	//FIXME: avoid mysql deadlock issue
 	if len(indc) > 0 {
 		valueStrings := make([]string, 0, len(indc))
 		valueArgs := make([]interface{}, 0, len(indc)*8)
