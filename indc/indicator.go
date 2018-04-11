@@ -5,8 +5,35 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/montanaflynn/stats"
+
 	"github.com/carusyte/stock/model"
 )
+
+//MA calculates moving average for given values.
+func MA(vals []float64, curIdx, n int) float64 {
+	if curIdx >= len(vals) {
+		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
+	}
+	nu := 0.
+	for i := int(math.Max(0, float64(curIdx-n+1))); i <= curIdx; i++ {
+		nu += vals[i]
+	}
+	return nu / float64(n)
+}
+
+//STD calculates standard deviation for given values.
+func STD(vals []float64, curIdx, n int) float64 {
+	if curIdx >= len(vals) {
+		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
+	}
+	bg := int(math.Max(0, float64(curIdx-n+1)))
+	std, e := stats.StandardDeviation(vals[bg : curIdx+1])
+	if e != nil {
+		log.Panicf("failed to calculate standard deviation: %+v", e)
+	}
+	return std
+}
 
 //SMA calculates Simple Moving Average for given values.
 //formula: Y = [M * X + (N-M) * Y'] / N

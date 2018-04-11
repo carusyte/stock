@@ -87,13 +87,13 @@ func calcWeek(stk *model.Stock, offset int64) {
 	}
 
 	tab := "kline_w"
-	switch conf.Args.DataSource.KdjSource {
+	switch conf.Args.DataSource.IndicatorSource {
 	case model.Backward:
 		tab = "kline_w_b"
 	case model.None:
 		tab = "kline_w_n"
 	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
 	}
 
 	var qw []*model.Quote
@@ -125,6 +125,24 @@ func calcWeek(stk *model.Stock, offset int64) {
 		idc.BIAS2 = bias[i].BIAS2
 		idc.BIAS3 = bias[i].BIAS3
 	}
+	boll := indc.DeftBOLL(qw)
+	for i, idc := range indicators {
+		idc.BOLL_lower = boll[i].BOLL_lower
+		idc.BOLL_lower_c = boll[i].BOLL_lower_c
+		idc.BOLL_lower_h = boll[i].BOLL_lower_h
+		idc.BOLL_lower_l = boll[i].BOLL_lower_l
+		idc.BOLL_lower_o = boll[i].BOLL_lower_o
+		idc.BOLL_mid = boll[i].BOLL_mid
+		idc.BOLL_mid_c = boll[i].BOLL_mid_c
+		idc.BOLL_mid_h = boll[i].BOLL_mid_h
+		idc.BOLL_mid_l = boll[i].BOLL_mid_l
+		idc.BOLL_mid_o = boll[i].BOLL_mid_o
+		idc.BOLL_upper = boll[i].BOLL_upper
+		idc.BOLL_upper_c = boll[i].BOLL_upper_c
+		idc.BOLL_upper_h = boll[i].BOLL_upper_h
+		idc.BOLL_upper_l = boll[i].BOLL_upper_l
+		idc.BOLL_upper_o = boll[i].BOLL_upper_o
+	}
 
 	binsIndc(indicators, "indicator_w")
 
@@ -145,13 +163,13 @@ func calcMonth(stk *model.Stock, offset int64) {
 	}
 
 	tab := "kline_m"
-	switch conf.Args.DataSource.KdjSource {
+	switch conf.Args.DataSource.IndicatorSource {
 	case model.Backward:
 		tab = "kline_m_b"
 	case model.None:
 		tab = "kline_m_n"
 	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
 	}
 
 	var qm []*model.Quote
@@ -183,6 +201,24 @@ func calcMonth(stk *model.Stock, offset int64) {
 		idc.BIAS2 = bias[i].BIAS2
 		idc.BIAS3 = bias[i].BIAS3
 	}
+	boll := indc.DeftBOLL(qm)
+	for i, idc := range indicators {
+		idc.BOLL_lower = boll[i].BOLL_lower
+		idc.BOLL_lower_c = boll[i].BOLL_lower_c
+		idc.BOLL_lower_h = boll[i].BOLL_lower_h
+		idc.BOLL_lower_l = boll[i].BOLL_lower_l
+		idc.BOLL_lower_o = boll[i].BOLL_lower_o
+		idc.BOLL_mid = boll[i].BOLL_mid
+		idc.BOLL_mid_c = boll[i].BOLL_mid_c
+		idc.BOLL_mid_h = boll[i].BOLL_mid_h
+		idc.BOLL_mid_l = boll[i].BOLL_mid_l
+		idc.BOLL_mid_o = boll[i].BOLL_mid_o
+		idc.BOLL_upper = boll[i].BOLL_upper
+		idc.BOLL_upper_c = boll[i].BOLL_upper_c
+		idc.BOLL_upper_h = boll[i].BOLL_upper_h
+		idc.BOLL_upper_l = boll[i].BOLL_upper_l
+		idc.BOLL_upper_o = boll[i].BOLL_upper_o
+	}
 
 	binsIndc(indicators, "indicator_m")
 
@@ -203,13 +239,13 @@ func calcDay(stk *model.Stock, offset int64) {
 	}
 
 	tab := "kline_d"
-	switch conf.Args.DataSource.KdjSource {
+	switch conf.Args.DataSource.IndicatorSource {
 	case model.Backward:
 		tab = "kline_d_b"
 	case model.None:
 		tab = "kline_d_n"
 	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.KdjSource)
+		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
 	}
 
 	var qd []*model.Quote
@@ -242,6 +278,24 @@ func calcDay(stk *model.Stock, offset int64) {
 		idc.BIAS2 = bias[i].BIAS2
 		idc.BIAS3 = bias[i].BIAS3
 	}
+	boll := indc.DeftBOLL(qd)
+	for i, idc := range indicators {
+		idc.BOLL_lower = boll[i].BOLL_lower
+		idc.BOLL_lower_c = boll[i].BOLL_lower_c
+		idc.BOLL_lower_h = boll[i].BOLL_lower_h
+		idc.BOLL_lower_l = boll[i].BOLL_lower_l
+		idc.BOLL_lower_o = boll[i].BOLL_lower_o
+		idc.BOLL_mid = boll[i].BOLL_mid
+		idc.BOLL_mid_c = boll[i].BOLL_mid_c
+		idc.BOLL_mid_h = boll[i].BOLL_mid_h
+		idc.BOLL_mid_l = boll[i].BOLL_mid_l
+		idc.BOLL_mid_o = boll[i].BOLL_mid_o
+		idc.BOLL_upper = boll[i].BOLL_upper
+		idc.BOLL_upper_c = boll[i].BOLL_upper_c
+		idc.BOLL_upper_h = boll[i].BOLL_upper_h
+		idc.BOLL_upper_l = boll[i].BOLL_upper_l
+		idc.BOLL_upper_o = boll[i].BOLL_upper_o
+	}
 
 	binsIndc(indicators, "indicator_d")
 
@@ -256,7 +310,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	}
 	retry := conf.Args.DeadlockRetry
 	rt := 0
-	numFields := 17
+	numFields := 32
 	holders := make([]string, numFields)
 	for i := range holders {
 		holders[i] = "?"
@@ -288,6 +342,21 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		valueArgs = append(valueArgs, i.BIAS1)
 		valueArgs = append(valueArgs, i.BIAS2)
 		valueArgs = append(valueArgs, i.BIAS3)
+		valueArgs = append(valueArgs, i.BOLL_lower)
+		valueArgs = append(valueArgs, i.BOLL_lower_c)
+		valueArgs = append(valueArgs, i.BOLL_lower_h)
+		valueArgs = append(valueArgs, i.BOLL_lower_l)
+		valueArgs = append(valueArgs, i.BOLL_lower_o)
+		valueArgs = append(valueArgs, i.BOLL_mid)
+		valueArgs = append(valueArgs, i.BOLL_mid_c)
+		valueArgs = append(valueArgs, i.BOLL_mid_h)
+		valueArgs = append(valueArgs, i.BOLL_mid_l)
+		valueArgs = append(valueArgs, i.BOLL_mid_o)
+		valueArgs = append(valueArgs, i.BOLL_upper)
+		valueArgs = append(valueArgs, i.BOLL_upper_c)
+		valueArgs = append(valueArgs, i.BOLL_upper_h)
+		valueArgs = append(valueArgs, i.BOLL_upper_l)
+		valueArgs = append(valueArgs, i.BOLL_upper_o)
 		valueArgs = append(valueArgs, i.Udate)
 		valueArgs = append(valueArgs, i.Utime)
 		code = i.Code
@@ -315,11 +384,21 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	}
 	rt = 0
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,macd,macd_diff,macd_dea,"+
-		"rsi1,rsi2,rsi3,bias1,bias2,bias3,udate,utime) VALUES %s on "+
+		"rsi1,rsi2,rsi3,bias1,bias2,bias3,"+
+		"boll_lower,boll_lower_c,boll_lower_h,boll_lower_l,boll_lower_o,"+
+		"boll_mid,boll_mid_c,boll_mid_h,boll_mid_l,boll_mid_o,"+
+		"boll_upper,boll_upper_c,boll_upper_h,boll_upper_l,boll_upper_o,"+
+		"udate,utime) VALUES %s on "+
 		"duplicate key update date=values(date),kdj_k=values(kdj_k),kdj_d=values(kdj_d),kdj_j=values"+
 		"(kdj_j),macd=values(macd),macd_diff=values(macd_diff),macd_dea=values(macd_dea),"+
 		"rsi1=values(rsi1),rsi2=values(rsi2),rsi3=values(rsi3),"+
 		"bias1=values(bias1),bias2=values(bias2),bias3=values(bias3),"+
+		"boll_lower=values(boll_lower),boll_lower_c=values(boll_lower_c),boll_lower_h=values(boll_lower_h),"+
+		"boll_lower_l=values(boll_lower_l),boll_lower_o=values(boll_lower_o),"+
+		"boll_mid=values(boll_mid),boll_mid_c=values(boll_mid_c),boll_mid_h=values(boll_mid_h),"+
+		"boll_mid_l=values(boll_mid_l),boll_mid_o=values(boll_mid_o),"+
+		"boll_upper=values(boll_upper),boll_upper_c=values(boll_upper_c),boll_upper_h=values(boll_upper_h),"+
+		"boll_upper_l=values(boll_upper_l),boll_upper_o=values(boll_upper_o),"+
 		"udate=values(udate),utime=values(utime)",
 		table, strings.Join(valueStrings, ","))
 	for ; rt < retry; rt++ {
@@ -338,6 +417,5 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	if rt >= retry {
 		log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 	}
-
 	return
 }

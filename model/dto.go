@@ -514,6 +514,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+//Quote represents various kline data
 type Quote struct {
 	Type          DBTab
 	Code          string `db:",size:6"`
@@ -550,13 +551,37 @@ type Quote struct {
 	Ma200         sql.NullFloat64
 	Ma250         sql.NullFloat64
 	LrMa5         sql.NullFloat64 `db:"lr_ma5"`
+	LrMa5Open     sql.NullFloat64 `db:"lr_ma5_o"`
+	LrMa5High     sql.NullFloat64 `db:"lr_ma5_h"`
+	LrMa5Low      sql.NullFloat64 `db:"lr_ma5_l"`
 	LrMa10        sql.NullFloat64 `db:"lr_ma10"`
+	LrMa10Open    sql.NullFloat64 `db:"lr_ma10_o"`
+	LrMa10High    sql.NullFloat64 `db:"lr_ma10_h"`
+	LrMa10Low     sql.NullFloat64 `db:"lr_ma10_l"`
 	LrMa20        sql.NullFloat64 `db:"lr_ma20"`
+	LrMa20Open    sql.NullFloat64 `db:"lr_ma20_o"`
+	LrMa20High    sql.NullFloat64 `db:"lr_ma20_h"`
+	LrMa20Low     sql.NullFloat64 `db:"lr_ma20_l"`
 	LrMa30        sql.NullFloat64 `db:"lr_ma30"`
+	LrMa30Open    sql.NullFloat64 `db:"lr_ma30_o"`
+	LrMa30High    sql.NullFloat64 `db:"lr_ma30_h"`
+	LrMa30Low     sql.NullFloat64 `db:"lr_ma30_l"`
 	LrMa60        sql.NullFloat64 `db:"lr_ma60"`
+	LrMa60Open    sql.NullFloat64 `db:"lr_ma60_o"`
+	LrMa60High    sql.NullFloat64 `db:"lr_ma60_h"`
+	LrMa60Low     sql.NullFloat64 `db:"lr_ma60_l"`
 	LrMa120       sql.NullFloat64 `db:"lr_ma120"`
+	LrMa120Open   sql.NullFloat64 `db:"lr_ma120_o"`
+	LrMa120High   sql.NullFloat64 `db:"lr_ma120_h"`
+	LrMa120Low    sql.NullFloat64 `db:"lr_ma120_l"`
 	LrMa200       sql.NullFloat64 `db:"lr_ma200"`
+	LrMa200Open   sql.NullFloat64 `db:"lr_ma200_o"`
+	LrMa200High   sql.NullFloat64 `db:"lr_ma200_h"`
+	LrMa200Low    sql.NullFloat64 `db:"lr_ma200_l"`
 	LrMa250       sql.NullFloat64 `db:"lr_ma250"`
+	LrMa250Open   sql.NullFloat64 `db:"lr_ma250_o"`
+	LrMa250High   sql.NullFloat64 `db:"lr_ma250_h"`
+	LrMa250Low    sql.NullFloat64 `db:"lr_ma250_l"`
 	Vol5          sql.NullFloat64
 	Vol10         sql.NullFloat64
 	Vol20         sql.NullFloat64
@@ -603,21 +628,36 @@ type KlineM struct {
 }
 
 type Indicator struct {
-	Code      string `db:",size:6"`
-	Date      string `db:",size:10"`
-	Klid      int
-	KDJ_K     float64
-	KDJ_D     float64
-	KDJ_J     float64
-	MACD      float64
-	MACD_diff float64
-	MACD_dea  float64
-	RSI1      float64
-	RSI2      float64
-	RSI3      float64
-	BIAS1     float64
-	BIAS2     float64
-	BIAS3     float64
+	Code         string `db:",size:6"`
+	Date         string `db:",size:10"`
+	Klid         int
+	KDJ_K        float64
+	KDJ_D        float64
+	KDJ_J        float64
+	MACD         float64
+	MACD_diff    float64
+	MACD_dea     float64
+	RSI1         float64
+	RSI2         float64
+	RSI3         float64
+	BIAS1        float64
+	BIAS2        float64
+	BIAS3        float64
+	BOLL_mid     float64
+	BOLL_mid_o   float64
+	BOLL_mid_h   float64
+	BOLL_mid_l   float64
+	BOLL_mid_c   float64
+	BOLL_upper   float64
+	BOLL_upper_o float64
+	BOLL_upper_h float64
+	BOLL_upper_l float64
+	BOLL_upper_c float64
+	BOLL_lower   float64
+	BOLL_lower_o float64
+	BOLL_lower_h float64
+	BOLL_lower_l float64
+	BOLL_lower_c float64
 	//最后更新日期
 	Udate sql.NullString
 	//最后更新时间

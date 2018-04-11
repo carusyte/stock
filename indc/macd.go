@@ -17,7 +17,7 @@ func MACD(src []*model.Quote, nshort, nlong, m float64) []*model.Indicator {
 
 		idc.MACD_diff = EMA(s.Close, close, nshort) - EMA(s.Close, close, nlong)
 		idc.MACD_dea = EMA(idc.MACD_diff, diff, m)
-		idc.MACD = 3. * (idc.MACD_diff - idc.MACD_dea)
+		idc.MACD = 2. * (idc.MACD_diff - idc.MACD_dea)
 
 		close = s.Close
 		diff = idc.MACD_diff

@@ -362,151 +362,121 @@ func CalLogReturns(qs []*model.Quote) {
 		if q.Xrate.Valid {
 			q.LrXr.Valid = true
 			if i > 0 && qs[i-1].Xrate.Valid {
-				q.LrXr.Float64 = logReturn(qs[i-1].Xrate.Float64, q.Xrate.Float64, bias)
+				q.LrXr.Float64 = util.LogReturn(qs[i-1].Xrate.Float64, q.Xrate.Float64, bias)
 			}
 		}
 		//calculates LR for MA
 		if q.Ma5.Valid {
-			q.LrMa5.Valid = true
-			if i > 0 && qs[i-1].Ma5.Valid {
-				q.LrMa5.Float64 = logReturn(qs[i-1].Ma5.Float64, q.Ma5.Float64, bias)
-			}
+			q.LrMa5 = sql.NullFloat64{Float64: util.LogReturn(q.Ma5.Float64, q.Close, bias), Valid: true}
+			q.LrMa5Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma5.Float64, q.Open, bias), Valid: true}
+			q.LrMa5High = sql.NullFloat64{Float64: util.LogReturn(q.Ma5.Float64, q.High, bias), Valid: true}
+			q.LrMa5Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma5.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma10.Valid {
-			q.LrMa10.Valid = true
-			if i > 0 && qs[i-1].Ma10.Valid {
-				q.LrMa10.Float64 = logReturn(qs[i-1].Ma10.Float64, q.Ma10.Float64, bias)
-			}
+			q.LrMa10 = sql.NullFloat64{Float64: util.LogReturn(q.Ma10.Float64, q.Close, bias), Valid: true}
+			q.LrMa10Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma10.Float64, q.Open, bias), Valid: true}
+			q.LrMa10High = sql.NullFloat64{Float64: util.LogReturn(q.Ma10.Float64, q.High, bias), Valid: true}
+			q.LrMa10Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma10.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma20.Valid {
-			q.LrMa20.Valid = true
-			if i > 0 && qs[i-1].Ma20.Valid {
-				q.LrMa20.Float64 = logReturn(qs[i-1].Ma20.Float64, q.Ma20.Float64, bias)
-			}
+			q.LrMa20 = sql.NullFloat64{Float64: util.LogReturn(q.Ma20.Float64, q.Close, bias), Valid: true}
+			q.LrMa20Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma20.Float64, q.Open, bias), Valid: true}
+			q.LrMa20High = sql.NullFloat64{Float64: util.LogReturn(q.Ma20.Float64, q.High, bias), Valid: true}
+			q.LrMa20Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma20.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma30.Valid {
-			q.LrMa30.Valid = true
-			if i > 0 && qs[i-1].Ma30.Valid {
-				q.LrMa30.Float64 = logReturn(qs[i-1].Ma30.Float64, q.Ma30.Float64, bias)
-			}
+			q.LrMa30 = sql.NullFloat64{Float64: util.LogReturn(q.Ma30.Float64, q.Close, bias), Valid: true}
+			q.LrMa30Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma30.Float64, q.Open, bias), Valid: true}
+			q.LrMa30High = sql.NullFloat64{Float64: util.LogReturn(q.Ma30.Float64, q.High, bias), Valid: true}
+			q.LrMa30Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma30.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma60.Valid {
-			q.LrMa60.Valid = true
-			if i > 0 && qs[i-1].Ma60.Valid {
-				q.LrMa60.Float64 = logReturn(qs[i-1].Ma60.Float64, q.Ma60.Float64, bias)
-			}
+			q.LrMa60 = sql.NullFloat64{Float64: util.LogReturn(q.Ma60.Float64, q.Close, bias), Valid: true}
+			q.LrMa60Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma60.Float64, q.Open, bias), Valid: true}
+			q.LrMa60High = sql.NullFloat64{Float64: util.LogReturn(q.Ma60.Float64, q.High, bias), Valid: true}
+			q.LrMa60Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma60.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma120.Valid {
-			q.LrMa120.Valid = true
-			if i > 0 && qs[i-1].Ma120.Valid {
-				q.LrMa120.Float64 = logReturn(qs[i-1].Ma120.Float64, q.Ma120.Float64, bias)
-			}
+			q.LrMa120 = sql.NullFloat64{Float64: util.LogReturn(q.Ma120.Float64, q.Close, bias), Valid: true}
+			q.LrMa120Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma120.Float64, q.Open, bias), Valid: true}
+			q.LrMa120High = sql.NullFloat64{Float64: util.LogReturn(q.Ma120.Float64, q.High, bias), Valid: true}
+			q.LrMa120Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma120.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma200.Valid {
-			q.LrMa200.Valid = true
-			if i > 0 && qs[i-1].Ma200.Valid {
-				q.LrMa200.Float64 = logReturn(qs[i-1].Ma200.Float64, q.Ma200.Float64, bias)
-			}
+			q.LrMa200 = sql.NullFloat64{Float64: util.LogReturn(q.Ma200.Float64, q.Close, bias), Valid: true}
+			q.LrMa200Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma200.Float64, q.Open, bias), Valid: true}
+			q.LrMa200High = sql.NullFloat64{Float64: util.LogReturn(q.Ma200.Float64, q.High, bias), Valid: true}
+			q.LrMa200Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma200.Float64, q.Low, bias), Valid: true}
 		}
 		if q.Ma250.Valid {
-			q.LrMa250.Valid = true
-			if i > 0 && qs[i-1].Ma250.Valid {
-				q.LrMa250.Float64 = logReturn(qs[i-1].Ma250.Float64, q.Ma250.Float64, bias)
-			}
+			q.LrMa250 = sql.NullFloat64{Float64: util.LogReturn(q.Ma250.Float64, q.Close, bias), Valid: true}
+			q.LrMa250Open = sql.NullFloat64{Float64: util.LogReturn(q.Ma250.Float64, q.Open, bias), Valid: true}
+			q.LrMa250High = sql.NullFloat64{Float64: util.LogReturn(q.Ma250.Float64, q.High, bias), Valid: true}
+			q.LrMa250Low = sql.NullFloat64{Float64: util.LogReturn(q.Ma250.Float64, q.Low, bias), Valid: true}
 		}
 		bias = 10
 		if q.Volume.Valid {
 			q.LrVol.Valid = true
 			if i > 0 && qs[i-1].Volume.Valid {
-				q.LrVol.Float64 = logReturn(qs[i-1].Volume.Float64, q.Volume.Float64, bias)
+				q.LrVol.Float64 = util.LogReturn(qs[i-1].Volume.Float64, q.Volume.Float64, bias)
 			}
 		}
 		if q.Amount.Valid {
 			q.LrAmt.Valid = true
 			if i > 0 && qs[i-1].Amount.Valid {
-				q.LrAmt.Float64 = logReturn(qs[i-1].Amount.Float64, q.Amount.Float64, bias)
+				q.LrAmt.Float64 = util.LogReturn(qs[i-1].Amount.Float64, q.Amount.Float64, bias)
 			}
 		}
 		//calculates LR for vol MA
-		if q.Vol5.Valid {
-			q.LrVol5.Valid = true
-			if i > 0 && qs[i-1].Vol5.Valid {
-				q.LrVol5.Float64 = logReturn(qs[i-1].Vol5.Float64, q.Vol5.Float64, bias)
+		if q.Vol5.Valid && q.Volume.Valid {
+			q.LrVol5 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol5.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol10.Valid {
-			q.LrVol10.Valid = true
-			if i > 0 && qs[i-1].Vol10.Valid {
-				q.LrVol10.Float64 = logReturn(qs[i-1].Vol10.Float64, q.Vol10.Float64, bias)
+		if q.Vol10.Valid && q.Volume.Valid {
+			q.LrVol10 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol10.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol20.Valid {
-			q.LrVol20.Valid = true
-			if i > 0 && qs[i-1].Vol20.Valid {
-				q.LrVol20.Float64 = logReturn(qs[i-1].Vol20.Float64, q.Vol20.Float64, bias)
+		if q.Vol20.Valid && q.Volume.Valid {
+			q.LrVol20 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol20.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol30.Valid {
-			q.LrVol30.Valid = true
-			if i > 0 && qs[i-1].Vol30.Valid {
-				q.LrVol30.Float64 = logReturn(qs[i-1].Vol30.Float64, q.Vol30.Float64, bias)
+		if q.Vol30.Valid && q.Volume.Valid {
+			q.LrVol30 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol30.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol60.Valid {
-			q.LrVol60.Valid = true
-			if i > 0 && qs[i-1].Vol60.Valid {
-				q.LrVol60.Float64 = logReturn(qs[i-1].Vol60.Float64, q.Vol60.Float64, bias)
+		if q.Vol60.Valid && q.Volume.Valid {
+			q.LrVol60 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol60.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol120.Valid {
-			q.LrVol120.Valid = true
-			if i > 0 && qs[i-1].Vol120.Valid {
-				q.LrVol120.Float64 = logReturn(qs[i-1].Vol120.Float64, q.Vol120.Float64, bias)
+		if q.Vol120.Valid && q.Volume.Valid {
+			q.LrVol120 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol120.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol200.Valid {
-			q.LrVol200.Valid = true
-			if i > 0 && qs[i-1].Vol200.Valid {
-				q.LrVol200.Float64 = logReturn(qs[i-1].Vol200.Float64, q.Vol200.Float64, bias)
+		if q.Vol200.Valid && q.Volume.Valid {
+			q.LrVol200 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol200.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
-		if q.Vol250.Valid {
-			q.LrVol250.Valid = true
-			if i > 0 && qs[i-1].Vol250.Valid {
-				q.LrVol250.Float64 = logReturn(qs[i-1].Vol250.Float64, q.Vol250.Float64, bias)
+		if q.Vol250.Valid && q.Volume.Valid {
+			q.LrVol250 = sql.NullFloat64{
+				Float64: util.LogReturn(q.Vol250.Float64, q.Volume.Float64, bias),
+				Valid:   true,
 			}
 		}
 	}
-}
-
-//logReturn calculates log return based on previous value, current value and bias.
-// bias is only used either previous or current value is not greater than 0.
-func logReturn(prev, cur, bias float64) float64 {
-	if bias <= 0 {
-		log.Panicf("bias %f must be greater than 0.", bias)
-	}
-	if prev == 0 {
-		return 0
-		// if prev == 0 && cur == 0 {
-		// 	return 0
-		// } else if prev == 0 {
-		// 	if cur > 0 {
-		// 		return math.Log((cur + bias) / bias)
-		// 	}
-		// 	return math.Log(bias / (math.Abs(cur) + bias))
-	} else if cur == 0 {
-		if prev > 0 {
-			return math.Log(bias / (prev + bias))
-		}
-		return math.Log((math.Abs(prev) + bias) / bias)
-	} else if prev < 0 && cur < 0 {
-		return math.Log(math.Abs(prev) / math.Abs(cur))
-	} else if prev < 0 {
-		return math.Log((cur + math.Abs(prev) + bias) / bias)
-	} else if cur < 0 {
-		return math.Log(bias / (prev + math.Abs(cur) + bias))
-	}
-	return math.Log(cur / prev)
 }
 
 func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
@@ -742,7 +712,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
-	numFields := 59
+	numFields := 83
 	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
@@ -791,13 +761,37 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		valueArgs = append(valueArgs, q.Ma200)
 		valueArgs = append(valueArgs, q.Ma250)
 		valueArgs = append(valueArgs, q.LrMa5)
+		valueArgs = append(valueArgs, q.LrMa5Open)
+		valueArgs = append(valueArgs, q.LrMa5High)
+		valueArgs = append(valueArgs, q.LrMa5Low)
 		valueArgs = append(valueArgs, q.LrMa10)
+		valueArgs = append(valueArgs, q.LrMa10Open)
+		valueArgs = append(valueArgs, q.LrMa10High)
+		valueArgs = append(valueArgs, q.LrMa10Low)
 		valueArgs = append(valueArgs, q.LrMa20)
+		valueArgs = append(valueArgs, q.LrMa20Open)
+		valueArgs = append(valueArgs, q.LrMa20High)
+		valueArgs = append(valueArgs, q.LrMa20Low)
 		valueArgs = append(valueArgs, q.LrMa30)
+		valueArgs = append(valueArgs, q.LrMa30Open)
+		valueArgs = append(valueArgs, q.LrMa30High)
+		valueArgs = append(valueArgs, q.LrMa30Low)
 		valueArgs = append(valueArgs, q.LrMa60)
+		valueArgs = append(valueArgs, q.LrMa60Open)
+		valueArgs = append(valueArgs, q.LrMa60High)
+		valueArgs = append(valueArgs, q.LrMa60Low)
 		valueArgs = append(valueArgs, q.LrMa120)
+		valueArgs = append(valueArgs, q.LrMa120Open)
+		valueArgs = append(valueArgs, q.LrMa120High)
+		valueArgs = append(valueArgs, q.LrMa120Low)
 		valueArgs = append(valueArgs, q.LrMa200)
+		valueArgs = append(valueArgs, q.LrMa200Open)
+		valueArgs = append(valueArgs, q.LrMa200High)
+		valueArgs = append(valueArgs, q.LrMa200Low)
 		valueArgs = append(valueArgs, q.LrMa250)
+		valueArgs = append(valueArgs, q.LrMa250Open)
+		valueArgs = append(valueArgs, q.LrMa250High)
+		valueArgs = append(valueArgs, q.LrMa250Low)
 		valueArgs = append(valueArgs, q.Vol5)
 		valueArgs = append(valueArgs, q.Vol10)
 		valueArgs = append(valueArgs, q.Vol20)
@@ -838,7 +832,14 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 		"volume,amount,lr_amt,xrate,lr_xr,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
 		"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
-		"lr_ma5,lr_ma10,lr_ma20,lr_ma30,lr_ma60,lr_ma120,lr_ma200,lr_ma250,"+
+		"lr_ma5,lr_ma5_o,lr_ma5_h,lr_ma5_l,"+
+		"lr_ma10,lr_ma10_o,lr_ma10_h,lr_ma10_l,"+
+		"lr_ma20,lr_ma20_o,lr_ma20_h,lr_ma20_l,"+
+		"lr_ma30,lr_ma30_o,lr_ma30_h,lr_ma30_l,"+
+		"lr_ma60,lr_ma60_o,lr_ma60_h,lr_ma60_l,"+
+		"lr_ma120,lr_ma120_o,lr_ma120_h,lr_ma120_l,"+
+		"lr_ma200,lr_ma200_o,lr_ma200_h,lr_ma200_l,"+
+		"lr_ma250,lr_ma250_o,lr_ma250_h,lr_ma250_l,"+
 		"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
 		"lr_vol5,lr_vol10,lr_vol20,lr_vol30,lr_vol60,lr_vol120,lr_vol200,lr_vol250,"+
 		"udate,utime) "+
@@ -852,9 +853,15 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
 		"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
 		"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
-		"ma250=values(ma250),lr_ma5=values(lr_ma5),lr_ma10=values(lr_ma10),lr_ma20=values(lr_ma20),"+
-		"lr_ma30=values(lr_ma30),lr_ma60=values(lr_ma60),lr_ma120=values(lr_ma120),"+
-		"lr_ma200=values(lr_ma200),lr_ma250=values(lr_ma250),"+
+		"ma250=values(ma250),"+
+		"lr_ma5=values(lr_ma5),lr_ma5_o=values(lr_ma5_o),lr_ma5_h=values(lr_ma5_h),lr_ma5_l=values(lr_ma5_l),"+
+		"lr_ma10=values(lr_ma10),lr_ma10_o=values(lr_ma10_o),lr_ma10_h=values(lr_ma10_h),lr_ma10_l=values(lr_ma10_l),"+
+		"lr_ma20=values(lr_ma20),lr_ma20_o=values(lr_ma20_o),lr_ma20_h=values(lr_ma20_h),lr_ma20_l=values(lr_ma20_l),"+
+		"lr_ma30=values(lr_ma30),lr_ma30_o=values(lr_ma30_o),lr_ma30_h=values(lr_ma30_h),lr_ma30_l=values(lr_ma30_l),"+
+		"lr_ma60=values(lr_ma60),lr_ma60_o=values(lr_ma60_o),lr_ma60_h=values(lr_ma60_h),lr_ma60_l=values(lr_ma60_l),"+
+		"lr_ma120=values(lr_ma120),lr_ma120_o=values(lr_ma120_o),lr_ma120_h=values(lr_ma120_h),lr_ma120_l=values(lr_ma120_l),"+
+		"lr_ma200=values(lr_ma200),lr_ma200_o=values(lr_ma200_o),lr_ma200_h=values(lr_ma200_h),lr_ma200_l=values(lr_ma200_l),"+
+		"lr_ma250=values(lr_ma250),lr_ma250_o=values(lr_ma250_o),lr_ma250_h=values(lr_ma250_h),lr_ma250_l=values(lr_ma250_l),"+
 		"vol5=values(vol5),vol10=values(vol10),vol20=values(vol20),"+
 		"vol30=values(vol30),vol60=values(vol60),vol120=values(vol120),vol200=values(vol200),"+
 		"vol250=values(vol250),lr_vol5=values(lr_vol5),lr_vol10=values(lr_vol10),lr_vol20=values(lr_vol20),"+

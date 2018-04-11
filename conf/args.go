@@ -77,7 +77,7 @@ type Arguments struct {
 		SkipIndexCalculation  bool        `mapstructure:"skip_index_calculation"`
 		SkipFinMark           bool        `mapstructure:"skip_fin_mark"`
 		SampleKdjFeature      bool        `mapstructure:"sample_kdj_feature"`
-		KdjSource             model.Rtype `mapstructure:"kdj_source"`
+		IndicatorSource       model.Rtype `mapstructure:"indicator_source"`
 		LimitPriceDayLr       []float64   `mapstructure:"limit_price_day_lr"`
 		FeatureScaling        string      `mapstructure:"feature_scaling"`
 	}
