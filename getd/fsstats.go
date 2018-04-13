@@ -48,12 +48,12 @@ func CollectFsStats() {
 	tabs := []string{"indicator_d"}
 	fields = []string{
 		"KDJ_K", "KDJ_D", "KDJ_J",
-		"MACD", "MACD_DIFF", "MACD_DEA",
+		"MACD", "MACD_diff", "MACD_dea",
 		"RSI1", "RSI2", "RSI3",
 		"BIAS1", "BIAS2", "BIAS3",
-		"lower", "lower_o", "lower_h", "lower_l", "lower_c",
-		"mid", "mid_o", "mid_h", "mid_l", "mid_c",
-		"upper", "upper_o", "upper_h", "upper_l", "upper_c",
+		"BOLL_lower", "BOLL_lower_o", "BOLL_lower_h", "BOLL_lower_l", "BOLL_lower_c",
+		"BOLL_mid", "BOLL_mid_o", "BOLL_mid_h", "BOLL_mid_l", "BOLL_mid_c",
+		"BOLL_upper", "BOLL_upper_o", "BOLL_upper_h", "BOLL_upper_l", "BOLL_upper_c",
 	}
 	for _, t := range tabs {
 		for _, f := range fields {

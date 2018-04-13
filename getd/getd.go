@@ -100,7 +100,7 @@ func Get() {
 
 	// Add indices pending to be calculated
 	for _, idx := range sucIdx {
-		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
+		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name, Source: idx.Src})
 	}
 	if !conf.Args.DataSource.SkipIndexCalculation {
 		stci := time.Now()

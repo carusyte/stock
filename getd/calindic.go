@@ -1,7 +1,6 @@
 package getd
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"runtime"
@@ -77,34 +76,24 @@ func doCalcIndices(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mod
 
 func calcWeek(stk *model.Stock, offset int64) {
 	var (
-		mxw  sql.NullInt64
 		err  error
 		code = stk.Code
 	)
-	if offset >= 0 {
-		mxw, err = dbmap.SelectNullInt("select max(klid) from indicator_w where code=?", code)
-		util.CheckErr(err, "failed to query max klid in indicator_w for "+code)
-	}
-
 	tab := "kline_w"
-	switch conf.Args.DataSource.IndicatorSource {
-	case model.Backward:
-		tab = "kline_w_b"
-	case model.None:
-		tab = "kline_w_n"
-	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+	if len(stk.Code) < 8 { // indices can only fetch from forward table
+		switch conf.Args.DataSource.IndicatorSource {
+		case model.Backward:
+			tab = "kline_w_b"
+		case model.None:
+			tab = "kline_w_n"
+		default:
+			panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+		}
 	}
 
 	var qw []*model.Quote
-	if offset < 0 || !mxw.Valid || mxw.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	} else {
-		_, err := dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? and klid >= ? "+
-			"order by klid", tab), code, mxw.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	}
+	_, err = dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 
 	indicators := indc.DeftKDJ(qw)
 	macd := indc.DeftMACD(qw)
@@ -153,34 +142,25 @@ func calcWeek(stk *model.Stock, offset int64) {
 
 func calcMonth(stk *model.Stock, offset int64) {
 	var (
-		mxm  sql.NullInt64
 		err  error
 		code = stk.Code
 	)
-	if offset >= 0 {
-		mxm, err = dbmap.SelectNullInt("select max(klid) from indicator_m where code=?", code)
-		util.CheckErr(err, "failed to query max klid in indicator_m for "+code)
-	}
 
 	tab := "kline_m"
-	switch conf.Args.DataSource.IndicatorSource {
-	case model.Backward:
-		tab = "kline_m_b"
-	case model.None:
-		tab = "kline_m_n"
-	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+	if len(stk.Code) < 8 { // indices can only fetch from forward table
+		switch conf.Args.DataSource.IndicatorSource {
+		case model.Backward:
+			tab = "kline_m_b"
+		case model.None:
+			tab = "kline_m_n"
+		default:
+			panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+		}
 	}
 
 	var qm []*model.Quote
-	if offset < 0 || !mxm.Valid || mxm.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	} else {
-		_, err := dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? and klid >= ? "+
-			"order by klid", tab), code, mxm.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	}
+	_, err = dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 
 	indicators := indc.DeftKDJ(qm)
 	macd := indc.DeftMACD(qm)
@@ -229,35 +209,26 @@ func calcMonth(stk *model.Stock, offset int64) {
 
 func calcDay(stk *model.Stock, offset int64) {
 	var (
-		mxd  sql.NullInt64
 		err  error
 		code = stk.Code
 	)
-	if offset >= 0 {
-		mxd, err = dbmap.SelectNullInt("select max(klid) from indicator_d where code=?", code)
-		util.CheckErr(err, "failed to query max klid in indicator_d for "+code)
-	}
 
 	tab := "kline_d"
-	switch conf.Args.DataSource.IndicatorSource {
-	case model.Backward:
-		tab = "kline_d_b"
-	case model.None:
-		tab = "kline_d_n"
-	default:
-		panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+	if len(stk.Code) < 8 { // indices can only fetch from forward table
+		switch conf.Args.DataSource.IndicatorSource {
+		case model.Backward:
+			tab = "kline_d_b"
+		case model.None:
+			tab = "kline_d_n"
+		default:
+			panic("undefined reinstatement type:" + conf.Args.DataSource.IndicatorSource)
+		}
 	}
 
 	var qd []*model.Quote
-	if offset < 0 || !mxd.Valid || mxd.Int64-offset-HIST_DATA_SIZE <= 0 {
-		_, err := dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
-			"%s where code = ? order by klid", tab), code)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	} else {
-		_, err := dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
-			"%s where code = ? and klid >= ? order by klid", tab), code, mxd.Int64-HIST_DATA_SIZE-offset)
-		util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
-	}
+	_, err = dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
+		"%s where code = ? order by klid", tab), code)
+	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 
 	indicators := indc.DeftKDJ(qd)
 	macd := indc.DeftMACD(qd)

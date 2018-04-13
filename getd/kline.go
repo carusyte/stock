@@ -329,31 +329,31 @@ func CalLogReturns(qs []*model.Quote) {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if q.Lr.Float64 < b {
-				log.Printf("%s %v %s %d lr below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
 				q.Lr.Float64 = b
 			} else if q.Lr.Float64 > t {
-				log.Printf("%s %v %s %d lr exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
 				q.Lr.Float64 = t
 			}
 			if q.LrHigh.Float64 < b {
-				log.Printf("%s %v %s %d lr_h below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_h below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
 				q.LrHigh.Float64 = b
 			} else if q.LrHigh.Float64 > t {
-				log.Printf("%s %v %s %d lr_h exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_h exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
 				q.LrHigh.Float64 = t
 			}
 			if q.LrOpen.Float64 < b {
-				log.Printf("%s %v %s %d lr_o below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_o below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
 				q.LrOpen.Float64 = b
 			} else if q.LrOpen.Float64 > t {
-				log.Printf("%s %v %s %d lr_o exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_o exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
 				q.LrOpen.Float64 = t
 			}
 			if q.LrLow.Float64 < b {
-				log.Printf("%s %v %s %d lr_l below lower limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_l below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
 				q.LrLow.Float64 = b
 			} else if q.LrLow.Float64 > t {
-				log.Printf("%s %v %s %d lr_l exceeds upper limit %f, truncated", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_l exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
 				q.LrLow.Float64 = t
 			}
 		}
