@@ -1155,3 +1155,15 @@ type GraderStats struct {
 	Udate     sql.NullString
 	Utime     sql.NullString
 }
+
+//XCorlTrn represents cross correlation training samples.
+type XCorlTrn struct {
+	Code  string
+	Klid  int
+	Date  string
+	Rcode string
+	Corl  float64
+	Flag  sql.NullString
+	Udate sql.NullString
+	Utime sql.NullString
+}

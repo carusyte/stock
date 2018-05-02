@@ -98,6 +98,14 @@ func Get() {
 		log.Printf("skipped updating basics table")
 	}
 
+	if !conf.Args.DataSource.SkipXCorl {
+		s := time.Now()
+		stks = CalXCorl(stks)
+		StopWatch("XCORL", s)
+	} else {
+		log.Printf("skipped cross correlation calculation")
+	}
+
 	// Add indices pending to be calculated
 	for _, idx := range sucIdx {
 		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name, Source: idx.Src})
