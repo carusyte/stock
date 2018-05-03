@@ -1,6 +1,7 @@
 package getd
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"runtime"
@@ -53,13 +54,72 @@ func CalXCorl(stocks *model.Stocks) (rstks *model.Stocks) {
 	return
 }
 
-func sampXCorlTrn(code string, wg *sync.WaitGroup, wf *chan int) {
+func sampXCorlTrn(code string, wg *sync.WaitGroup, wf *chan int, out chan *xCorlTrnDBJob) {
 	defer func() {
 		wg.Done()
 		<-*wf
 	}()
 	//TODO realize me
+	var err error
 	prior := conf.Args.Sampler.PriorLength
+	resample := conf.Args.Sampler.Resample
+	span := conf.Args.Sampler.XCorlSpan
+	shift := conf.Args.Sampler.XCorlShift
+	// keep track of latest selected klid;
+	var lxc *model.XCorlTrn
+	if resample == 0 {
+		err = dbmap.SelectOne(&lxc, `select distinct klid from xcorl_trn where code = ? `+
+			`order by klid desc limit 1`, code)
+	} else if resample > 0 {
+		err = dbmap.SelectOne(&lxc,
+			`select distinct klid from xcorl_trn where code = ? `+
+				`order by klid desc limit 1 offset ?`, code, resample)
+	}
+	if err != nil && sql.ErrNoRows != err {
+		log.Printf(`%s failed to query last xcorl_trn, %+v`, code, err)
+		return
+	}
+	qryKlid := ""
+	eklid := span
+	if lxc != nil {
+		qryKlid = fmt.Sprintf(" and klid > %d", lxc.Klid)
+		eklid += lxc.Klid
+	} else if prior > 0 {
+		qryKlid = fmt.Sprintf(" and klid > %d", prior-1)
+		eklid += prior - 1
+	}
+	qryKlid += fmt.Sprintf(" and klid <= %d", eklid)
+	// use backward reinstated kline
+	query, e := global.Dot.Raw("QUERY_BWR_DAILY")
+	if e != nil {
+		log.Printf(`%s failed to load sql QUERY_BWR_DAILY, %+v`, code, err)
+		return
+	}
+	query = fmt.Sprintf(query, qryKlid)
+	var klhist []*model.Quote
+	_, err = dbmap.Select(&klhist, query, code)
+	if err != nil {
+		if sql.ErrNoRows != err {
+			log.Printf(`%s failed to load kline hist data, %+v`, code, err)
+			return
+		}
+		log.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
+		return
+	}
+
+	if len(klhist) < span {
+		log.Printf("%s insufficient data for xcorl_trn sampling: %d, %d required",
+			code, len(klhist), span)
+		return
+	}
+	//TODO: query reference security kline_d_b with shifted matching dates & calculate correlation
+	var r []*model.KeyPoint
+	r, err = grader.sample(code, frame, klhist)
+	if err != nil {
+		return
+	}
+	chkpts[frame] <- r
+	log.Printf("%s xcorl_trn sampled: %d", code, len(r))
 }
 
 func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *sync.WaitGroup) {

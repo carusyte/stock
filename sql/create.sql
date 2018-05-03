@@ -1525,3 +1525,14 @@ CREATE TABLE `xdxr` (
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `xcorl_trn` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `rcode` varchar(8) NOT NULL,
+  `corl` double DEFAULT NULL,
+  `flag` varchar(20) DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL,
+  `utime` varchar(8) DEFAULT NULL,
+  PRIMARY KEY (`code`,`date`,`klid`,`rcode`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
