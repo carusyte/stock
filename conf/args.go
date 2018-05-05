@@ -143,6 +143,22 @@ func init() {
 	//viper.OnConfigChange(func(e fsnotify.Event) {
 	//	fmt.Println("Config file changed:", e.Name)
 	//})
+	checkConfig()
+}
+
+func checkConfig() {
+	shift := Args.Sampler.XCorlShift
+	if shift < 0 {
+		logrus.Panicf("Sampler.XCorlShift must be >= 0, but is %d", shift)
+	}
+	prior := Args.Sampler.PriorLength
+	if prior < 0 {
+		logrus.Panicf("Sampler.PriorLength must be >= 0, but is %d", prior)
+	}
+	if shift > prior {
+		logrus.Panicf(`invalid configuration setting, Sampler.PriorLength (%d) greater than `+
+			`Sampler.XCorlShift (%d)`, prior, shift)
+	}
 }
 
 func setDefaults() {

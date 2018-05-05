@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -308,59 +309,75 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 
 //update to database
 func saveXdxrs(xdxrs []*model.Xdxr) {
-	if len(xdxrs) > 0 {
-		code := xdxrs[0].Code
-		valueStrings := make([]string, 0, len(xdxrs))
-		valueArgs := make([]interface{}, 0, len(xdxrs)*27)
-		for _, e := range xdxrs {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"?, ?, ?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, e.Code)
-			valueArgs = append(valueArgs, e.Name)
-			valueArgs = append(valueArgs, e.Idx)
-			valueArgs = append(valueArgs, e.NoticeDate)
-			valueArgs = append(valueArgs, e.ReportYear)
-			valueArgs = append(valueArgs, e.BoardDate)
-			valueArgs = append(valueArgs, e.GmsDate)
-			valueArgs = append(valueArgs, e.ImplDate)
-			valueArgs = append(valueArgs, e.Plan)
-			valueArgs = append(valueArgs, e.Divi)
-			valueArgs = append(valueArgs, e.DiviAtx)
-			valueArgs = append(valueArgs, e.DiviEndDate)
-			valueArgs = append(valueArgs, e.SharesAllot)
-			valueArgs = append(valueArgs, e.SharesAllotDate)
-			valueArgs = append(valueArgs, e.SharesCvt)
-			valueArgs = append(valueArgs, e.SharesCvtDate)
-			valueArgs = append(valueArgs, e.RegDate)
-			valueArgs = append(valueArgs, e.XdxrDate)
-			valueArgs = append(valueArgs, e.PayoutDate)
-			valueArgs = append(valueArgs, e.Progress)
-			valueArgs = append(valueArgs, e.Dpr)
-			valueArgs = append(valueArgs, e.Dyr)
-			valueArgs = append(valueArgs, e.DiviTarget)
-			valueArgs = append(valueArgs, e.SharesBase)
-			valueArgs = append(valueArgs, e.EndTrdDate)
-			valueArgs = append(valueArgs, e.Udate)
-			valueArgs = append(valueArgs, e.Utime)
+	if len(xdxrs) == 0 {
+		return
+	}
+	retry := conf.Args.DeadlockRetry
+	rt := 0
+	code := xdxrs[0].Code
+	valueStrings := make([]string, 0, len(xdxrs))
+	valueArgs := make([]interface{}, 0, len(xdxrs)*27)
+	for _, e := range xdxrs {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
+			"?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueArgs = append(valueArgs, e.Code)
+		valueArgs = append(valueArgs, e.Name)
+		valueArgs = append(valueArgs, e.Idx)
+		valueArgs = append(valueArgs, e.NoticeDate)
+		valueArgs = append(valueArgs, e.ReportYear)
+		valueArgs = append(valueArgs, e.BoardDate)
+		valueArgs = append(valueArgs, e.GmsDate)
+		valueArgs = append(valueArgs, e.ImplDate)
+		valueArgs = append(valueArgs, e.Plan)
+		valueArgs = append(valueArgs, e.Divi)
+		valueArgs = append(valueArgs, e.DiviAtx)
+		valueArgs = append(valueArgs, e.DiviEndDate)
+		valueArgs = append(valueArgs, e.SharesAllot)
+		valueArgs = append(valueArgs, e.SharesAllotDate)
+		valueArgs = append(valueArgs, e.SharesCvt)
+		valueArgs = append(valueArgs, e.SharesCvtDate)
+		valueArgs = append(valueArgs, e.RegDate)
+		valueArgs = append(valueArgs, e.XdxrDate)
+		valueArgs = append(valueArgs, e.PayoutDate)
+		valueArgs = append(valueArgs, e.Progress)
+		valueArgs = append(valueArgs, e.Dpr)
+		valueArgs = append(valueArgs, e.Dyr)
+		valueArgs = append(valueArgs, e.DiviTarget)
+		valueArgs = append(valueArgs, e.SharesBase)
+		valueArgs = append(valueArgs, e.EndTrdDate)
+		valueArgs = append(valueArgs, e.Udate)
+		valueArgs = append(valueArgs, e.Utime)
+	}
+	stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,idx,notice_date,report_year,board_date,"+
+		"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt,"+
+		"shares_cvt_date,reg_date,xdxr_date,payout_date,progress,dpr,"+
+		"dyr,divi_target,shares_base,end_trddate,udate,utime) VALUES %s "+
+		"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values"+
+		"(report_year),board_date=values"+
+		"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
+		"divi=values(divi),divi_atx=values(divi_atx),divi_end_date=values"+
+		"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values"+
+		"(shares_allot_date),shares_cvt=values"+
+		"(shares_cvt),shares_cvt_date=values(shares_cvt_date),reg_date=values(reg_date),"+
+		"xdxr_date=values"+
+		"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
+		"(dpr),dyr=values(dyr),divi_target=values(divi_target),"+
+		"shares_base=values(shares_base),end_trddate=values(end_trddate),udate=values(udate),utime=values(utime)",
+		strings.Join(valueStrings, ","))
+	for ; rt < retry; rt++ {
+		_, e := global.Dbmap.Exec(stmt, valueArgs...)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to bulk update xdxr\n%+v", code, e)
+			}
 		}
-		stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,idx,notice_date,report_year,board_date,"+
-			"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt,"+
-			"shares_cvt_date,reg_date,xdxr_date,payout_date,progress,dpr,"+
-			"dyr,divi_target,shares_base,end_trddate,udate,utime) VALUES %s "+
-			"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values"+
-			"(report_year),board_date=values"+
-			"(board_date),gms_date=values(gms_date),impl_date=values(impl_date),plan=values(plan),"+
-			"divi=values(divi),divi_atx=values(divi_atx),divi_end_date=values"+
-			"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values"+
-			"(shares_allot_date),shares_cvt=values"+
-			"(shares_cvt),shares_cvt_date=values(shares_cvt_date),reg_date=values(reg_date),"+
-			"xdxr_date=values"+
-			"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
-			"(dpr),dyr=values(dyr),divi_target=values(divi_target),"+
-			"shares_base=values(shares_base),end_trddate=values(end_trddate),udate=values(udate),utime=values(utime)",
-			strings.Join(valueStrings, ","))
-		_, err := global.Dbmap.Exec(stmt, valueArgs...)
-		util.CheckErr(err, code+": failed to bulk update xdxr")
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to bulk update xdxr, too much deadlock", code)
 	}
 }
 

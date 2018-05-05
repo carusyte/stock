@@ -579,3 +579,35 @@ FROM
     FROM
         %[1]s 
 	) t1
+
+-- name: QUERY_BWR_DAILY_4_XCORL_TRN
+SELECT 
+    t.code,
+    t.date,
+    t.klid,
+    t.open,
+    t.high,
+    t.close,
+    t.low,
+    t.volume,
+    t.amount,
+    t.xrate,
+    t.varate,
+    t.varate_rgl,
+    t.lr,
+    t.udate,
+    t.utime
+FROM
+    kline_d_b t
+        INNER JOIN
+    (SELECT 
+        code, COUNT(*) cnt
+    FROM
+        kline_d_b
+    WHERE
+        code <> ? AND date IN (%[1]s)
+    GROUP BY code
+    HAVING cnt = %[2]d) f USING (code)
+WHERE
+    t.date IN (%[1]s)
+ORDER BY code , klid
