@@ -4,7 +4,6 @@
 package main
 
 import (
-	"github.com/carusyte/stock/getd"
 	"flag"
 	"fmt"
 	"io"
@@ -323,8 +322,8 @@ func newKlinem() *model.KlineM {
 
 func batchInsert(code string, klinesw []*model.KlineW, klinesm []*model.KlineM,
 	indc []*model.Indicator, indcw []*model.IndicatorW, indcm []*model.IndicatorM) {
-	cklw := binsKlw(klinesw)
-	cklm := binsKlm(klinesm)
+	// cklw := binsKlw(klinesw)
+	// cklm := binsKlm(klinesm)
 	// cindc := getd.binsIndc(kdjw, "indicator_d")
 	// cindw := getd.binsIndc(kdjw, "indicator_w")
 	// cindm := getd.binsIndc(kdjw, "indicator_m")

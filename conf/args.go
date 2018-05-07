@@ -63,6 +63,8 @@ type Arguments struct {
 		Index                 string      `mapstructure:"index"`
 		Industry              string      `mapstructure:"industry"`
 		ThsCookie             string      `mapstructure:"ths_cookie"`
+		ThsConcurrency        int         `mapstructure:"ths_concurrency"`
+		ThsFailureKeyword     string      `mapstructure:"ths_failure_keyword"`
 		WhtURL                string      `mapstructure:"wht_url"`
 		SkipStocks            bool        `mapstructure:"skip_stocks"`
 		SkipFinance           bool        `mapstructure:"skip_finance"`

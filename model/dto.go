@@ -1167,3 +1167,11 @@ type XCorlTrn struct {
 	Udate sql.NullString
 	Utime sql.NullString
 }
+
+func (x *XCorlTrn) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}

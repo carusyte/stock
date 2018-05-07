@@ -69,7 +69,11 @@ func getIndustry(stocks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	rstks := new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < conf.Args.Concurrency; i++ {
+	pl := conf.Args.Concurrency
+	if conf.Args.DataSource.Industry == conf.THS {
+		pl = conf.Args.DataSource.ThsConcurrency
+	}
+	for i := 0; i < pl; i++ {
 		wg.Add(1)
 		go doGetIndustry(chstk, chrstk, &wg)
 	}

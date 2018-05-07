@@ -23,6 +23,11 @@ import (
 	"golang.org/x/text/transform"
 )
 
+type xdxrDBJob struct {
+	stock *model.Stock
+	xdxr  []*model.Xdxr
+}
+
 func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting XDXR info...")
 	var wg sync.WaitGroup
@@ -30,7 +35,7 @@ func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < global.MAX_CONCURRENCY; i++ {
+	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
 		wg.Add(1)
 		go parseBonusPage(chstk, &wg, chrstk)
 	}
@@ -93,8 +98,9 @@ func XdxrDateBetween(code, sDate, eDate string) (xemap map[string]*model.Xdxr, e
 func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	// target web server can't withstand heavy traffic
-	RETRIES := 5
+	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
+		wait := 2
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := parse10jqkBonus(stock)
 			//ok, r := ParseIfengBonus(stock)
@@ -102,7 +108,7 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mo
 				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * 1)
+				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -134,6 +140,11 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	if e != nil {
 		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
+		return false, true
+	}
+
+	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+		log.Printf("%s encounter authorization block, retrying: %s", stock.Code, url)
 		return false, true
 	}
 
@@ -231,14 +242,17 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 	// no records found, return normally
 	if len(xdxrs) == 0 {
+		log.Printf("%s no xdxr data found at %s", stock.Code, url)
 		return true, false
 	}
 
+	// reverse order
 	for i, j := len(xdxrs)-1, 0; i >= 0; i, j = i-1, j+1 {
 		xdxrs[i].Idx = j
 	}
 
 	calcDyrDpr(xdxrs)
+
 	saveXdxrs(xdxrs)
 
 	return true, false
@@ -432,7 +446,7 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < global.MAX_CONCURRENCY; i++ {
+	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
 		wg.Add(1)
 		go parseFinancePage(chstk, &wg, chrstk)
 	}
@@ -461,7 +475,7 @@ func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < global.MAX_CONCURRENCY; i++ {
+	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
 		wg.Add(1)
 		go parseFinPredictPage(chstk, &wg, chrstk)
 	}
@@ -486,8 +500,9 @@ func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk cha
 	defer wg.Done()
 	// urlt := `http://basic.10jqka.com.cn/%s/worth.html`
 	urlt := `http://stockpage.10jqka.com.cn/%s/worth`
-	RETRIES := 5
+	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
+		wait := 2
 		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := doParseFinPredictPage(url, stock.Code)
@@ -496,7 +511,7 @@ func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk cha
 				break
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * 1)
+				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -525,6 +540,10 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	doc, e = goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
 		log.Printf("%s failed to read from response body, retrying...", code)
+		return false, true
+	}
+	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+		log.Printf("%s encounter authorization block, retrying: %s", code, url)
 		return false, true
 	}
 	return parseFinPredictTables(doc, url, code)
@@ -596,7 +615,7 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		fp.Udate.String = d
 		fp.Utime.String = t
 	})
-	//TODO parse np table
+	//parse np table
 	//reset column index
 	iNum, iMin, iAvg, iMax, iIndAvg = -1, -1, -1, -1, -1
 	doc.Find(`#forecast div.bd div.clearfix div.fr.yjyc table thead tr`).Each(func(i int, s *goquery.Selection) {
@@ -670,9 +689,30 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		log.Printf("no prediction data %s", url)
 		return true, false
 	}
-	// clean stale data before insert
-	_, err := dbmap.Exec("delete from fin_predict where code = ?", code)
-	util.CheckErr(err, code+": failed to delete stale fin_predict")
+	ok = saveFinPredict(code, fpMap)
+	return ok, false
+}
+
+func saveFinPredict(code string, fpMap map[string]*model.FinPredict) bool {
+	retry := conf.Args.DeadlockRetry
+	rt := 0
+	for ; rt < retry; rt++ {
+		// clean stale data before insert
+		_, e := dbmap.Exec("delete from fin_predict where code = ?", code)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to clean fin_predict data\n%+v", code, e)
+			}
+		}
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to clean fin_predict data, too much deadlock", code)
+	}
+	rt = 0
 	//update to database
 	valueStrings := make([]string, 0, len(fpMap))
 	valueArgs := make([]interface{}, 0, len(fpMap)*14)
@@ -701,9 +741,22 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 		"np_num=values(np_num),np_min=values(np_min),np_avg=values(np_avg),np_max=values(np_max),"+
 		"np_ind_avg=values(np_ind_avg),udate=values(udate),utime=values(utime)",
 		strings.Join(valueStrings, ","))
-	_, err = global.Dbmap.Exec(stmt, valueArgs...)
-	util.CheckErr(err, code+": failed to bulk update fin_predict")
-	return true, false
+	for ; rt < retry; rt++ {
+		_, e := global.Dbmap.Exec(stmt, valueArgs...)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to bulk update fin_predict\n%+v", code, e)
+			}
+		}
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to bulk update fin_predict, too much deadlock", code)
+	}
+	return true
 }
 
 func newFinPredict(code string) *model.FinPredict {
@@ -725,8 +778,9 @@ func newFinPredict(code string) *model.FinPredict {
 func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
 	urlt := `http://basic.10jqka.com.cn/%s/finance.html`
-	RETRIES := 5
+	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
+		wait := 2
 		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := doParseFinPage(url, stock.Code)
@@ -735,7 +789,7 @@ func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *
 				break
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * 1)
+				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -766,6 +820,12 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
 	}
+
+	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+		log.Printf("%s encounter authorization block, retrying: %s", code, url)
+		return false, true
+	}
+
 	fr := &model.FinReport{}
 	e = json.Unmarshal([]byte(doc.Find("#main").Text()), fr)
 	if e != nil {

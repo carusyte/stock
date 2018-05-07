@@ -32,6 +32,7 @@ func CalXCorl(stocks *model.Stocks) (rstks *model.Stocks) {
 	wgr := collect(rstks, suc)
 	chxcorl := make(chan *xCorlTrnDBJob, conf.Args.DBQueueCapacity)
 	wgdb := goSaveXCorlTrn(chxcorl, suc)
+	log.Printf("calculating cross correlations for training, parallel level:%d", pl)
 	for _, stk := range stocks.List {
 		wg.Add(1)
 		wf <- 1
@@ -87,6 +88,11 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 		log.Printf(`%s failed to query max klid, %+v`, code, err)
 		return
 	}
+	if int(maxKlid)+1 < prior {
+		log.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
+			code, int(maxKlid)+1, prior)
+		return
+	}
 	start := 0
 	if lxc != nil {
 		start = lxc.Klid - shift + 1
@@ -100,7 +106,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	stop := false
 	var xt []*model.XCorlTrn
 	for klid := start; klid <= int(maxKlid)-span-shift; klid++ {
-		stop, xt = sampXCorlTrnAt(stock, klid, out)
+		stop, xt = sampXCorlTrnAt(stock, klid)
 		if stop {
 			break
 		}
@@ -115,7 +121,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	}
 }
 
-func sampXCorlTrnAt(stock *model.Stock, klid int, out chan *xCorlTrnDBJob) (stop bool, xt []*model.XCorlTrn) {
+func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlTrn) {
 	span := conf.Args.Sampler.XCorlSpan
 	shift := conf.Args.Sampler.XCorlShift
 	code := stock.Code
@@ -142,8 +148,8 @@ func sampXCorlTrnAt(stock *model.Stock, klid int, out chan *xCorlTrnDBJob) (stop
 		return
 	}
 	if len(klhist)-shift < span {
-		log.Printf("%s insufficient data for xcorl_trn sampling: %d, %d required",
-			code, len(klhist)-shift, span)
+		log.Printf("%s insufficient data for xcorl_trn sampling at klid %d: %d, %d required",
+			code, klid, len(klhist)-shift, span)
 		return
 	}
 
@@ -163,15 +169,34 @@ func sampXCorlTrnAt(stock *model.Stock, klid int, out chan *xCorlTrnDBJob) (stop
 			lrs[i-shift] = k.Lr.Float64
 		}
 	}
+	var codes []string
+	dateStr := util.Join(dates, ",", true)
+	query = fmt.Sprintf(`select code from kline_d_b where code <> ? and date in (%s) group by code having count(*)=?`, dateStr)
+	_, err = dbmap.Select(&codes, query, code, len(dates))
+	if err != nil {
+		if sql.ErrNoRows != err {
+			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
+			return true, xt
+		}
+		log.Printf(`%s no available reference data between %s and %s`,
+			code, dates[0], dates[len(dates)-1])
+		return
+	}
+	if len(codes) == 0 {
+		log.Printf(`%s no available reference data between %s and %s`,
+			code, dates[0], dates[len(dates)-1])
+		return
+	}
+
 	query, err = global.Dot.Raw("QUERY_BWR_DAILY_4_XCORL_TRN")
 	if err != nil {
 		log.Printf(`%s failed to load sql QUERY_BWR_DAILY_4_XCORL_TRN, %+v`, code, err)
 		return true, xt
 	}
-	dateStr := util.Join(dates, ",", true)
-	query = fmt.Sprintf(query, dateStr, len(dates))
+	codeStr := util.Join(codes, ",", true)
+	query = fmt.Sprintf(query, codeStr, dateStr)
 	var rhist []*model.Quote
-	_, err = dbmap.Select(&rhist, query, code)
+	_, err = dbmap.Select(&rhist, query)
 	if err != nil {
 		if sql.ErrNoRows != err {
 			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
@@ -232,6 +257,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int, out chan *xCorlTrnDBJob) (stop
 		}
 		lcode = k.Code
 	}
+	log.Printf("%s %s matched: %d", code, skl.Date, len(xt))
 	return
 }
 
@@ -241,7 +267,7 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *syn
 	go func(wg *sync.WaitGroup, ch chan *xCorlTrnDBJob, suc chan *model.Stock) {
 		defer wg.Done()
 		for x := range ch {
-			e := SaveXCorlTrn(x.xcorls...)
+			e := saveXCorlTrn(x.xcorls...)
 			if e == nil {
 				suc <- x.stock
 				log.Printf("%s %d %s saved", x.stock.Code, len(x.xcorls), "xcorl_trn")
@@ -251,8 +277,8 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *syn
 	return
 }
 
-// SaveXCorlTrn update existing xcorl_trn data or insert new ones in database.
-func SaveXCorlTrn(xs ...*model.XCorlTrn) (err error) {
+// saveXCorlTrn update existing xcorl_trn data or insert new ones in database.
+func saveXCorlTrn(xs ...*model.XCorlTrn) (err error) {
 	if len(xs) == 0 {
 		return nil
 	}
