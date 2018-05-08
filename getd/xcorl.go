@@ -10,6 +10,7 @@ import (
 
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
@@ -19,11 +20,16 @@ import (
 
 type xCorlTrnDBJob struct {
 	stock  *model.Stock
+	fin    int //-1:failed, 0:unfinished, 1:finished
 	xcorls []*model.XCorlTrn
 }
 
 //CalXCorl calculates cross correlation for stocks
 func CalXCorl(stocks *model.Stocks) (rstks *model.Stocks) {
+	if stocks == nil {
+		stocks = &model.Stocks{}
+		stocks.Add(StocksDb()...)
+	}
 	var wg sync.WaitGroup
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	wf := make(chan int, pl)
@@ -69,6 +75,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	resample := conf.Args.Sampler.Resample
 	shift := conf.Args.Sampler.XCorlShift
 	span := conf.Args.Sampler.XCorlSpan
+	syear := conf.Args.Sampler.XCorlStartYear
 	// keep track of latest selected klid;
 	var lxc *model.XCorlTrn
 	if resample == 0 {
@@ -96,38 +103,55 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	start := 0
 	if lxc != nil {
 		start = lxc.Klid - shift + 1
+	} else if len(syear) > 0 {
+		sklid, err := dbmap.SelectInt(`select min(klid) from kline_d_b where code = ? and date >= ?`, code, syear)
+		if err != nil {
+			log.Printf(`%s failed to query min klid, %+v`, code, err)
+			return
+		}
+		if int(sklid)+1 < prior {
+			log.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
+				code, int(sklid)+1, prior)
+			return
+		}
+		start = int(sklid)
 	} else if prior > 0 {
 		start = prior - shift
 	}
-	r := &xCorlTrnDBJob{
-		stock: stock,
-	}
-	count := 0
 	stop := false
 	var xt []*model.XCorlTrn
 	for klid := start; klid <= int(maxKlid)-span-shift; klid++ {
 		stop, xt = sampXCorlTrnAt(stock, klid)
 		if stop {
+			out <- &xCorlTrnDBJob{
+				stock: stock,
+				fin:   -1,
+			}
 			break
 		}
 		if len(xt) > 0 {
-			r.xcorls = append(r.xcorls, xt...)
-			count++
+			out <- &xCorlTrnDBJob{
+				stock:  stock,
+				fin:    0,
+				xcorls: xt,
+			}
 		}
 	}
-	if !stop {
-		out <- r
-		log.Printf("%s xcorl_trn sampled: %d", code, count)
+	out <- &xCorlTrnDBJob{
+		stock: stock,
+		fin:   1,
 	}
 }
 
 func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlTrn) {
 	span := conf.Args.Sampler.XCorlSpan
 	shift := conf.Args.Sampler.XCorlShift
+	prior := conf.Args.Sampler.PriorLength
 	code := stock.Code
 	qryKlid := ""
+	offset := span - 1
 	if klid > 0 {
-		qryKlid = fmt.Sprintf(" and klid >= %d", klid)
+		qryKlid = fmt.Sprintf(" and klid >= %d", klid-offset)
 	}
 	qryKlid += fmt.Sprintf(" and klid <= %d", klid+span)
 	// use backward reinstated kline
@@ -147,32 +171,33 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		log.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
 		return
 	}
-	if len(klhist)-shift < span {
+	if len(klhist) < span+offset+shift {
 		log.Printf("%s insufficient data for xcorl_trn sampling at klid %d: %d, %d required",
-			code, klid, len(klhist)-shift, span)
+			code, klid, len(klhist)-shift, span+offset)
 		return
 	}
 
 	//query reference security kline_d_b with shifted matching dates & calculate correlation
-	skl := klhist[shift-1]
+	skl := klhist[shift+offset-1]
 	dates := make([]string, len(klhist)-shift)
-	lrs := make([]float64, len(klhist)-shift)
+	lrs := make([]float64, len(klhist)-shift-offset)
 	for i, k := range klhist {
 		if i < len(klhist)-shift {
 			dates[i] = k.Date
 		}
-		if i >= shift {
+		if i >= shift+offset {
 			if !k.Lr.Valid {
 				log.Printf(`%s %s log return is null, skipping`, code, k.Date)
 				return
 			}
-			lrs[i-shift] = k.Lr.Float64
+			lrs[i-shift-offset] = k.Lr.Float64
 		}
 	}
 	var codes []string
 	dateStr := util.Join(dates, ",", true)
-	query = fmt.Sprintf(`select code from kline_d_b where code <> ? and date in (%s) group by code having count(*)=?`, dateStr)
-	_, err = dbmap.Select(&codes, query, code, len(dates))
+	query = fmt.Sprintf(`select code from kline_d_b where code <> ? and date in (%s) `+
+		`group by code having count(*) = ? and min(klid) >= ?`, dateStr)
+	_, err = dbmap.Select(&codes, query, code, len(dates), prior-1)
 	if err != nil {
 		if sql.ErrNoRows != err {
 			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
@@ -194,6 +219,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		return true, xt
 	}
 	codeStr := util.Join(codes, ",", true)
+	dateStr = util.Join(dates[offset:], ",", true)
 	query = fmt.Sprintf(query, codeStr, dateStr)
 	var rhist []*model.Quote
 	_, err = dbmap.Select(&rhist, query)
@@ -240,6 +266,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		}
 		dt, tm := util.TimeStr()
 		x := &model.XCorlTrn{
+			UUID:  fmt.Sprintf("%s", uuid.NewV1()),
 			Code:  code,
 			Klid:  skl.Klid,
 			Date:  skl.Date,
@@ -257,7 +284,6 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		}
 		lcode = k.Code
 	}
-	log.Printf("%s %s matched: %d", code, skl.Date, len(xt))
 	return
 }
 
@@ -266,11 +292,22 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *syn
 	wg.Add(1)
 	go func(wg *sync.WaitGroup, ch chan *xCorlTrnDBJob, suc chan *model.Stock) {
 		defer wg.Done()
+		counter := make(map[string]int)
 		for x := range ch {
-			e := saveXCorlTrn(x.xcorls...)
-			if e == nil {
+			code := x.stock.Code
+			if x.fin < 0 {
+				log.Printf("%s failed samping xcorl_trn", code)
+			} else if x.fin == 0 {
+				e := saveXCorlTrn(x.xcorls...)
+				if e == nil {
+					counter[code] += len(x.xcorls)
+					log.Printf("%s %d %s saved", code, len(x.xcorls), "xcorl_trn")
+				} else {
+					log.Panicf("%s db operation error:%+v", code, e)
+				}
+			} else {
+				log.Printf("%s finished xcorl_trn sampling, total: %d", code, counter[code])
 				suc <- x.stock
-				log.Printf("%s %d %s saved", x.stock.Code, len(x.xcorls), "xcorl_trn")
 			}
 		}
 	}(wg, chxcorl, suc)
@@ -282,28 +319,28 @@ func saveXCorlTrn(xs ...*model.XCorlTrn) (err error) {
 	if len(xs) == 0 {
 		return nil
 	}
-	retry := 10
+	code := xs[0].Code
+	valueStrings := make([]string, 0, len(xs))
+	valueArgs := make([]interface{}, 0, len(xs)*8)
+	for _, e := range xs {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
+		valueArgs = append(valueArgs, e.UUID)
+		valueArgs = append(valueArgs, e.Code)
+		valueArgs = append(valueArgs, e.Klid)
+		valueArgs = append(valueArgs, e.Date)
+		valueArgs = append(valueArgs, e.Rcode)
+		valueArgs = append(valueArgs, e.Corl)
+		valueArgs = append(valueArgs, e.Udate)
+		valueArgs = append(valueArgs, e.Utime)
+	}
+	stmt := fmt.Sprintf("INSERT INTO xcorl_trn (uuid,code,klid,date,rcode,corl,"+
+		"udate,utime) VALUES %s "+
+		"on duplicate key update corl=values(corl),"+
+		"udate=values(udate),utime=values(utime)",
+		strings.Join(valueStrings, ","))
+	retry := conf.Args.DeadlockRetry
 	rt := 0
-	code := ""
 	for ; rt < retry; rt++ {
-		code = xs[0].Code
-		valueStrings := make([]string, 0, len(xs))
-		valueArgs := make([]interface{}, 0, len(xs)*7)
-		for _, e := range xs {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, e.Code)
-			valueArgs = append(valueArgs, e.Klid)
-			valueArgs = append(valueArgs, e.Date)
-			valueArgs = append(valueArgs, e.Rcode)
-			valueArgs = append(valueArgs, e.Corl)
-			valueArgs = append(valueArgs, e.Udate)
-			valueArgs = append(valueArgs, e.Utime)
-		}
-		stmt := fmt.Sprintf("INSERT INTO xcorl_trn (code,klid,date,rcode,corl,"+
-			"udate,utime) VALUES %s "+
-			"on duplicate key update corl=values(corl),"+
-			"udate=values(udate),utime=values(utime)",
-			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		if err != nil {
 			fmt.Println(err)

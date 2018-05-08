@@ -1526,6 +1526,7 @@ CREATE TABLE `xdxr` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `xcorl_trn` (
+  `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
   `date` varchar(10) NOT NULL,
   `klid` int(11) NOT NULL,
@@ -1534,5 +1535,8 @@ CREATE TABLE `xcorl_trn` (
   `flag` varchar(20) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`code`,`date`,`klid`,`rcode`)
+  PRIMARY KEY (`code`,`date`,`klid`,`rcode`),
+  UNIQUE KEY `UNI_IDX_01` (`uuid`),
+  KEY `IDX_FLAG` (`flag`,`uuid`),
+  KEY `IDX_CORL` (`corl`,`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

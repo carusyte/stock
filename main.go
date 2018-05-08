@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -21,6 +20,7 @@ import (
 )
 
 var (
+	xcorl          bool
 	tagTest        int
 	tagTrain       int
 	trainBatchSize int
@@ -43,6 +43,11 @@ func main() {
 		getd.StopWatch("KEY_POINT_SAMPLING", stkps)
 	} else {
 		log.Println("skipping key point sampling")
+	}
+	if xcorl {
+		s := time.Now()
+		getd.CalXCorl(nil)
+		getd.StopWatch("XCORL", s)
 	}
 	if tagTest > 0 {
 		log.Printf("tagging kpts%d data for test set...", tagTest)
@@ -77,6 +82,7 @@ func main() {
 }
 
 func parseArgs() {
+	flag.BoolVar(&xcorl, "xcorl", false, "sample cross correlation amongst securities.")
 	flag.IntVar(&tagTest, "tagTest", 0, "tag key point sample data for test set.")
 	flag.IntVar(&tagTrain, "tagTrain", 0, "tag key point sample data for training set.")
 	flag.IntVar(&trainBatchSize, "trainBatchSize", conf.Args.Sampler.TrainSetBatchSize,
@@ -102,10 +108,6 @@ func panicHandler(output string) {
 	// panic. Put it in a file or something.
 	fmt.Printf("The child panicked:\n\n%s\n", output)
 	os.Exit(1)
-}
-
-func testSplitAfter() {
-	fmt.Println(strings.SplitN("hello_world_n_you", "_", 3))
 }
 
 func fixVarate() {

@@ -75,7 +75,6 @@ type Arguments struct {
 		SkipKlines            bool        `mapstructure:"skip_klines"`
 		SkipFsStats           bool        `mapstructure:"skip_fs_stats"`
 		SkipIndices           bool        `mapstructure:"skip_indices"`
-		SkipXCorl             bool        `mapstructure:"skip_xcorl"`
 		SkipBasicsUpdate      bool        `mapstructure:"skip_basics_update"`
 		SkipIndexCalculation  bool        `mapstructure:"skip_index_calculation"`
 		SkipFinMark           bool        `mapstructure:"skip_fin_mark"`
@@ -104,6 +103,7 @@ type Arguments struct {
 		RefreshGraderStats bool   `mapstructure:"refresh_grader_stats"`
 		TestSetBatchSize   int    `mapstructure:"test_set_batch_size"`
 		TrainSetBatchSize  int    `mapstructure:"train_set_batch_size"`
+		XCorlStartYear     string    `mapstructure:"xcorl_start_year"`
 		XCorlShift         int    `mapstructure:"xcorl_shift"`
 		XCorlSpan          int    `mapstructure:"xcorl_span"`
 	}

@@ -1158,6 +1158,7 @@ type GraderStats struct {
 
 //XCorlTrn represents cross correlation training samples.
 type XCorlTrn struct {
+	UUID  string
 	Code  string
 	Klid  int
 	Date  string
