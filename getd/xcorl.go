@@ -297,13 +297,14 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *syn
 			code := x.stock.Code
 			if x.fin < 0 {
 				log.Printf("%s failed samping xcorl_trn", code)
-			} else if x.fin == 0 {
+			} else if x.fin == 0 && len(x.xcorls) > 0 {
+				x1 := x.xcorls[0]
 				e := saveXCorlTrn(x.xcorls...)
 				if e == nil {
 					counter[code] += len(x.xcorls)
-					log.Printf("%s %d %s saved", code, len(x.xcorls), "xcorl_trn")
+					log.Printf("%s %d xcorl_trn saved, start date:%s", code, len(x.xcorls), x1.Date)
 				} else {
-					log.Panicf("%s db operation error:%+v", code, e)
+					log.Panicf("%s %s db operation error:%+v", code, x1.Date, e)
 				}
 			} else {
 				log.Printf("%s finished xcorl_trn sampling, total: %d", code, counter[code])
