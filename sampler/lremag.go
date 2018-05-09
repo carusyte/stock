@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"sync"
 
 	"github.com/carusyte/stock/indc"
 
@@ -22,7 +23,7 @@ const graderRemaLr = "RemaLr"
 // Evaluate regional performance on respective day-span basis
 // Score according to the close price log return ema calculated from the far-most future to the nearest.
 type remaLrGrader struct {
-	gstats map[int][]*model.GraderStats
+	gstats sync.Map //map[int][]*model.GraderStats
 }
 
 func (g *remaLrGrader) sample(code string, frame int, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
@@ -164,29 +165,28 @@ func (g *remaLrGrader) stats(frame int) (e error) {
 
 func (g *remaLrGrader) score(uuid string, remalr float64, frame int) (s float64, e error) {
 	//load stats if needed
-	if g.gstats == nil || g.gstats[frame] == nil {
-		if g.gstats == nil {
-			g.gstats = make(map[int][]*model.GraderStats)
-		}
-		stats := make([]*model.GraderStats, 0, 16)
+	var stats []*model.GraderStats
+	if istats, ok := g.gstats.Load(frame); ok {
+		stats = istats.([]*model.GraderStats)
+	} else {
+		stats = make([]*model.GraderStats, 0, 16)
 		_, e := dbmap.Select(&stats, "select * from grader_stats where grader = ? and frame = ? order by score",
 			graderRemaLr, frame)
 		if e != nil && e != sql.ErrNoRows {
 			return s, errors.WithStack(e)
 		}
-		g.gstats[frame] = stats
+		g.gstats.Store(frame, stats)
 	}
-	if len(g.gstats[frame]) == 0 {
+	if len(stats) == 0 {
 		return 0, nil
 	}
 	// scoring
-	gstats := g.gstats[frame]
-	for i, gs := range gstats {
-		if i < len(gstats)-1 &&
+	for i, gs := range stats {
+		if i < len(stats)-1 &&
 			(remalr < gs.Threshold.Float64 || (remalr == gs.Threshold.Float64 && uuid <= gs.UUID.String)) {
 			return gs.Score, nil
-		} else if i == len(gstats)-1 {
-			lgs := gstats[i-1]
+		} else if i == len(stats)-1 {
+			lgs := stats[i-1]
 			if remalr > lgs.Threshold.Float64 || (remalr == lgs.Threshold.Float64 && uuid > lgs.UUID.String) {
 				return gs.Score, nil
 			}

@@ -21,6 +21,7 @@ var (
 
 //SampAllKeyPoints sample all keypoints using goroutine and save sampled data to kpts table.
 func SampAllKeyPoints() (e error) {
+	log.Printf("sampling key points...")
 	var stks []*model.Stock
 	dbmap.Select(&stks, "select * from basics")
 	log.Printf("%d stocks loaded from db", len(stks))
