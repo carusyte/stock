@@ -102,8 +102,9 @@ type Arguments struct {
 		GraderScoreClass   int    `mapstructure:"grader_score_class"`
 		RefreshGraderStats bool   `mapstructure:"refresh_grader_stats"`
 		TestSetBatchSize   int    `mapstructure:"test_set_batch_size"`
+		TestSetGroups      int    `mapstructure:"test_set_groups"`
 		TrainSetBatchSize  int    `mapstructure:"train_set_batch_size"`
-		XCorlStartYear     string    `mapstructure:"xcorl_start_year"`
+		XCorlStartYear     string `mapstructure:"xcorl_start_year"`
 		XCorlShift         int    `mapstructure:"xcorl_shift"`
 		XCorlSpan          int    `mapstructure:"xcorl_span"`
 	}

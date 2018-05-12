@@ -1,4 +1,4 @@
-package getd
+package sampler
 
 import (
 	"database/sql"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
 	uuid "github.com/satori/go.uuid"
@@ -25,17 +26,17 @@ type xCorlTrnDBJob struct {
 }
 
 //CalXCorl calculates cross correlation for stocks
-func CalXCorl(stocks *model.Stocks) (rstks *model.Stocks) {
+func CalXCorl(stocks *model.Stocks) {
 	if stocks == nil {
 		stocks = &model.Stocks{}
-		stocks.Add(StocksDb()...)
+		stocks.Add(getd.StocksDb()...)
 	}
 	var wg sync.WaitGroup
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	wf := make(chan int, pl)
-	suc := make(chan *model.Stock, global.JOB_CAPACITY)
-	rstks = &model.Stocks{}
-	wgr := collect(rstks, suc)
+	suc := make(chan string, global.JOB_CAPACITY)
+	var rstks []string
+	wgr := collect(&rstks, suc)
 	chxcorl := make(chan *xCorlTrnDBJob, conf.Args.DBQueueCapacity)
 	wgdb := goSaveXCorlTrn(chxcorl, suc)
 	log.Printf("calculating cross correlations for training, parallel level:%d", pl)
@@ -53,15 +54,17 @@ func CalXCorl(stocks *model.Stocks) (rstks *model.Stocks) {
 	close(suc)
 	wgr.Wait()
 
-	log.Printf("xcorl_trn data saved. %d / %d", rstks.Size(), stocks.Size())
-	if stocks.Size() != rstks.Size() {
-		same, skp := stocks.Diff(rstks)
-		if !same {
-			log.Printf("Failed: %+v", skp)
+	log.Printf("xcorl_trn data saved. %d / %d", len(rstks), stocks.Size())
+	if stocks.Size() != len(rstks) {
+		codes := make([]string, stocks.Size())
+		for i, s := range stocks.List {
+			codes[i] = s.Code
+		}
+		eq, fs, _ := util.DiffStrings(codes, rstks)
+		if !eq {
+			log.Printf("Failed: %+v", fs)
 		}
 	}
-
-	return
 }
 
 func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *xCorlTrnDBJob) {
@@ -69,6 +72,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 		wg.Done()
 		<-*wf
 	}()
+	//TODO: sample randomly instead
 	code := stock.Code
 	var err error
 	prior := conf.Args.Sampler.PriorLength
@@ -287,10 +291,10 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	return
 }
 
-func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *sync.WaitGroup) {
+func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan string) (wg *sync.WaitGroup) {
 	wg = new(sync.WaitGroup)
 	wg.Add(1)
-	go func(wg *sync.WaitGroup, ch chan *xCorlTrnDBJob, suc chan *model.Stock) {
+	go func(wg *sync.WaitGroup, ch chan *xCorlTrnDBJob, suc chan string) {
 		defer wg.Done()
 		counter := make(map[string]int)
 		for x := range ch {
@@ -308,7 +312,7 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan *model.Stock) (wg *syn
 				}
 			} else {
 				log.Printf("%s finished xcorl_trn sampling, total: %d", code, counter[code])
-				suc <- x.stock
+				suc <- x.stock.Code
 			}
 		}
 	}(wg, chxcorl, suc)

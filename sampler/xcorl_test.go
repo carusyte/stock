@@ -1,4 +1,4 @@
-package getd
+package sampler
 
 import (
 	"testing"

@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	//TestFlag indicates a sample data as member of test set.
+	//TestFlag indicates the tagged data is a member of test set.
 	TestFlag = "TEST"
+	//TrainFlag indicates the tagged data is a member of training set.
+	TrainFlag = "TRAIN"
 )
 
 var (
@@ -50,8 +52,8 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 		s.Count = int(float32(s.Count) * float32(0.1))
 	}
 	// clear already "TEST" tagged data
-	usql := fmt.Sprintf(`update kpts%d set flag = null where flag = ?`, frame)
-	_, e = dbmap.Exec(usql, TestFlag)
+	usql := fmt.Sprintf(`update kpts%d set flag = null where flag like '%s%%'`, frame, TestFlag)
+	_, e = dbmap.Exec(usql)
 	if e != nil {
 		return errors.WithStack(e)
 	}
@@ -245,7 +247,7 @@ func TagTrainingSetByScore(frame, batchSize int) (e error) {
 			qmap[s] = fmt.Sprintf("%d-%d", len(us), mquota)
 			uuids = append(uuids, nus...)
 		}
-		flag := fmt.Sprintf("TRN_%v", bno)
+		flag := fmt.Sprintf("%s_%v", TrainFlag, bno)
 		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
 		updSQL := fmt.Sprintf(`update kpts%d set flag = ? where uuid in (%s)`,
 			frame, util.Join(uuids, ",", true))

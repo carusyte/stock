@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -23,6 +24,9 @@ var (
 	xcorl          bool
 	tagTest        int
 	tagTrain       int
+	tagXcorl       string
+	tagXcorlTest   bool
+	tagXcorlTrain  bool
 	trainBatchSize int
 	testBatchSize  int
 )
@@ -46,9 +50,23 @@ func main() {
 	}
 	if xcorl {
 		s := time.Now()
-		getd.CalXCorl(nil)
+		sampler.CalXCorl(nil)
 		getd.StopWatch("XCORL", s)
 	}
+
+	if tagXcorlTest {
+		e := sampler.TagXcorlTrn(sampler.TestFlag)
+		if e != nil {
+			log.Println(e)
+		}
+	}
+	if tagXcorlTrain {
+		e := sampler.TagXcorlTrn(sampler.TrainFlag)
+		if e != nil {
+			log.Println(e)
+		}
+	}
+
 	if tagTest > 0 {
 		log.Printf("tagging kpts%d data for test set...", tagTest)
 		e := sampler.TagTestSetByIndustry(tagTest, testBatchSize)
@@ -85,11 +103,23 @@ func parseArgs() {
 	flag.BoolVar(&xcorl, "xcorl", false, "sample cross correlation amongst securities.")
 	flag.IntVar(&tagTest, "tagTest", 0, "tag key point sample data for test set.")
 	flag.IntVar(&tagTrain, "tagTrain", 0, "tag key point sample data for training set.")
+	flag.StringVar(&tagXcorl, "tagXcorl", "", "tag xcorl_trn sample data for the specified set(test/train, or both).")
 	flag.IntVar(&trainBatchSize, "trainBatchSize", conf.Args.Sampler.TrainSetBatchSize,
 		"batch size for key point sample training set.")
 	flag.IntVar(&testBatchSize, "testBatchSize", conf.Args.Sampler.TestSetBatchSize,
 		"batch size for key point sample test set.")
 	flag.Parse()
+
+	tags := strings.Split(tagXcorl, ",")
+	for _, t := range tags {
+		if strings.EqualFold(sampler.TestFlag, t) {
+			tagXcorlTest = true
+		} else if strings.EqualFold(sampler.TrainFlag, t) {
+			tagXcorlTrain = true
+		} else {
+			log.Panicf("unsupported xcorl_trn flag: %s", t)
+		}
+	}
 }
 
 func shutdownHook() {
