@@ -19,7 +19,7 @@ func CollectFsStats() {
 		return
 	}
 	fields := []string{
-		"lr", "lr_l", "lr_h", "lr_o", "lr_vol",
+		"lr", "lr_l", "lr_l_c", "lr_h", "lr_h_c", "lr_o", "lr_o_c", "lr_vol",
 		"lr_ma5", "lr_ma5_l", "lr_ma5_h", "lr_ma5_o",
 		"lr_ma10", "lr_ma10_l", "lr_ma10_h", "lr_ma10_o",
 		"lr_ma20", "lr_ma20_l", "lr_ma20_h", "lr_ma20_o",

@@ -110,14 +110,16 @@ func parseArgs() {
 		"batch size for key point sample test set.")
 	flag.Parse()
 
-	tags := strings.Split(tagXcorl, ",")
-	for _, t := range tags {
-		if strings.EqualFold(sampler.TestFlag, t) {
-			tagXcorlTest = true
-		} else if strings.EqualFold(sampler.TrainFlag, t) {
-			tagXcorlTrain = true
-		} else {
-			log.Panicf("unsupported xcorl_trn flag: %s", t)
+	if len(tagXcorl) > 0 {
+		tags := strings.Split(tagXcorl, ",")
+		for _, t := range tags {
+			if strings.EqualFold(sampler.TestFlag, t) {
+				tagXcorlTest = true
+			} else if strings.EqualFold(sampler.TrainFlag, t) {
+				tagXcorlTrain = true
+			} else {
+				log.Panicf("unsupported xcorl_trn flag: %s", t)
+			}
 		}
 	}
 }

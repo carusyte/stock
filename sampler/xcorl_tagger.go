@@ -24,11 +24,13 @@ func TagXcorlTrn(flag string) (e error) {
 		return errors.WithStack(e)
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
-	log.Println("counting untagged records...")
-	total, e := dbmap.SelectInt(`select count(*) from xcorl_trn where flag is null`)
+	log.Println("loading untagged records...")
+	var untagged []string
+	_, e = dbmap.Select(&untagged, `select uuid from xcorl_trn where flag is null order by corl`)
 	if e != nil {
 		return errors.WithStack(e)
 	}
+	total := len(untagged)
 	log.Printf("total of untagged records: %d", total)
 	bsize := conf.Args.Sampler.TestSetBatchSize
 	if flag == TrainFlag {
@@ -54,20 +56,15 @@ func TagXcorlTrn(flag string) (e error) {
 	grps := make([][]string, batches)
 
 	for i := 0; i < bsize; i++ {
-		log.Printf("loading ordered sampled data step %d...", i+1)
 		limit := segment
 		if _, ok := remOwn[i]; ok {
 			limit++
 		}
 		var uuids []string
 		if i < bsize-1 {
-			_, e = dbmap.Select(&uuids, `select uuid from xcorl_trn where flag is null order by corl limit ? offset ?`,
-				limit, offset)
+			uuids = untagged[offset : offset+limit]
 		} else {
-			_, e = dbmap.Select(&uuids, `select uuid from xcorl_trn where flag is null order by corl offset ?`, offset)
-		}
-		if e != nil {
-			return errors.WithStack(e)
+			uuids = untagged[offset:]
 		}
 		log.Printf("%d/%d size: %d", i+1, bsize, len(uuids))
 		offset += limit
@@ -78,14 +75,18 @@ func TagXcorlTrn(flag string) (e error) {
 			grps[j] = append(grps[j], uuids[perm[j]])
 		}
 	}
-	for i, g := range grps {
+	untagged = nil
+	for i := 0; i < len(grps); i++ {
+		g := grps[i]
 		uuids := util.Join(g, ",", true)
-		flag := fmt.Sprintf("%s_%d", TestFlag, i)
-		log.Printf("tagging %s, size: %d", flag, len(uuids))
-		_, e = dbmap.Exec(`update xcorl_trn set flag = ? where uuid in (?)`, flag, uuids)
+		flag := fmt.Sprintf("%s_%d", flag, i+1)
+		prog := float32(float32(i) / float32(len(grps)))
+		log.Printf("step %d/%d(%.2f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
+		_, e = dbmap.Exec(fmt.Sprintf(`update xcorl_trn set flag = ? where uuid in (%s)`, uuids), flag)
 		if e != nil {
 			return errors.WithStack(e)
 		}
+		grps[i] = nil
 	}
 	log.Printf("xcorl_trn %s set tagged: %d", flag, batches)
 	return nil

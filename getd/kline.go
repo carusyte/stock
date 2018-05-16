@@ -319,46 +319,70 @@ func CalLogReturns(qs []*model.Quote) {
 		if !q.VarateRglLow.Valid {
 			vlw = q.VarateLow.Float64
 		}
+		bias := .01
 		q.Lr = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
 		q.LrHigh = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
+		q.LrHighClose = sql.NullFloat64{Float64: util.LogReturn(q.Close, q.High, bias), Valid: true}
 		q.LrOpen = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
+		q.LrOpenClose = sql.NullFloat64{Float64: util.LogReturn(q.Close, q.Open, bias), Valid: true}
 		q.LrLow = sql.NullFloat64{Float64: math.Log(vlw/100. + 1.), Valid: true}
+		q.LrLowClose = sql.NullFloat64{Float64: util.LogReturn(q.Close, q.Low, bias), Valid: true}
 
 		if (q.Type == model.KLINE_DAY || q.Type == model.KLINE_DAY_B || q.Type == model.KLINE_DAY_NR || q.Type == model.KLINE_DAY_VLD) &&
 			len(conf.Args.DataSource.LimitPriceDayLr) > 0 {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if q.Lr.Float64 < b {
-				log.Printf("%s %v %s %d lr below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.Lr.Float64)
 				q.Lr.Float64 = b
 			} else if q.Lr.Float64 > t {
-				log.Printf("%s %v %s %d lr exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.Lr.Float64)
 				q.Lr.Float64 = t
 			}
 			if q.LrHigh.Float64 < b {
-				log.Printf("%s %v %s %d lr_h below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_h below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHigh.Float64)
 				q.LrHigh.Float64 = b
 			} else if q.LrHigh.Float64 > t {
-				log.Printf("%s %v %s %d lr_h exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_h exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHigh.Float64)
 				q.LrHigh.Float64 = t
 			}
+			if q.LrHighClose.Float64 < b {
+				log.Printf("%s %v %s %d lr_h_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHighClose.Float64)
+				q.LrHighClose.Float64 = b
+			} else if q.LrHighClose.Float64 > t {
+				log.Printf("%s %v %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHighClose.Float64)
+				q.LrHighClose.Float64 = t
+			}
 			if q.LrOpen.Float64 < b {
-				log.Printf("%s %v %s %d lr_o below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_o below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpen.Float64)
 				q.LrOpen.Float64 = b
 			} else if q.LrOpen.Float64 > t {
-				log.Printf("%s %v %s %d lr_o exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_o exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpen.Float64)
 				q.LrOpen.Float64 = t
 			}
+			if q.LrOpenClose.Float64 < b {
+				log.Printf("%s %v %s %d lr_o_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpenClose.Float64)
+				q.LrOpenClose.Float64 = b
+			} else if q.LrOpenClose.Float64 > t {
+				log.Printf("%s %v %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpenClose.Float64)
+				q.LrOpenClose.Float64 = t
+			}
 			if q.LrLow.Float64 < b {
-				log.Printf("%s %v %s %d lr_l below lower limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, b)
+				log.Printf("%s %v %s %d lr_l below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLow.Float64)
 				q.LrLow.Float64 = b
 			} else if q.LrLow.Float64 > t {
-				log.Printf("%s %v %s %d lr_l exceeds upper limit %f, clipped", q.Code, q.Type, q.Date, q.Klid, t)
+				log.Printf("%s %v %s %d lr_l exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLow.Float64)
 				q.LrLow.Float64 = t
+			}
+			if q.LrLowClose.Float64 < b {
+				log.Printf("%s %v %s %d lr_l_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLowClose.Float64)
+				q.LrLowClose.Float64 = b
+			} else if q.LrLowClose.Float64 > t {
+				log.Printf("%s %v %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLowClose.Float64)
+				q.LrLowClose.Float64 = t
 			}
 		}
 
-		bias := .01
 		if q.Xrate.Valid {
 			q.LrXr.Valid = true
 			if i > 0 && qs[i-1].Xrate.Valid {
@@ -712,7 +736,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
-	numFields := 83
+	numFields := 86
 	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
@@ -749,8 +773,11 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		valueArgs = append(valueArgs, q.VarateRglLow)
 		valueArgs = append(valueArgs, q.Lr)
 		valueArgs = append(valueArgs, q.LrHigh)
+		valueArgs = append(valueArgs, q.LrHighClose)
 		valueArgs = append(valueArgs, q.LrOpen)
+		valueArgs = append(valueArgs, q.LrOpenClose)
 		valueArgs = append(valueArgs, q.LrLow)
+		valueArgs = append(valueArgs, q.LrLowClose)
 		valueArgs = append(valueArgs, q.LrVol)
 		valueArgs = append(valueArgs, q.Ma5)
 		valueArgs = append(valueArgs, q.Ma10)
@@ -831,7 +858,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	rt = 0
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
 		"volume,amount,lr_amt,xrate,lr_xr,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
-		"varate_rgl_l,lr,lr_h,lr_o,lr_l,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
+		"varate_rgl_l,lr,lr_h,lr_h_c,lr_o,lr_o_c,lr_l,lr_l_c,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
 		"lr_ma5,lr_ma5_o,lr_ma5_h,lr_ma5_l,"+
 		"lr_ma10,lr_ma10_o,lr_ma10_h,lr_ma10_l,"+
 		"lr_ma20,lr_ma20_o,lr_ma20_h,lr_ma20_l,"+
@@ -850,7 +877,8 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
 		"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
 		"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
-		"lr=values(lr),lr_h=values(lr_h),lr_o=values(lr_o),lr_l=values(lr_l),"+
+		"lr=values(lr),lr_h=values(lr_h),lr_h_c=values(lr_h_c),lr_o=values(lr_o),"+
+		"lr_o_c=values(lr_o_c),lr_l=values(lr_l),lr_l_c=values(lr_l_c),"+
 		"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
 		"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
 		"ma250=values(ma250),"+

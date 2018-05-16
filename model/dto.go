@@ -539,8 +539,11 @@ type Quote struct {
 	VarateRglLow  sql.NullFloat64 `db:"varate_rgl_l"`
 	Lr            sql.NullFloat64 //Log Returns
 	LrHigh        sql.NullFloat64 `db:"lr_h"`
+	LrHighClose   sql.NullFloat64 `db:"lr_h_c"`
 	LrOpen        sql.NullFloat64 `db:"lr_o"`
+	LrOpenClose   sql.NullFloat64 `db:"lr_o_c"`
 	LrLow         sql.NullFloat64 `db:"lr_l"`
+	LrLowClose    sql.NullFloat64 `db:"lr_l_c"`
 	LrVol         sql.NullFloat64 `db:"lr_vol"` //Log Returns for Volume
 	Ma5           sql.NullFloat64
 	Ma10          sql.NullFloat64
