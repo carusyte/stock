@@ -100,7 +100,7 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mo
 	// target web server can't withstand heavy traffic
 	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
-		wait := 2
+		wait := 2.
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := parse10jqkBonus(stock)
 			//ok, r := ParseIfengBonus(stock)
@@ -108,7 +108,7 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mo
 				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
+				time.Sleep(time.Second * time.Duration(math.Pow(wait, float64(rtCount+1))))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -502,7 +502,7 @@ func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk cha
 	urlt := `http://stockpage.10jqka.com.cn/%s/worth`
 	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
-		wait := 2
+		wait := 2.
 		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := doParseFinPredictPage(url, stock.Code)
@@ -511,7 +511,7 @@ func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk cha
 				break
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
+				time.Sleep(time.Second * time.Duration(math.Pow(wait, float64(rtCount+1))))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -780,7 +780,7 @@ func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *
 	urlt := `http://basic.10jqka.com.cn/%s/finance.html`
 	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
-		wait := 2
+		wait := 2.
 		url := fmt.Sprintf(urlt, stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := doParseFinPage(url, stock.Code)
@@ -789,7 +789,7 @@ func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *
 				break
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * time.Duration(wait*(rtCount+1)))
+				time.Sleep(time.Second * time.Duration(math.Pow(wait, float64(rtCount+1))))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)

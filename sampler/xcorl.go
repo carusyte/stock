@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
 	"strings"
 	"sync"
@@ -80,6 +81,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	shift := conf.Args.Sampler.XCorlShift
 	span := conf.Args.Sampler.XCorlSpan
 	syear := conf.Args.Sampler.XCorlStartYear
+	portion := conf.Args.Sampler.XCorlPortion
 	// keep track of latest selected klid;
 	var lxc *model.XCorlTrn
 	if resample == 0 {
@@ -99,9 +101,10 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 		log.Printf(`%s failed to query max klid, %+v`, code, err)
 		return
 	}
-	if int(maxKlid)+1 < prior {
+	maxk := int(maxKlid)
+	if maxk+1 < prior {
 		log.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
-			code, int(maxKlid)+1, prior)
+			code, maxk+1, prior)
 		return
 	}
 	start := 0
@@ -124,7 +127,10 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	}
 	stop := false
 	var xt []*model.XCorlTrn
-	for klid := start; klid <= int(maxKlid)-span-shift; klid++ {
+	for klid := start; klid <= maxk-span-shift; klid++ {
+		if rand.Float64() > portion {
+			continue
+		}
 		stop, xt = sampXCorlTrnAt(stock, klid)
 		if stop {
 			out <- &xCorlTrnDBJob{
@@ -183,6 +189,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 
 	//query reference security kline_d_b with shifted matching dates & calculate correlation
 	skl := klhist[shift+offset-1]
+	log.Printf("%s sampling xcorl at %d, %s", skl.Code, skl.Klid, skl.Date)
 	dates := make([]string, len(klhist)-shift)
 	lrs := make([]float64, len(klhist)-shift-offset)
 	for i, k := range klhist {

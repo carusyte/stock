@@ -125,9 +125,8 @@ func getShares(stocks *model.Stocks) {
 func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// target web server can't withstand heavy traffic
-	RETRIES := 5
 	for stock := range chstk {
-		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
+		for rtCount := 0; rtCount <= conf.Args.DataSource.KlineFailureRetry; rtCount++ {
 			var ok, r bool
 			switch conf.Args.DataSource.Industry {
 			case conf.TENCENT_TC, conf.TENCENT_CSRC:
