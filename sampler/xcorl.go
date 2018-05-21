@@ -22,7 +22,7 @@ import (
 
 type xCorlTrnDBJob struct {
 	stock  *model.Stock
-	fin    int //-1:failed, 0:unfinished, 1:finished
+	fin    int //-1:abort, 0:unfinished, 1:finished
 	xcorls []*model.XCorlTrn
 }
 
@@ -63,7 +63,7 @@ func CalXCorl(stocks *model.Stocks) {
 		}
 		eq, fs, _ := util.DiffStrings(codes, rstks)
 		if !eq {
-			log.Printf("Failed: %+v", fs)
+			log.Printf("Unsaved: %+v", fs)
 		}
 	}
 }
@@ -73,7 +73,6 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 		wg.Done()
 		<-*wf
 	}()
-	//TODO: sample randomly instead
 	code := stock.Code
 	var err error
 	prior := conf.Args.Sampler.PriorLength

@@ -80,8 +80,8 @@ func TagXcorlTrn(flag string) (e error) {
 		g := grps[i]
 		uuids := util.Join(g, ",", true)
 		flag := fmt.Sprintf("%s_%d", flag, i+1)
-		prog := float32(float32(i) / float32(len(grps)))
-		log.Printf("step %d/%d(%.2f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
+		prog := float64(float64(i+1) / float64(len(grps))) * 100.
+		log.Printf("step %d/%d(%.3f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
 		_, e = dbmap.Exec(fmt.Sprintf(`update xcorl_trn set flag = ? where uuid in (%s)`, uuids), flag)
 		if e != nil {
 			return errors.WithStack(e)
