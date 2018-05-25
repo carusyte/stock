@@ -105,6 +105,7 @@ type Arguments struct {
 		TestSetGroups      int     `mapstructure:"test_set_groups"`
 		TrainSetBatchSize  int     `mapstructure:"train_set_batch_size"`
 		XCorlStartYear     string  `mapstructure:"xcorl_start_year"`
+		XCorlPrior         int     `mapstructure:"xcorl_prior"`
 		XCorlPortion       float64 `mapstructure:"xcorl_portion"`
 		XCorlShift         int     `mapstructure:"xcorl_shift"`
 		XCorlSpan          int     `mapstructure:"xcorl_span"`

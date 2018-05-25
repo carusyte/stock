@@ -76,25 +76,10 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	code := stock.Code
 	var err error
 	prior := conf.Args.Sampler.PriorLength
-	resample := conf.Args.Sampler.Resample
 	shift := conf.Args.Sampler.XCorlShift
 	span := conf.Args.Sampler.XCorlSpan
 	syear := conf.Args.Sampler.XCorlStartYear
 	portion := conf.Args.Sampler.XCorlPortion
-	// keep track of latest selected klid;
-	var lxc *model.XCorlTrn
-	if resample == 0 {
-		err = dbmap.SelectOne(&lxc, `select distinct klid from xcorl_trn where code = ? `+
-			`order by klid desc limit 1`, code)
-	} else if resample > 0 {
-		err = dbmap.SelectOne(&lxc,
-			`select distinct klid from xcorl_trn where code = ? `+
-				`order by klid desc limit 1 offset ?`, code, resample)
-	}
-	if err != nil && sql.ErrNoRows != err {
-		log.Printf(`%s failed to query last xcorl_trn, %+v`, code, err)
-		return
-	}
 	maxKlid, err := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
 	if err != nil {
 		log.Printf(`%s failed to query max klid, %+v`, code, err)
@@ -107,9 +92,7 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 		return
 	}
 	start := 0
-	if lxc != nil {
-		start = lxc.Klid - shift + 1
-	} else if len(syear) > 0 {
+	if len(syear) > 0 {
 		sklid, err := dbmap.SelectInt(`select min(klid) from kline_d_b where code = ? and date >= ?`, code, syear)
 		if err != nil {
 			log.Printf(`%s failed to query min klid, %+v`, code, err)
@@ -155,10 +138,11 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlTrn) {
 	span := conf.Args.Sampler.XCorlSpan
 	shift := conf.Args.Sampler.XCorlShift
-	prior := conf.Args.Sampler.PriorLength
+	minReq := conf.Args.Sampler.PriorLength
+	prior := conf.Args.Sampler.XCorlPrior
 	code := stock.Code
 	qryKlid := ""
-	offset := span - 1
+	offset := prior - 1
 	if klid > 0 {
 		qryKlid = fmt.Sprintf(" and klid >= %d", klid-offset)
 	}
@@ -207,7 +191,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	dateStr := util.Join(dates, ",", true)
 	query = fmt.Sprintf(`select code from kline_d_b where code <> ? and date in (%s) `+
 		`group by code having count(*) = ? and min(klid) >= ?`, dateStr)
-	_, err = dbmap.Select(&codes, query, code, len(dates), prior-1)
+	_, err = dbmap.Select(&codes, query, code, len(dates), minReq-1)
 	if err != nil {
 		if sql.ErrNoRows != err {
 			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
