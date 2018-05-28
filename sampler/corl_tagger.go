@@ -12,13 +12,20 @@ import (
 	"github.com/pkg/errors"
 )
 
-//TagXcorlTrn tags the sampled xcorl_trn data with specified flag as prefix
-//by randomly and evenly selecting untagged samples.
-func TagXcorlTrn(flag string) (e error) {
-	log.Printf("tagging xcorl_trn using %s as prefix...", flag)
+type CorlTab string
+
+const (
+	XcorlTrn CorlTab = "xcorl_trn"
+	WccTrn   CorlTab = "wcc_trn"
+)
+
+//TagCorlTrn tags the sampled correlation training table (such as xcorl_trn or wcc_trn) data
+//with specified flag as prefix by randomly and evenly selecting untagged samples.
+func TagCorlTrn(table CorlTab, flag string) (e error) {
+	log.Printf("tagging %v using %s as prefix...", table, flag)
 	// clear already tagged data
 	log.Println("cleansing existing tag...")
-	usql := fmt.Sprintf(`update xcorl_trn set flag = null where flag like '%s%%'`, flag)
+	usql := fmt.Sprintf(`update %v set flag = null where flag like '%s%%'`, table, flag)
 	_, e = dbmap.Exec(usql)
 	if e != nil {
 		return errors.WithStack(e)
@@ -26,7 +33,7 @@ func TagXcorlTrn(flag string) (e error) {
 	// tag group * batch_size of target data from untagged records randomly and evenly
 	log.Println("loading untagged records...")
 	var untagged []string
-	_, e = dbmap.Select(&untagged, `select uuid from xcorl_trn where flag is null order by corl`)
+	_, e = dbmap.Select(&untagged, fmt.Sprintf(`select uuid from %v where flag is null order by corl`, table))
 	if e != nil {
 		return errors.WithStack(e)
 	}
@@ -80,14 +87,14 @@ func TagXcorlTrn(flag string) (e error) {
 		g := grps[i]
 		uuids := util.Join(g, ",", true)
 		flag := fmt.Sprintf("%s_%d", flag, i+1)
-		prog := float64(float64(i+1) / float64(len(grps))) * 100.
+		prog := float64(float64(i+1)/float64(len(grps))) * 100.
 		log.Printf("step %d/%d(%.3f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
-		_, e = dbmap.Exec(fmt.Sprintf(`update xcorl_trn set flag = ? where uuid in (%s)`, uuids), flag)
+		_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ? where uuid in (%s)`, table, uuids), flag)
 		if e != nil {
 			return errors.WithStack(e)
 		}
 		grps[i] = nil
 	}
-	log.Printf("xcorl_trn %s set tagged: %d", flag, batches)
+	log.Printf("%v %s set tagged: %d", table, flag, batches)
 	return nil
 }

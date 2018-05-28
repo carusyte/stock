@@ -21,14 +21,13 @@ import (
 )
 
 var (
-	xcorl          bool
-	tagTest        int
-	tagTrain       int
-	tagXcorl       string
-	tagXcorlTest   bool
-	tagXcorlTrain  bool
-	trainBatchSize int
-	testBatchSize  int
+	xcorl, wcc                 bool
+	tagTest, tagTrain          int
+	tagXcorl, tagWcc           string
+	tagXcorlTest, tagWccTest   bool
+	tagXcorlTrain, tagWccTrain bool
+	trainBatchSize             int
+	testBatchSize              int
 )
 
 func main() {
@@ -53,15 +52,32 @@ func main() {
 		sampler.CalXCorl(nil)
 		getd.StopWatch("XCORL", s)
 	}
-
 	if tagXcorlTest {
-		e := sampler.TagXcorlTrn(sampler.TestFlag)
+		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TestFlag)
 		if e != nil {
 			log.Println(e)
 		}
 	}
 	if tagXcorlTrain {
-		e := sampler.TagXcorlTrn(sampler.TrainFlag)
+		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TrainFlag)
+		if e != nil {
+			log.Println(e)
+		}
+	}
+
+	if wcc {
+		s := time.Now()
+		sampler.CalWcc(nil)
+		getd.StopWatch("WCC", s)
+	}
+	if tagWccTest {
+		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TestFlag)
+		if e != nil {
+			log.Println(e)
+		}
+	}
+	if tagWccTrain {
+		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TrainFlag)
 		if e != nil {
 			log.Println(e)
 		}
@@ -101,9 +117,11 @@ func main() {
 
 func parseArgs() {
 	flag.BoolVar(&xcorl, "xcorl", false, "sample cross correlation amongst securities.")
+	flag.BoolVar(&wcc, "wcc", false, "sample warping correlation coefficient amongst securities.")
 	flag.IntVar(&tagTest, "tagTest", 0, "tag key point sample data for test set.")
 	flag.IntVar(&tagTrain, "tagTrain", 0, "tag key point sample data for training set.")
 	flag.StringVar(&tagXcorl, "tagXcorl", "", "tag xcorl_trn sample data for the specified set(test/train, or both).")
+	flag.StringVar(&tagWcc, "tagWcc", "", "tag wcc_trn sample data for the specified set(test/train, or both).")
 	flag.IntVar(&trainBatchSize, "trainBatchSize", conf.Args.Sampler.TrainSetBatchSize,
 		"batch size for key point sample training set.")
 	flag.IntVar(&testBatchSize, "testBatchSize", conf.Args.Sampler.TestSetBatchSize,
@@ -119,6 +137,18 @@ func parseArgs() {
 				tagXcorlTrain = true
 			} else {
 				log.Panicf("unsupported xcorl_trn flag: %s", t)
+			}
+		}
+	}
+	if len(tagWcc) > 0 {
+		tags := strings.Split(tagWcc, ",")
+		for _, t := range tags {
+			if strings.EqualFold(sampler.TestFlag, t) {
+				tagWccTest = true
+			} else if strings.EqualFold(sampler.TrainFlag, t) {
+				tagWccTrain = true
+			} else {
+				log.Panicf("unsupported wcc_trn flag: %s", t)
 			}
 		}
 	}

@@ -109,6 +109,7 @@ type Arguments struct {
 		XCorlPortion       float64 `mapstructure:"xcorl_portion"`
 		XCorlShift         int     `mapstructure:"xcorl_shift"`
 		XCorlSpan          int     `mapstructure:"xcorl_span"`
+		WccMaxShift        int     `mapstructure:"wcc_max_shift"`
 	}
 	//TODO logrus log to file
 }
