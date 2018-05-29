@@ -1575,6 +1575,7 @@ CREATE TABLE `wcc_trn` (
   `klid` int(11) NOT NULL,
   `rcode` varchar(8) NOT NULL,
   `corl` double DEFAULT NULL,
+  `abs_diff` double DEFAULT NULL,
   `flag` varchar(20) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
@@ -1583,3 +1584,4 @@ CREATE TABLE `wcc_trn` (
   KEY `IDX_FLAG` (`flag`,`uuid`),
   KEY `IDX_CORL` (`corl`,`uuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+

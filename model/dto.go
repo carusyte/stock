@@ -1180,18 +1180,18 @@ func (x *XCorlTrn) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
-
 //WccTrn represents Warping Correlation Coefficient training samples.
 type WccTrn struct {
-	UUID  string
-	Code  string
-	Klid  int
-	Date  string
-	Rcode string
-	Corl  float64
-	Flag  sql.NullString
-	Udate sql.NullString
-	Utime sql.NullString
+	UUID    string
+	Code    string
+	Klid    int
+	Date    string
+	Rcode   string
+	Corl    float64
+	AbsDiff float64
+	Flag    sql.NullString
+	Udate   sql.NullString
+	Utime   sql.NullString
 }
 
 func (x *WccTrn) String() string {
