@@ -22,6 +22,7 @@ import (
 
 var (
 	wccMaxLr = math.NaN()
+	lock     sync.Mutex
 )
 
 type wccTrnDBJob struct {
@@ -59,7 +60,7 @@ func CalWcc(stocks *model.Stocks) {
 	close(suc)
 	wgr.Wait()
 
-	log.Printf("wcc_trn data saved. %d / %d", len(rstks), stocks.Size())
+	log.Printf("wcc_trn data saved. sampled stocks: %d / %d", len(rstks), stocks.Size())
 	if stocks.Size() != len(rstks) {
 		codes := make([]string, stocks.Size())
 		for i, s := range stocks.List {
@@ -67,7 +68,7 @@ func CalWcc(stocks *model.Stocks) {
 		}
 		eq, fs, _ := util.DiffStrings(codes, rstks)
 		if !eq {
-			log.Printf("Unsaved: %+v", fs)
+			log.Printf("Unsampled: %+v", fs)
 		}
 	}
 }
@@ -418,12 +419,14 @@ func warpingCorl(lrs, bucket []float64) (c, ad float64, e error) {
 }
 
 func getMaxLrForWcc() (float64, error) {
+	lock.Lock()
+	defer lock.Unlock()
 	if !math.IsNaN(wccMaxLr) {
 		return wccMaxLr, nil
 	}
 	var e error
 	log.Println("querying max lr for wcc...")
-	wccMaxLr, e = dbmap.SelectFloat("select max(lr) from kline_d_b")
+	wccMaxLr, e = dbmap.SelectFloat("select max(lr)-min(lr) from kline_d_b")
 	if e != nil {
 		log.Printf("failed to query max lr for wcc: %+v", e)
 		return wccMaxLr, errors.WithStack(e)
