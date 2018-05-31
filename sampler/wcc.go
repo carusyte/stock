@@ -60,6 +60,8 @@ func CalWcc(stocks *model.Stocks) {
 	close(suc)
 	wgr.Wait()
 
+	updateWcc()
+
 	log.Printf("wcc_trn data saved. sampled stocks: %d / %d", len(rstks), stocks.Size())
 	if stocks.Size() != len(rstks) {
 		codes := make([]string, stocks.Size())
@@ -70,6 +72,31 @@ func CalWcc(stocks *model.Stocks) {
 		if !eq {
 			log.Printf("Unsampled: %+v", fs)
 		}
+	}
+}
+
+//updates corl column in the wcc_trn table based on sampled min_diff and max_diff
+func updateWcc() {
+	//remap [0, x] to [1, -1] (in opposite direction)
+	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
+	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
+	log.Printf("querying max(max_diff) + min(min_diff)...")
+	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
+	if e != nil {
+		log.Printf("failed to update corl: %+v", e)
+		return
+	}
+	log.Printf("max: %f, updating corl value...", max)
+	_, e = dbmap.Exec(`
+		UPDATE wcc_trn  
+		SET 
+			corl = CASE
+				WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
+				ELSE  - max_diff / :mx * 2 + 1
+			END
+	`, map[string]interface{}{"mx": max})
+	if e != nil {
+		log.Printf("failed to update corl: %+v", e)
 	}
 }
 
@@ -268,8 +295,8 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 			lcode = k.Code
 			continue
 		}
-		//calculate wcc
-		corl, absDiff, err := warpingCorl(lrs, bucket)
+		//calculate mindiff and maxdiff
+		minDiff, maxDiff, err := warpingCorl(lrs, bucket)
 		if err != nil {
 			log.Printf(`%s failed calculate wcc at klid %d, %+v`, code, klid, err)
 			return false, wccs, err
@@ -281,8 +308,8 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 			Klid:    skl.Klid,
 			Date:    skl.Date,
 			Rcode:   lcode,
-			Corl:    corl,
-			AbsDiff: absDiff,
+			MinDiff: minDiff,
+			MaxDiff: maxDiff,
 			Udate:   sql.NullString{Valid: true, String: dt},
 			Utime:   sql.NullString{Valid: true, String: tm},
 		}
@@ -333,23 +360,24 @@ func saveWccTrn(ws ...*model.WccTrn) (err error) {
 	}
 	code := ws[0].Code
 	valueStrings := make([]string, 0, len(ws))
-	valueArgs := make([]interface{}, 0, len(ws)*9)
+	valueArgs := make([]interface{}, 0, len(ws)*10)
 	for _, e := range ws {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs, e.UUID)
 		valueArgs = append(valueArgs, e.Code)
 		valueArgs = append(valueArgs, e.Klid)
 		valueArgs = append(valueArgs, e.Date)
 		valueArgs = append(valueArgs, e.Rcode)
 		valueArgs = append(valueArgs, e.Corl)
-		valueArgs = append(valueArgs, e.AbsDiff)
+		valueArgs = append(valueArgs, e.MinDiff)
+		valueArgs = append(valueArgs, e.MaxDiff)
 		valueArgs = append(valueArgs, e.Udate)
 		valueArgs = append(valueArgs, e.Utime)
 	}
 	stmt := fmt.Sprintf("INSERT INTO wcc_trn (uuid,code,klid,date,rcode,corl,"+
-		"abs_diff,udate,utime) VALUES %s "+
-		"on duplicate key update corl=values(corl), abs_diff=values(abs_diff),"+
-		"udate=values(udate),utime=values(utime)",
+		"min_diff,max_diff,udate,utime) VALUES %s "+
+		"on duplicate key update corl=values(corl), min_diff=values(min_diff),"+
+		"max_diff=values(max_diff),udate=values(udate),utime=values(utime)",
 		strings.Join(valueStrings, ","))
 	retry := conf.Args.DeadlockRetry
 	rt := 0
@@ -374,10 +402,10 @@ func saveWccTrn(ws ...*model.WccTrn) (err error) {
 //warpingCorl calculates warping correlation coefficients and absolute difference.
 //Actually summing over minimum/maximum absolute distance of each paired elements within shifted prior of bucket,
 //and divide by len(lrs) to get average. Final correlation coefficient is chosen by max absolute average.
-func warpingCorl(lrs, bucket []float64) (c, ad float64, e error) {
+func warpingCorl(lrs, bucket []float64) (minDiff, maxDiff float64, e error) {
 	lenLrs := len(lrs)
 	if len(bucket) < lenLrs {
-		return c, ad, errors.WithStack(errors.Errorf("len(bucket)(%d) must be greater than len(lrs)(%s)", len(bucket), len(lrs)))
+		return minDiff, maxDiff, errors.WithStack(errors.Errorf("len(bucket)(%d) must be greater than len(lrs)(%s)", len(bucket), len(lrs)))
 	}
 	shift := len(bucket) - lenLrs
 	sumMin, sumMax := 0., 0.
@@ -398,39 +426,11 @@ func warpingCorl(lrs, bucket []float64) (c, ad float64, e error) {
 		sumMin += min
 		sumMax += max
 	}
-	maxlr := 0.
-	maxlr, e = getMaxLrForWcc()
 	if e != nil {
-		return c, ad, e
+		return minDiff, maxDiff, e
 	}
 	flen := float64(lenLrs)
-	avgMin := sumMin / flen
-	avgMax := sumMax / flen
-	if avgMin > maxlr-avgMax {
-		ad = avgMax
-	} else {
-		ad = avgMin
-	}
-	//remap [0, x] to [1, -1] (in opposite direction)
-	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
-	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
-	c = -ad/maxlr*2. + 1
+	minDiff = sumMin / flen
+	maxDiff = sumMax / flen
 	return
-}
-
-func getMaxLrForWcc() (float64, error) {
-	lock.Lock()
-	defer lock.Unlock()
-	if !math.IsNaN(wccMaxLr) {
-		return wccMaxLr, nil
-	}
-	var e error
-	log.Println("querying max lr for wcc...")
-	wccMaxLr, e = dbmap.SelectFloat("select max(lr)-min(lr) from kline_d_b")
-	if e != nil {
-		log.Printf("failed to query max lr for wcc: %+v", e)
-		return wccMaxLr, errors.WithStack(e)
-	}
-	log.Printf("max lr for wcc: %f", wccMaxLr)
-	return wccMaxLr, nil
 }

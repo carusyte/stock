@@ -1507,6 +1507,24 @@ CREATE TABLE `tradecal` (
   KEY `ix_tradecal_index` (`index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE `wcc_trn` (
+  `uuid` varchar(50) NOT NULL,
+  `code` varchar(8) NOT NULL,
+  `date` varchar(10) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `rcode` varchar(8) NOT NULL,
+  `corl` double DEFAULT NULL,
+  `min_diff` double DEFAULT NULL,
+  `max_diff` double DEFAULT NULL,
+  `flag` varchar(20) DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL,
+  `utime` varchar(8) DEFAULT NULL,
+  PRIMARY KEY (`code`,`date`,`klid`,`rcode`),
+  UNIQUE KEY `UNI_IDX_01` (`uuid`),
+  KEY `IDX_FLAG` (`flag`,`uuid`),
+  KEY `IDX_CORL` (`corl`,`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE `worst_rec` (
   `model` varchar(45) NOT NULL,
   `start_time` varchar(20) NOT NULL,
@@ -1567,21 +1585,3 @@ CREATE TABLE `xdxr` (
   PRIMARY KEY (`code`,`idx`),
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-CREATE TABLE `wcc_trn` (
-  `uuid` varchar(50) NOT NULL,
-  `code` varchar(8) NOT NULL,
-  `date` varchar(10) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `rcode` varchar(8) NOT NULL,
-  `corl` double DEFAULT NULL,
-  `abs_diff` double DEFAULT NULL,
-  `flag` varchar(20) DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL,
-  `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`code`,`date`,`klid`,`rcode`),
-  UNIQUE KEY `UNI_IDX_01` (`uuid`),
-  KEY `IDX_FLAG` (`flag`,`uuid`),
-  KEY `IDX_CORL` (`corl`,`uuid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-

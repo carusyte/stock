@@ -1188,7 +1188,8 @@ type WccTrn struct {
 	Date    string
 	Rcode   string
 	Corl    float64
-	AbsDiff float64
+	MinDiff float64
+	MaxDiff float64
 	Flag    sql.NullString
 	Udate   sql.NullString
 	Utime   sql.NullString
