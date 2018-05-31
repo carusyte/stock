@@ -6,8 +6,8 @@ import (
 	"github.com/DejaMi/mymysql-pool"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	_ "github.com/ziutek/mymysql/godrv"
-	_ "github.com/ziutek/mymysql/native"
+	//mysql driver
+	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/gorp.v2"
 )
 
@@ -15,10 +15,12 @@ var p, e = pool.New(pool.Config{Address: "127.0.0.1:3306", Protocol: "tcp", User
 	Database: "secu", MaxConnections: 100, MaxConnectionAge: 60, ConnectTimeout: 60, RequestTimeout: 60,
 	KeepConnectionsAlive: true})
 
+//Get dbmap
 func Get(create, truncate bool) *gorp.DbMap {
 	// connect to db using standard Go database/sql API
 	// use whatever database/sql driver you wish
-	db, err := sql.Open("mymysql", "tcp:localhost:3306*secu/mysql/123456")
+	// db, err := sql.Open("mysql", "tcp:localhost:3306*secu/mysql/123456")
+	db, err := sql.Open("mysql", "mysql:123456@/secu")
 	util.CheckErr(err, "sql.Open failed,")
 
 	db.SetMaxOpenConns(64)
