@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/DejaMi/mymysql-pool"
 	"github.com/carusyte/stock/model"
@@ -25,6 +26,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 
 	db.SetMaxOpenConns(64)
 	db.SetMaxIdleConns(64)
+	db.SetConnMaxLifetime(time.Second * 15)
 
 	// construct a gorp DbMap
 	dbmap := &gorp.DbMap{Db: db, Dialect: gorp.MySQLDialect{"InnoDB", "utf8"}}

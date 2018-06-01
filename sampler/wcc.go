@@ -83,7 +83,7 @@ func updateWcc() {
 	log.Printf("querying max(max_diff) + min(min_diff)...")
 	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
 	if e != nil {
-		log.Printf("failed to update corl: %+v", e)
+		log.Printf("failed to update corl: %+v", errors.WithStack(e))
 		return
 	}
 	log.Printf("max: %f, updating corl value...", max)
@@ -96,7 +96,39 @@ func updateWcc() {
 			END
 	`, map[string]interface{}{"mx": max})
 	if e != nil {
-		log.Printf("failed to update corl: %+v", e)
+		log.Printf("failed to update corl: %+v", errors.WithStack(e))
+		return
+	}
+	log.Printf("collecting corl stats...")
+	_, e = dbmap.Exec(`
+		INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
+		SELECT 
+			'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
+		FROM
+			wcc_trn
+	`,)
+	if e != nil {
+		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
+		return
+	}
+	log.Printf("standardizing...")
+	_, e = dbmap.Exec(`
+		UPDATE wcc_trn w
+				JOIN
+			(SELECT 
+				mean m, std s
+			FROM
+				fs_stats
+			WHERE
+				method = 'standardization'
+					AND tab = 'wcc_trn'
+					AND fields = 'corl') f 
+		SET 
+			corl = (corl - f.m) / f.s
+	`,)
+	if e != nil {
+		log.Printf("failed to standardize wcc corl: %+v", errors.WithStack(e))
+		return
 	}
 }
 

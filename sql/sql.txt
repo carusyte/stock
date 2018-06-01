@@ -580,6 +580,7 @@ FROM
         %[1]s 
 	) t1
 
+
 -- name: QUERY_BWR_DAILY_4_XCORL_TRN
 SELECT 
     t.code,

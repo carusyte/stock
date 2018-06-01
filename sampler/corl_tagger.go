@@ -89,9 +89,19 @@ func TagCorlTrn(table CorlTab, flag string) (e error) {
 		flag := fmt.Sprintf("%s_%d", flag, i+1)
 		prog := float64(float64(i+1)/float64(len(grps))) * 100.
 		log.Printf("step %d/%d(%.3f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
-		_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ? where uuid in (%s)`, table, uuids), flag)
-		if e != nil {
-			return errors.WithStack(e)
+		rt := 0
+		for ; rt < 3; rt++ {
+			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ? where uuid in (%s)`, table, uuids), flag)
+			if e != nil {
+				log.Printf("failed to update flag: %+v, retrying %d...", e, rt+1)
+			} else {
+				break
+			}
+		}
+		if rt >= 3 {
+			if e != nil {
+				return errors.WithStack(e)
+			}
 		}
 		grps[i] = nil
 	}
