@@ -12,23 +12,47 @@ import (
 	"github.com/pkg/errors"
 )
 
+//CorlTab type, such as XcorlTrn, WccTrn, etc.
 type CorlTab string
 
 const (
+	//XcorlTrn Cross Correlation Training
 	XcorlTrn CorlTab = "xcorl_trn"
-	WccTrn   CorlTab = "wcc_trn"
+	//WccTrn Warping Correlation Coefficient Training
+	WccTrn CorlTab = "wcc_trn"
 )
 
 //TagCorlTrn tags the sampled correlation training table (such as xcorl_trn or wcc_trn) data
 //with specified flag as prefix by randomly and evenly selecting untagged samples.
-func TagCorlTrn(table CorlTab, flag string) (e error) {
+func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	log.Printf("tagging %v using %s as prefix...", table, flag)
-	// clear already tagged data
-	log.Println("cleansing existing tag...")
-	usql := fmt.Sprintf(`update %v set flag = null where flag like '%s%%'`, table, flag)
-	_, e = dbmap.Exec(usql)
-	if e != nil {
-		return errors.WithStack(e)
+	startno := 0
+	if erase {
+		// clear already tagged data
+		log.Println("cleansing existing tag...")
+		usql := fmt.Sprintf(`update %v set flag = null where flag like '%s%%'`, table, flag)
+		_, e = dbmap.Exec(usql)
+		if e != nil {
+			return errors.WithStack(e)
+		}
+	} else {
+		// load existent max tag number
+		q := "SELECT  " +
+			"    MAX(CONVERT( SUBSTRING_INDEX(flag, '_', - 1) , UNSIGNED INTEGER)) AS max_bno " +
+			"FROM " +
+			"    (SELECT DISTINCT " +
+			"        flag " +
+			"    FROM " +
+			"        wcc_trn " +
+			"    WHERE " +
+			"        flag LIKE ?) t "
+		f := fmt.Sprintf("%s_%%", flag)
+		sno, e := dbmap.SelectInt(q, f)
+		if e != nil {
+			return errors.WithStack(e)
+		}
+		startno = int(sno)
+		log.Printf("continue with batch number: %d", startno+1)
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
 	log.Println("loading untagged records...")
@@ -86,7 +110,7 @@ func TagCorlTrn(table CorlTab, flag string) (e error) {
 	for i := 0; i < len(grps); i++ {
 		g := grps[i]
 		uuids := util.Join(g, ",", true)
-		flag := fmt.Sprintf("%s_%d", flag, i+1)
+		flag := fmt.Sprintf("%s_%d", flag, startno+i+1)
 		prog := float64(float64(i+1)/float64(len(grps))) * 100.
 		log.Printf("step %d/%d(%.3f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
 		rt := 0

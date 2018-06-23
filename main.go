@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	xcorl, wcc                 bool
+	xcorl, wcc, eraseTag       bool
 	tagTest, tagTrain          int
 	tagXcorl, tagWcc           string
 	tagXcorlTest, tagWccTest   bool
@@ -53,13 +53,13 @@ func main() {
 		getd.StopWatch("XCORL", s)
 	}
 	if tagXcorlTest {
-		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TestFlag)
+		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TestFlag, eraseTag)
 		if e != nil {
 			log.Println(e)
 		}
 	}
 	if tagXcorlTrain {
-		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TrainFlag)
+		e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TrainFlag, eraseTag)
 		if e != nil {
 			log.Println(e)
 		}
@@ -71,13 +71,13 @@ func main() {
 		getd.StopWatch("WCC", s)
 	}
 	if tagWccTest {
-		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TestFlag)
+		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TestFlag, eraseTag)
 		if e != nil {
 			log.Println(e)
 		}
 	}
 	if tagWccTrain {
-		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TrainFlag)
+		e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TrainFlag, eraseTag)
 		if e != nil {
 			log.Println(e)
 		}
@@ -118,6 +118,7 @@ func main() {
 func parseArgs() {
 	flag.BoolVar(&xcorl, "xcorl", false, "sample cross correlation amongst securities.")
 	flag.BoolVar(&wcc, "wcc", false, "sample warping correlation coefficient amongst securities.")
+	flag.BoolVar(&eraseTag, "eraseTag", false, "erase existing tag in the training table.")
 	flag.IntVar(&tagTest, "tagTest", 0, "tag key point sample data for test set.")
 	flag.IntVar(&tagTrain, "tagTrain", 0, "tag key point sample data for training set.")
 	flag.StringVar(&tagXcorl, "tagXcorl", "", "tag xcorl_trn sample data for the specified set(test/train, or both).")
