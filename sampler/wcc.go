@@ -81,7 +81,7 @@ func updateWcc() {
 	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
 	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
 	log.Printf("querying max(max_diff) + min(min_diff)...")
-	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
+	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn where flag is null")
 	if e != nil {
 		log.Printf("failed to update corl: %+v", errors.WithStack(e))
 		return
@@ -94,19 +94,26 @@ func updateWcc() {
 				WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
 				ELSE  - max_diff / :mx * 2 + 1
 			END
+		WHERE flag is null
 	`, map[string]interface{}{"mx": max})
 	if e != nil {
 		log.Printf("failed to update corl: %+v", errors.WithStack(e))
 		return
 	}
 	log.Printf("collecting corl stats...")
+	_, e = dbmap.Exec(`delete from fs_stats where method = ? and tab = ? and fields = ?`,
+		"standardization", "wcc_trn", "corl")
+	if e != nil {
+		log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
+		return
+	}
 	_, e = dbmap.Exec(`
 		INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
 		SELECT 
 			'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
 		FROM
 			wcc_trn
-	`,)
+	`)
 	if e != nil {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
@@ -125,7 +132,8 @@ func updateWcc() {
 					AND fields = 'corl') f 
 		SET 
 			corl = (corl - f.m) / f.s
-	`,)
+		WHERE flag is null
+	`)
 	if e != nil {
 		log.Printf("failed to standardize wcc corl: %+v", errors.WithStack(e))
 		return
