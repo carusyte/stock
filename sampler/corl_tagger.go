@@ -47,12 +47,16 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 			"    WHERE " +
 			"        flag LIKE ?) t "
 		f := fmt.Sprintf("%s_%%", flag)
-		sno, e := dbmap.SelectInt(q, f)
+		sno, e := dbmap.SelectNullInt(q, f)
 		if e != nil {
 			return errors.WithStack(e)
 		}
-		startno = int(sno)
-		log.Printf("continue with batch number: %d", startno+1)
+		if sno.Valid {
+			startno = int(sno.Int64)
+			log.Printf("continue with batch number: %d", startno+1)
+		} else {
+			log.Printf("no existing data for %s set. batch no will be starting from %d", flag, startno+1)
+		}
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
 	log.Println("loading untagged records...")
