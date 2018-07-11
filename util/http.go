@@ -9,12 +9,14 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"time"
 
+	"github.com/carusyte/stock/conf"
+	"github.com/pkg/errors"
 	logr "github.com/sirupsen/logrus"
-	pxtool "github.com/carusyte/stock/proxy"
 	"golang.org/x/net/proxy"
 )
 
@@ -23,34 +25,37 @@ const RETRY int = 3
 var PART_PROXY float64 = 0
 var PROXY_ADDR string = ""
 
-func HttpGetResponse(url string, headers map[string]string, rotateProxy, rotateAgent bool) (res *http.Response, e error) {
+//HTTPGetResponse initiates HTTP get request and returns its response
+func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rotateProxy, rotateAgent bool) (res *http.Response, e error) {
+	if useMasterProxy && rotateProxy {
+		log.Panic("can't useMasterProxy and rotateProxy at the same time.")
+	}
+
 	host := ""
-	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(url)
+	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(link)
 	if len(r) > 0 {
 		host = r[len(r)-1]
 	}
 
 	var client *http.Client
-	//determine if we must use a proxy
-	if rotateProxy {
-		
+	//determine if we must use a master proxy
+	if useMasterProxy {
 		// create a socks5 dialer
-		dialer, err := proxy.SOCKS5("tcp", PROXY_ADDR, nil, proxy.Direct)
+		dialer, err := proxy.SOCKS5("tcp", conf.Args.Network.MasterProxyAddr, nil, proxy.Direct)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "can't connect to the proxy:", err)
-			os.Exit(1)
+			log.Printf("can't connect to the master proxy: %+v", err)
+			return nil, errors.WithStack(err)
 		}
 		// setup a http client
 		httpTransport := &http.Transport{Dial: dialer.Dial}
 		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
 			Transport: httpTransport}
-	} else {
+	} else if !rotateProxy {
 		client = &http.Client{Timeout: time.Second * 60} // Maximum of 60 secs
-
 	}
 
 	for i := 0; true; i++ {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, link, nil)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -60,38 +65,61 @@ func HttpGetResponse(url string, headers map[string]string, rotateProxy, rotateA
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6")
 		req.Header.Set("Cache-Control", "no-cache")
 		req.Header.Set("Connection", "keep-alive")
-		//req.Header.Set("Cookie", "searchGuide=sg; "+
-		//	"UM_distinctid=15d4e2ca50580-064a0c1f749ffa-30667808-232800-15d4e2ca506a9c; "+
-		//	"Hm_lvt_78c58f01938e4d85eaf619eae71b4ed1=1502162404,1502164752,1504536800; "+
-		//	"Hm_lpvt_78c58f01938e4d85eaf619eae71b4ed1=1504536800")
 		if host != "" {
 			req.Header.Set("Host", host)
 		}
 		req.Header.Set("Pragma", "no-cache")
 		req.Header.Set("Upgrade-Insecure-Requests", "1")
-		req.Header.Set("User-Agent",
-			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) "+
-				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36")
+		uagent := ""
+		if rotateAgent {
+			uagent, e = PickUserAgent()
+			if e != nil {
+				log.Printf("failed to acquire rotate user agent: %+v", e)
+				time.Sleep(time.Millisecond * time.Duration(300+rand.Intn(300)))
+				continue
+			}
+		} else {
+			uagent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) " +
+				"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36"
+		}
+		req.Header.Set("User-Agent", uagent)
 		if headers != nil && len(headers) > 0 {
 			for k, hv := range headers {
 				req.Header.Set(k, hv)
 			}
 		}
 
+		if rotateProxy {
+			//determine if we must use a rotated proxy
+			httpProxy, e := PickHTTPProxy()
+			if e != nil {
+				log.Printf("failed to acquire rotate proxy: %+v", e)
+				return nil, errors.WithStack(e)
+			}
+			proxyURL, e := url.Parse(httpProxy)
+			if e != nil {
+				log.Printf("invalid proxy: %s, %+v", httpProxy, e)
+				return nil, errors.WithStack(e)
+			}
+			// setup a http client
+			client = &http.Client{
+				Timeout:   time.Second * 60, // Maximum of 60 secs
+				Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
+		}
+
 		res, err = client.Do(req)
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", url, err)
+				log.Printf("http communication failed. url=%s\n%+v", link, err)
 				e = err
 				return
-			} else {
-				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
-				if res != nil {
-					res.Body.Close()
-				}
-				time.Sleep(time.Millisecond * 500)
 			}
+			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+			if res != nil {
+				res.Body.Close()
+			}
+			time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(300)))
 		} else {
 			return
 		}
@@ -99,13 +127,13 @@ func HttpGetResponse(url string, headers map[string]string, rotateProxy, rotateA
 	return
 }
 
-func HttpGetResp(url string) (res *http.Response, e error) {
-	return HttpGetRespUsingHeaders(url, nil)
+func HttpGetResp(link string) (res *http.Response, e error) {
+	return HttpGetRespUsingHeaders(link, nil)
 }
 
-func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.Response, e error) {
+func HttpGetRespUsingHeaders(link string, headers map[string]string) (res *http.Response, e error) {
 	host := ""
-	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(url)
+	r := regexp.MustCompile(`//([^/]*)/`).FindStringSubmatch(link)
 	if len(r) > 0 {
 		host = r[len(r)-1]
 	}
@@ -129,7 +157,7 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 	}
 
 	for i := 0; true; i++ {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, link, nil)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -161,11 +189,11 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", url, err)
+				log.Printf("http communication failed. url=%s\n%+v", link, err)
 				e = err
 				return
 			} else {
-				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 				if res != nil {
 					res.Body.Close()
 				}
@@ -178,7 +206,7 @@ func HttpGetRespUsingHeaders(url string, headers map[string]string) (res *http.R
 	return
 }
 
-func HttpGetBytesUsingHeaders(url string, headers map[string]string) (body []byte, e error) {
+func HttpGetBytesUsingHeaders(link string, headers map[string]string) (body []byte, e error) {
 	var resBody *io.ReadCloser
 	defer func() {
 		if resBody != nil {
@@ -186,13 +214,13 @@ func HttpGetBytesUsingHeaders(url string, headers map[string]string) (body []byt
 		}
 	}()
 	for i := 0; true; i++ {
-		res, e := HttpGetRespUsingHeaders(url, headers)
+		res, e := HttpGetRespUsingHeaders(link, headers)
 		if e != nil {
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", url, e)
+				log.Printf("http communication failed. url=%s\n%+v", link, e)
 				return nil, e
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, e)
+			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, e)
 			if res != nil {
 				res.Body.Close()
 			}
@@ -205,10 +233,10 @@ func HttpGetBytesUsingHeaders(url string, headers map[string]string) (body []byt
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", url, err)
+				log.Printf("http communication failed. url=%s\n%+v", link, err)
 				return nil, e
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 			if resBody != nil {
 				res.Body.Close()
 			}
@@ -223,7 +251,7 @@ func HttpGetBytesUsingHeaders(url string, headers map[string]string) (body []byt
 
 //HTTPPostJSON visits url using http post method, optionally using provided headers.
 // params will be marshalled to json format before sending to the url server.
-func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e error) {
+func HTTPPostJSON(link string, headers, params map[string]string) (body []byte, e error) {
 	var resBody *io.ReadCloser
 	defer func() {
 		if resBody != nil {
@@ -258,7 +286,7 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 		logr.Debugf("HTTP Post param: %+v", params)
 		req, err := http.NewRequest(
 			http.MethodPost,
-			url,
+			link,
 			bytes.NewBuffer((jsonParams)))
 		if err != nil {
 			return nil, err
@@ -273,11 +301,11 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", url, err)
+				log.Printf("http communication failed. url=%s\n%+v", link, err)
 				e = err
 				return
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 			if res != nil {
 				res.Body.Close()
 			}
@@ -288,10 +316,10 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 			if err != nil {
 				//handle "read: connection reset by peer" error by retrying
 				if i >= RETRY {
-					log.Printf("http communication failed. url=%s\n%+v", url, err)
+					log.Printf("http communication failed. url=%s\n%+v", link, err)
 					return nil, e
 				}
-				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", url, i+1, err)
+				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 				if resBody != nil {
 					res.Body.Close()
 				}
@@ -305,16 +333,16 @@ func HTTPPostJSON(url string, headers, params map[string]string) (body []byte, e
 	return
 }
 
-func HttpGetBytes(url string) (body []byte, e error) {
-	return HttpGetBytesUsingHeaders(url, nil)
+func HttpGetBytes(link string) (body []byte, e error) {
+	return HttpGetBytesUsingHeaders(link, nil)
 }
 
-func Download(url, file string) (err error) {
-	return DownloadUsingHeaders(url, file, nil)
+func Download(link, file string) (err error) {
+	return DownloadUsingHeaders(link, file, nil)
 }
 
-func DownloadUsingHeaders(url, file string, headers map[string]string) (e error) {
-	log.Printf("Downloading from %s", url)
+func DownloadUsingHeaders(link, file string, headers map[string]string) (e error) {
+	log.Printf("Downloading from %s", link)
 
 	if _, e := os.Stat(file); e == nil {
 		os.Remove(file)
@@ -327,16 +355,16 @@ func DownloadUsingHeaders(url, file string, headers map[string]string) (e error)
 	}
 	defer output.Close()
 
-	response, err := HttpGetRespUsingHeaders(url, headers)
+	response, err := HttpGetRespUsingHeaders(link, headers)
 	if err != nil {
-		log.Printf("Error while downloading %s\n%+v", url, err)
+		log.Printf("Error while downloading %s\n%+v", link, err)
 		return
 	}
 	defer response.Body.Close()
 
 	n, err := io.Copy(output, response.Body)
 	if err != nil {
-		log.Printf("Error while downloading %s\n%+v", url, err)
+		log.Printf("Error while downloading %s\n%+v", link, err)
 		return
 	}
 

@@ -125,7 +125,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 	var xdxrs []*model.Xdxr
 	// Load the URL
-	res, e := util.HttpGetResp(url)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		log.Printf("%s, http failed, giving up %s", stock.Code, url)
 		return false, false
@@ -528,7 +528,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 		e   error
 	)
 	// Load the URL
-	res, e = util.HttpGetResp(url)
+	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		log.Printf("%s, http failed, giving up %s", code, url)
 		return false, false
@@ -806,7 +806,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		e   error
 	)
 	// Load the URL
-	res, e = util.HttpGetResp(url)
+	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		log.Printf("%s, http failed, giving up %s", code, url)
 		return false, false

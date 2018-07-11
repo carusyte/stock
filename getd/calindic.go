@@ -81,7 +81,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 	)
 	tab := "kline_w"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
-		switch conf.Args.DataSource.IndicatorSource {
+		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
 			tab = "kline_w_b"
 		case model.None:
@@ -148,7 +148,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 
 	tab := "kline_m"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
-		switch conf.Args.DataSource.IndicatorSource {
+		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
 			tab = "kline_m_b"
 		case model.None:
@@ -215,7 +215,7 @@ func calcDay(stk *model.Stock, offset int64) {
 
 	tab := "kline_d"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
-		switch conf.Args.DataSource.IndicatorSource {
+		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
 			tab = "kline_d_b"
 		case model.None:

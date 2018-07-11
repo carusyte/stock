@@ -172,7 +172,7 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 
 func thsShares(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/equity.html`, stock.Code)
-	res, e := util.HttpGetResp(url)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		log.Printf("%s, http failed, giving up %s", stock.Code, url)
 		return false, false
@@ -295,7 +295,7 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 
 func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/field.html`, stock.Code)
-	res, e := util.HttpGetResp(url)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		log.Printf("%s, http failed, giving up %s", stock.Code, url)
 		return false, false
@@ -562,7 +562,8 @@ func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.Wa
 	urlt := `http://q.10jqka.com.cn/index/index/board/all/field/zdf/order/desc/page/%d/ajax/1/`
 
 	// Load the URL
-	res, e := util.HttpGetResp(fmt.Sprintf(urlt, page))
+	url := fmt.Sprintf(urlt, page)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
 		panic(e)
 	}
