@@ -22,7 +22,6 @@ import (
 
 var (
 	wccMaxLr = math.NaN()
-	lock     sync.Mutex
 )
 
 type wccTrnDBJob struct {
@@ -81,20 +80,19 @@ func updateWcc() {
 	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
 	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
 	log.Printf("querying max(max_diff) + min(min_diff)...")
-	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn where flag is null")
+	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
 	if e != nil {
 		log.Printf("failed to update corl: %+v", errors.WithStack(e))
 		return
 	}
-	log.Printf("max: %f, updating corl value...", max)
+	log.Printf("max: %f, updating corl_stz value...", max)
 	_, e = dbmap.Exec(`
 		UPDATE wcc_trn  
-		SET 
+		SET
 			corl = CASE
 				WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
 				ELSE  - max_diff / :mx * 2 + 1
 			END
-		WHERE flag is null
 	`, map[string]interface{}{"mx": max})
 	if e != nil {
 		log.Printf("failed to update corl: %+v", errors.WithStack(e))
@@ -108,12 +106,12 @@ func updateWcc() {
 		return
 	}
 	_, e = dbmap.Exec(`
-		INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
+		INSERT INTO fs_stats (method, tab, fields, mean, std, vmax, udate, utime)
 		SELECT 
-			'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
+			'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S')
 		FROM
 			wcc_trn
-	`)
+	`, max)
 	if e != nil {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
@@ -131,8 +129,7 @@ func updateWcc() {
 					AND tab = 'wcc_trn'
 					AND fields = 'corl') f 
 		SET 
-			corl = (corl - f.m) / f.s
-		WHERE flag is null
+			corl_stz = (corl - f.m) / f.s
 	`)
 	if e != nil {
 		log.Printf("failed to standardize wcc corl: %+v", errors.WithStack(e))

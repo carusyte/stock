@@ -1202,3 +1202,28 @@ func (x *WccTrn) String() string {
 	}
 	return fmt.Sprintf("%v", string(j))
 }
+
+//StockRel represents stock relations regarding the correlation coefficients at different times.
+type StockRel struct {
+	Code       string
+	Date       string
+	Klid       int
+	RcodePos   string
+	RcodePosHs string
+	RcodeNeg   string
+	RcodeNegHs string
+	PosCorl    float64
+	PosCorlHs  float64
+	NegCorl    float64
+	NegCorlHs  float64
+	Udate      sql.NullString
+	Utime      sql.NullString
+}
+
+func (x *StockRel) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}

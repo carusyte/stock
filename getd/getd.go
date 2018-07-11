@@ -127,6 +127,7 @@ func Get() {
 	rptFailed(allstks, stks)
 }
 
+//StopWatch stops the timer and insert duration info into stats table.
 func StopWatch(code string, start time.Time) {
 	ss := start.Format("2006-01-02 15:04:05")
 	end := time.Now().Format("2006-01-02 15:04:05")

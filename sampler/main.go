@@ -19,13 +19,13 @@ func init() {
 
 	switch conf.Args.Sampler.Grader {
 	case graderLr:
-		log.Println("Sampling key points using LrGrader")
+		log.Println("Key point grader: LrGrader")
 		grader = new(lrGrader)
 	case graderRemaLr:
-		log.Println("Sampling key points using RemaLrGrader")
+		log.Println("Key point grader: RemaLrGrader")
 		grader = new(remaLrGrader)
 	default:
-		log.Println("Sampling key points using default grader")
+		log.Println("Key point grader: default grader")
 		grader = new(dwGrader)
 	}
 }

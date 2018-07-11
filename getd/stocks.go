@@ -437,44 +437,56 @@ func overwrite(allstk []*model.Stock) {
 	if len(allstk) > 0 {
 		tran, e := dbmap.Begin()
 		util.CheckErr(e, "failed to begin new transaction")
-
+		numFields := 31
+		holders := make([]string, numFields)
+		for i := range holders {
+			holders[i] = "?"
+		}
+		holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 		codes := make([]string, len(allstk))
-		valueStrings := make([]string, 0, len(allstk))
-		valueArgs := make([]interface{}, 0, len(allstk)*31)
+		type batch struct {
+			placeHolders []string
+			values       []interface{}
+		}
+		batchSize := 500
+		batches := make([]*batch, 0, 16)
 		for i, stk := range allstk {
-			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-			valueArgs = append(valueArgs, stk.Code)
-			valueArgs = append(valueArgs, stk.Name)
-			valueArgs = append(valueArgs, stk.Market)
-			valueArgs = append(valueArgs, stk.Industry)
-			valueArgs = append(valueArgs, stk.IndLv1)
-			valueArgs = append(valueArgs, stk.IndLv2)
-			valueArgs = append(valueArgs, stk.IndLv3)
-			valueArgs = append(valueArgs, stk.Price)
-			valueArgs = append(valueArgs, stk.Varate)
-			valueArgs = append(valueArgs, stk.Var)
-			valueArgs = append(valueArgs, stk.Accer)
-			valueArgs = append(valueArgs, stk.Xrate)
-			valueArgs = append(valueArgs, stk.Volratio)
-			valueArgs = append(valueArgs, stk.Ampl)
-			valueArgs = append(valueArgs, stk.Turnover)
-			valueArgs = append(valueArgs, stk.Outstanding)
-			valueArgs = append(valueArgs, stk.Totals)
-			valueArgs = append(valueArgs, stk.CircMarVal)
-			valueArgs = append(valueArgs, stk.TimeToMarket)
-			valueArgs = append(valueArgs, stk.ShareSum)
-			valueArgs = append(valueArgs, stk.AShareSum)
-			valueArgs = append(valueArgs, stk.AShareExch)
-			valueArgs = append(valueArgs, stk.AShareR)
-			valueArgs = append(valueArgs, stk.BShareSum)
-			valueArgs = append(valueArgs, stk.BShareExch)
-			valueArgs = append(valueArgs, stk.BShareR)
-			valueArgs = append(valueArgs, stk.HShareSum)
-			valueArgs = append(valueArgs, stk.HShareExch)
-			valueArgs = append(valueArgs, stk.HShareR)
-			valueArgs = append(valueArgs, stk.UDate)
-			valueArgs = append(valueArgs, stk.UTime)
+			q, r := i/batchSize, i%batchSize
+			if r == 0 {
+				batches = append(batches, &batch{})
+			}
+			batches[q].placeHolders = append(batches[q].placeHolders, holderString)
+			batches[q].values = append(batches[q].values, stk.Code)
+			batches[q].values = append(batches[q].values, stk.Name)
+			batches[q].values = append(batches[q].values, stk.Market)
+			batches[q].values = append(batches[q].values, stk.Industry)
+			batches[q].values = append(batches[q].values, stk.IndLv1)
+			batches[q].values = append(batches[q].values, stk.IndLv2)
+			batches[q].values = append(batches[q].values, stk.IndLv3)
+			batches[q].values = append(batches[q].values, stk.Price)
+			batches[q].values = append(batches[q].values, stk.Varate)
+			batches[q].values = append(batches[q].values, stk.Var)
+			batches[q].values = append(batches[q].values, stk.Accer)
+			batches[q].values = append(batches[q].values, stk.Xrate)
+			batches[q].values = append(batches[q].values, stk.Volratio)
+			batches[q].values = append(batches[q].values, stk.Ampl)
+			batches[q].values = append(batches[q].values, stk.Turnover)
+			batches[q].values = append(batches[q].values, stk.Outstanding)
+			batches[q].values = append(batches[q].values, stk.Totals)
+			batches[q].values = append(batches[q].values, stk.CircMarVal)
+			batches[q].values = append(batches[q].values, stk.TimeToMarket)
+			batches[q].values = append(batches[q].values, stk.ShareSum)
+			batches[q].values = append(batches[q].values, stk.AShareSum)
+			batches[q].values = append(batches[q].values, stk.AShareExch)
+			batches[q].values = append(batches[q].values, stk.AShareR)
+			batches[q].values = append(batches[q].values, stk.BShareSum)
+			batches[q].values = append(batches[q].values, stk.BShareExch)
+			batches[q].values = append(batches[q].values, stk.BShareR)
+			batches[q].values = append(batches[q].values, stk.HShareSum)
+			batches[q].values = append(batches[q].values, stk.HShareExch)
+			batches[q].values = append(batches[q].values, stk.HShareR)
+			batches[q].values = append(batches[q].values, stk.UDate)
+			batches[q].values = append(batches[q].values, stk.UTime)
 			codes[i] = stk.Code
 		}
 
@@ -489,24 +501,25 @@ func overwrite(allstk []*model.Stock) {
 			log.Panicf("failed to get delete sql rows affected\n%+v", e)
 		}
 		log.Printf("%d stale stock record deleted from basics", ra)
-
-		stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,ind_lv1,ind_lv2,ind_lv3,price,"+
-			"varate,var,accer,xrate,volratio,ampl,turnover,outstanding,totals,circmarval,timeToMarket,"+
-			"share_sum,a_share_sum,a_share_exch,a_share_r,b_share_sum,b_share_exch,b_share_r,"+
-			"h_share_sum,h_share_exch,h_share_r,udate,utime) VALUES %s on duplicate key update "+
-			"name=values(name),market=values(market),industry=values(industry),ind_lv1=values(ind_lv1),ind_lv2=values(ind_lv2),"+
-			"ind_lv3=values(ind_lv3),price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
-			"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
-			"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+
-			"(timeToMarket),share_sum=values(share_sum),a_share_sum=values(a_share_sum),a_share_exch=values(a_share_exch),"+
-			"a_share_r=values(a_share_r),b_share_sum=values(b_share_sum),b_share_exch=values(b_share_exch),"+
-			"b_share_r=values(b_share_r),h_share_sum=values(h_share_sum),h_share_exch=values(h_share_exch),"+
-			"h_share_r=values(h_share_r),udate=values(udate),utime=values(utime)",
-			strings.Join(valueStrings, ","))
-		_, e = tran.Exec(stmt, valueArgs...)
-		if e != nil {
-			tran.Rollback()
-			log.Panicf("failed to bulk update basics %d\n%+v", len(allstk), e)
+		for _, b := range batches {
+			stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,ind_lv1,ind_lv2,ind_lv3,price,"+
+				"varate,var,accer,xrate,volratio,ampl,turnover,outstanding,totals,circmarval,timeToMarket,"+
+				"share_sum,a_share_sum,a_share_exch,a_share_r,b_share_sum,b_share_exch,b_share_r,"+
+				"h_share_sum,h_share_exch,h_share_r,udate,utime) VALUES %s on duplicate key update "+
+				"name=values(name),market=values(market),industry=values(industry),ind_lv1=values(ind_lv1),ind_lv2=values(ind_lv2),"+
+				"ind_lv3=values(ind_lv3),price=values(price),varate=values(varate),var=values(var),accer=values(accer),"+
+				"xrate=values(xrate),volratio=values(volratio),ampl=values(ampl),turnover=values(turnover),"+
+				"outstanding=values(outstanding),totals=values(totals),circmarval=values(circmarval),timeToMarket=values"+
+				"(timeToMarket),share_sum=values(share_sum),a_share_sum=values(a_share_sum),a_share_exch=values(a_share_exch),"+
+				"a_share_r=values(a_share_r),b_share_sum=values(b_share_sum),b_share_exch=values(b_share_exch),"+
+				"b_share_r=values(b_share_r),h_share_sum=values(h_share_sum),h_share_exch=values(h_share_exch),"+
+				"h_share_r=values(h_share_r),udate=values(udate),utime=values(utime)",
+				strings.Join(b.placeHolders, ","))
+			_, e = tran.Exec(stmt, b.values...)
+			if e != nil {
+				tran.Rollback()
+				log.Panicf("failed to bulk update basics %d\n%+v", len(allstk), e)
+			}
 		}
 		tran.Commit()
 		log.Printf("%d stocks info overwrite to basics", len(allstk))
