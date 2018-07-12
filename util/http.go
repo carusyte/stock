@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -39,6 +40,10 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 
 	var client *http.Client
 	//determine if we must use a master proxy
+	bypassed := false
+	if rotateProxy && rand.Float32() <= conf.Args.Network.RotateProxyBypassRatio {
+		bypassed = true
+	}
 	if useMasterProxy {
 		// create a socks5 dialer
 		dialer, err := proxy.SOCKS5("tcp", conf.Args.Network.MasterProxyAddr, nil, proxy.Direct)
@@ -50,7 +55,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 		httpTransport := &http.Transport{Dial: dialer.Dial}
 		client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
 			Transport: httpTransport}
-	} else if !rotateProxy {
+	} else if !rotateProxy || bypassed {
 		client = &http.Client{Timeout: time.Second * 60} // Maximum of 60 secs
 	}
 
@@ -64,7 +69,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 			"application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6")
 		req.Header.Set("Cache-Control", "no-cache")
-		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Connection", "close")
 		if host != "" {
 			req.Header.Set("Host", host)
 		}
@@ -89,22 +94,36 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 			}
 		}
 
-		if rotateProxy {
+		if rotateProxy && !bypassed {
 			//determine if we must use a rotated proxy
-			httpProxy, e := PickHTTPProxy()
-			if e != nil {
-				log.Printf("failed to acquire rotate proxy: %+v", e)
-				return nil, errors.WithStack(e)
+			proxyAddr, e := PickProxy()
+			if strings.HasPrefix(proxyAddr, "socks5://") {
+				// create a socks5 dialer
+				dialer, err := proxy.SOCKS5("tcp", strings.TrimLeft(proxyAddr, "socks5://"), nil, proxy.Direct)
+				if err != nil {
+					log.Printf("can't connect to the socks5 proxy: %+v", err)
+					return nil, errors.WithStack(err)
+				}
+				// setup a http client
+				httpTransport := &http.Transport{Dial: dialer.Dial}
+				client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
+					Transport: httpTransport}
+			} else {
+				//http proxy
+				if e != nil {
+					log.Printf("failed to acquire rotate proxy: %+v", e)
+					return nil, errors.WithStack(e)
+				}
+				proxyURL, e := url.Parse(proxyAddr)
+				if e != nil {
+					log.Printf("invalid proxy: %s, %+v", proxyAddr, e)
+					return nil, errors.WithStack(e)
+				}
+				// setup a http client
+				client = &http.Client{
+					Timeout:   time.Second * 60, // Maximum of 60 secs
+					Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
 			}
-			proxyURL, e := url.Parse(httpProxy)
-			if e != nil {
-				log.Printf("invalid proxy: %s, %+v", httpProxy, e)
-				return nil, errors.WithStack(e)
-			}
-			// setup a http client
-			client = &http.Client{
-				Timeout:   time.Second * 60, // Maximum of 60 secs
-				Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
 		}
 
 		res, err = client.Do(req)
@@ -166,7 +185,7 @@ func HttpGetRespUsingHeaders(link string, headers map[string]string) (res *http.
 			"application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6")
 		req.Header.Set("Cache-Control", "no-cache")
-		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Connection", "close")
 		//req.Header.Set("Cookie", "searchGuide=sg; "+
 		//	"UM_distinctid=15d4e2ca50580-064a0c1f749ffa-30667808-232800-15d4e2ca506a9c; "+
 		//	"Hm_lvt_78c58f01938e4d85eaf619eae71b4ed1=1502162404,1502164752,1504536800; "+

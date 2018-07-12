@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,7 +141,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * 3)
+				time.Sleep(time.Millisecond * time.Duration(3000+rand.Intn(3000)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -152,7 +153,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 
 func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
-	RETRIES := 5
+	RETRIES := conf.Args.DefaultRetry
 	for stock := range chstk {
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r := thsShares(stock)
@@ -174,8 +175,8 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/equity.html`, stock.Code)
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", stock.Code, url)
-		return false, false
+		log.Printf("%s, http failed %s", stock.Code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 
@@ -260,8 +261,8 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://stock.finance.qq.com/corp1/plate.php?zqdm=%s`, stock.Code)
 	res, e := util.HttpGetResp(url)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", stock.Code, url)
-		return false, false
+		log.Printf("%s, http failed %s", stock.Code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 
@@ -297,8 +298,8 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/field.html`, stock.Code)
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", stock.Code, url)
-		return false, false
+		log.Printf("%s, http failed %s", stock.Code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 

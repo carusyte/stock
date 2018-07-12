@@ -35,6 +35,7 @@ const (
 //Arguments arguments struct type
 type Arguments struct {
 	//RPCServers rpc server address strings
+	DefaultRetry      int      `mapstructure:"default_retry"`
 	RPCServers        []string `mapstructure:"rpc_servers"`
 	RunMode           RunMode  `mapstructure:"run_mode"`
 	Concurrency       int      `mapstructure:"concurrency"`
@@ -44,7 +45,10 @@ type Arguments struct {
 	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
 	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
 	Network           struct {
-		MasterProxyAddr string `mapstructure:"master_proxy_addr"`
+		MasterProxyAddr            string  `mapstructure:"master_proxy_addr"`
+		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`
+		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
+		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
 	}
 	Kdjv struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`

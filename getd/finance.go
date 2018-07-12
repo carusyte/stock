@@ -127,8 +127,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	// Load the URL
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", stock.Code, url)
-		return false, false
+		log.Printf("%s, http failed %s", stock.Code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 
@@ -530,8 +530,8 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	// Load the URL
 	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", code, url)
-		return false, false
+		log.Printf("%s, http failed %s", code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 	// Convert the designated charset HTML to utf-8 encoded HTML.
@@ -808,8 +808,8 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	// Load the URL
 	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", code, url)
-		return false, false
+		log.Printf("%s, http failed %s", code, url)
+		return false, true
 	}
 	defer res.Body.Close()
 	// Convert the designated charset HTML to utf-8 encoded HTML.
