@@ -141,7 +141,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Millisecond * time.Duration(3000+rand.Intn(3000)))
+				time.Sleep(time.Millisecond * time.Duration(1000+rand.Intn(1000)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
@@ -161,7 +161,7 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 				chrstk <- stock
 			} else if r {
 				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
-				time.Sleep(time.Second * 3)
+				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
 				continue
 			} else {
 				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)

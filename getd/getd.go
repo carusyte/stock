@@ -10,11 +10,12 @@ import (
 	"github.com/carusyte/stock/util"
 )
 
+//Get miscellaneous stock info.
 func Get() {
 	var allstks, stks *model.Stocks
+	start := time.Now()
+	defer StopWatch("GETD_TOTAL", start)
 	if !conf.Args.DataSource.SkipStocks {
-		start := time.Now()
-		defer StopWatch("GETD_TOTAL", start)
 		allstks = GetStockInfo()
 		StopWatch("STOCK_LIST", start)
 	} else {

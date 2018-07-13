@@ -27,7 +27,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 	}
 
 	db.SetMaxOpenConns(64)
-	db.SetMaxIdleConns(64)
+	db.SetMaxIdleConns(4)
 	db.SetConnMaxLifetime(time.Second * 15)
 
 	// construct a gorp DbMap
