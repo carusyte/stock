@@ -192,10 +192,11 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 	}
 
 	//parse share structure table
+	ok, retry, cont := false, true, true
 	doc.Find("#stockcapit div.bd.pt5 table tbody tr").Each(
 		func(i int, s *goquery.Selection) {
 			typ := strings.TrimSpace(s.Find("th").Text())
-			if "变动原因" == typ {
+			if "变动原因" == typ || !cont {
 				return
 			}
 			sval := s.Find("td").First().Text()
@@ -217,6 +218,7 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 				div = 10000.
 			}
 			fval /= div
+			ok, retry = true, false
 			switch typ {
 			case "总股本(股)":
 				stock.ShareSum.Valid = true
@@ -249,12 +251,12 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 				stock.HShareR.Valid = true
 				stock.HShareR.Float64 = fval
 			default:
-				log.Panicf("%s unrecognized type: %s, url: %s", stock.Code, typ, url)
+				log.Printf("%s unrecognized type: %s, url: %s", stock.Code, typ, url)
+				ok, retry, cont = false, true, false
 				return
 			}
 		})
-
-	return true, false
+	return
 }
 
 func tcIndustry(stock *model.Stock) (ok, retry bool) {
