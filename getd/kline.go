@@ -736,11 +736,40 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	if len(quotes) == 0 {
 		return 0
 	}
-	numFields := 86
 	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
-	code := ""
+	code := quotes[0].Code
+	var e error
+	// delete stale records first
+	for ; rt < retry; rt++ {
+		_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+			}
+		}
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
+	}
+	batchSize := 200
+	for idx := 0; idx < len(quotes); idx += batchSize {
+		end := int(math.Min(float64(len(quotes)), float64(idx+batchSize)))
+		insertMinibatch(quotes[idx:end], table)
+	}
+	return
+}
+
+func insertMinibatch(quotes []*model.Quote, table string) (c int) {
+	numFields := 86
+	retry := conf.Args.DeadlockRetry
+	rt := 0
+	code := quotes[0].Code
 	holders := make([]string, numFields)
 	for i := range holders {
 		holders[i] = "?"
@@ -837,23 +866,6 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 		valueArgs = append(valueArgs, q.LrVol250)
 		valueArgs = append(valueArgs, q.Udate)
 		valueArgs = append(valueArgs, q.Utime)
-		code = q.Code
-	}
-	// delete stale records first
-	for ; rt < retry; rt++ {
-		_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
-		if e != nil {
-			fmt.Println(e)
-			if strings.Contains(e.Error(), "Deadlock") {
-				continue
-			} else {
-				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
-			}
-		}
-		break
-	}
-	if rt >= retry {
-		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
 	}
 	rt = 0
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
