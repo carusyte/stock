@@ -37,7 +37,7 @@ func init() {
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
 	defer Cleanup()
-	log.Printf("begin to fetch kline data: %+v", kltype)
+	log.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
 	var wg sync.WaitGroup
 	parallel := conf.Args.ChromeDP.PoolSize
 	switch conf.Args.DataSource.Kline {
@@ -760,7 +760,7 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 	batchSize := 200
 	for idx := 0; idx < len(quotes); idx += batchSize {
 		end := int(math.Min(float64(len(quotes)), float64(idx+batchSize)))
-		insertMinibatch(quotes[idx:end], table)
+		c += insertMinibatch(quotes[idx:end], table)
 	}
 	return
 }

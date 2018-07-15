@@ -149,6 +149,19 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		return false, true
 	}
 
+	numXdxr := strings.TrimSpace(doc.Find("#bonuslist div.bd.pt5.pagination div strong").Text())
+	if len(numXdxr) == 0 {
+		log.Printf("%s possible erroneous page encountered."+
+			" unable to find xdxr counts in page %s", stock.Code, url)
+		return false, true
+	}
+
+	//if table doesn't exist and historical xdxr record is 0, return normally
+	if doc.Find("#bonus_table").Size() == 0 && numXdxr == "0" {
+		log.Printf("%s no xdxr data found at %s", stock.Code, url)
+		return true, false
+	}
+
 	//parse column index
 	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRegDate, iXdxrDate, iProgress, iPayoutRatio,
 		iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
@@ -241,10 +254,10 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		parseXdxrPlan(xdxr)
 	})
 
-	// no records found, return normally
+	// no records found, possible errornous page encounter
 	if len(xdxrs) == 0 {
 		log.Printf("%s no xdxr data found at %s", stock.Code, url)
-		return true, false
+		return false, true
 	}
 
 	// reverse order
