@@ -3,6 +3,7 @@ package getd
 import (
 	"fmt"
 	"log"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -281,6 +282,37 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	}
 	retry := conf.Args.DeadlockRetry
 	rt := 0
+	sklid := indc[0].Klid
+	if len(indc) > 5 {
+		sklid = indc[len(indc)-5].Klid
+	}
+	code := indc[0].Code
+	var e error
+	for ; rt < retry; rt++ {
+		stmt := fmt.Sprintf("delete from %s where code = ? and klid >= ?", table)
+		_, e = dbmap.Exec(stmt, code, sklid)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
+			}
+		}
+		break
+	}
+	if rt >= retry {
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
+	}
+	batchSize := 200
+	for idx := 0; idx < len(indc); idx += batchSize {
+		end := int(math.Min(float64(len(indc)), float64(idx+batchSize)))
+		c += insertIndicMiniBatch(indc[idx:end], table)
+	}
+	return
+}
+
+func insertIndicMiniBatch(indc []*model.Indicator, table string) (c int) {
 	numFields := 32
 	holders := make([]string, numFields)
 	for i := range holders {
@@ -289,7 +321,7 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 	holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 	valueStrings := make([]string, 0, len(indc))
 	valueArgs := make([]interface{}, 0, len(indc)*numFields)
-	var code string
+	code := indc[0].Code
 	var e error
 	for _, i := range indc {
 		d, t := util.TimeStr()
@@ -330,30 +362,10 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 		valueArgs = append(valueArgs, i.BOLL_upper_o)
 		valueArgs = append(valueArgs, i.Udate)
 		valueArgs = append(valueArgs, i.Utime)
-		code = i.Code
-	}
-	sklid := indc[0].Klid
-	if len(indc) > 5 {
-		sklid = indc[len(indc)-5].Klid
 	}
 
-	for ; rt < retry; rt++ {
-		stmt := fmt.Sprintf("delete from %s where code = ? and klid >= ?", table)
-		_, e = dbmap.Exec(stmt, code, sklid)
-		if e != nil {
-			fmt.Println(e)
-			if strings.Contains(e.Error(), "Deadlock") {
-				continue
-			} else {
-				log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
-			}
-		}
-		break
-	}
-	if rt >= retry {
-		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
-	}
-	rt = 0
+	retry := conf.Args.DeadlockRetry
+	rt := 0
 	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,kdj_k,kdj_d,kdj_j,macd,macd_diff,macd_dea,"+
 		"rsi1,rsi2,rsi3,bias1,bias2,bias3,"+
 		"boll_lower,boll_lower_c,boll_lower_h,boll_lower_l,boll_lower_o,"+
@@ -382,11 +394,8 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 				log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 			}
 		}
-		c = len(indc)
-		break
+		return len(indc)
 	}
-	if rt >= retry {
-		log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
-	}
+	log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 	return
 }

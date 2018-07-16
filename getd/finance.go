@@ -982,11 +982,9 @@ func latestUFRXdxr(code string) (x *model.Xdxr) {
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return nil
-		} else {
-			log.Panicln("failed to run sql", e)
 		}
+		log.Panicln("failed to run sql", e)
 		return nil
-	} else {
-		return x
 	}
+	return x
 }

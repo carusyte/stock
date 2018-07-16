@@ -919,12 +919,9 @@ func insertMinibatch(quotes []*model.Quote, table string) (c int) {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
-		c = len(quotes)
-		break
+		return len(quotes)
 	}
-	if rt >= retry {
-		log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
-	}
+	log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	return
 }
 
