@@ -27,27 +27,30 @@ const (
 func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	log.Printf("tagging %v using %s as prefix...", table, flag)
 	startno := 0
+	vflag := ""
+	switch flag {
+	case TrainFlag:
+		vflag = "TR"
+	case TestFlag:
+		vflag = "TS"
+	}
 	if erase {
 		// clear already tagged data
-		log.Println("cleansing existing tag...")
-		usql := fmt.Sprintf(`update %v set flag = null where flag like '%s%%'`, table, flag)
-		_, e = dbmap.Exec(usql)
+		log.Printf("cleansing existing %s tag...", vflag)
+		usql := fmt.Sprintf(`update %v set flag = null, bno=null where flag = ?`, table)
+		_, e = dbmap.Exec(usql, vflag)
 		if e != nil {
 			return errors.WithStack(e)
 		}
 	} else {
 		// load existent max tag number
 		q := "SELECT  " +
-			"    MAX(CONVERT( SUBSTRING_INDEX(flag, '_', - 1) , UNSIGNED INTEGER)) AS max_bno " +
+			"    MAX(distinct bno) AS max_bno " +
 			"FROM " +
-			"    (SELECT DISTINCT " +
-			"        flag " +
-			"    FROM " +
-			"        wcc_trn " +
-			"    WHERE " +
-			"        flag LIKE ?) t "
-		f := fmt.Sprintf("%s_%%", flag)
-		sno, e := dbmap.SelectNullInt(q, f)
+			"    wcc_trn " +
+			"WHERE " +
+			"    flag = ?"
+		sno, e := dbmap.SelectNullInt(q, vflag)
 		if e != nil {
 			return errors.WithStack(e)
 		}
@@ -55,7 +58,7 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 			startno = int(sno.Int64)
 			log.Printf("continue with batch number: %d", startno+1)
 		} else {
-			log.Printf("no existing data for %s set. batch no will be starting from %d", flag, startno+1)
+			log.Printf("no existing data for %s set. batch no will be starting from %d", vflag, startno+1)
 		}
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
@@ -89,7 +92,6 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 		batches = segment
 	}
 	grps := make([][]string, batches)
-
 	for i := 0; i < bsize; i++ {
 		limit := segment
 		if _, ok := remOwn[i]; ok {
@@ -114,14 +116,14 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	for i := 0; i < len(grps); i++ {
 		g := grps[i]
 		uuids := util.Join(g, ",", true)
-		flag := fmt.Sprintf("%s_%d", flag, startno+i+1)
+		bno := startno + i + 1
 		prog := float64(float64(i+1)/float64(len(grps))) * 100.
-		log.Printf("step %d/%d(%.3f%%) tagging %s, size: %d", i+1, len(grps), prog, flag, len(g))
+		log.Printf("step %d/%d(%.3f%%) tagging %s,%d size: %d", i+1, len(grps), prog, vflag, bno, len(g))
 		rt := 0
 		for ; rt < 3; rt++ {
-			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ? where uuid in (%s)`, table, uuids), flag)
+			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ?, bno = ? where uuid in (%s)`, table, uuids), vflag, bno)
 			if e != nil {
-				log.Printf("failed to update flag: %+v, retrying %d...", e, rt+1)
+				log.Printf("failed to update flag %s,%d: %+v, retrying %d...", vflag, bno, e, rt+1)
 			} else {
 				break
 			}

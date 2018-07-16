@@ -105,13 +105,20 @@ func updateWcc() {
 		log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
 		return
 	}
+	type stats struct {
+		mean float64
+		std  float64
+	}
+	var stat stats
+	e = dbmap.SelectOne(&stat, "select AVG(corl) `mean`, STD(corl) `std` from wcc_trn")
+	if e != nil {
+		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
+		return
+	}
 	_, e = dbmap.Exec(`
 		INSERT INTO fs_stats (method, tab, fields, mean, std, vmax, udate, utime)
-		SELECT 
-			'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S')
-		FROM
-			wcc_trn
-	`, max)
+		VALUES('standardization', 'wcc_trn', 'corl', ?, ?, ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S')) 
+	`, stat.mean, stat.std, max)
 	if e != nil {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
@@ -119,18 +126,8 @@ func updateWcc() {
 	log.Printf("standardizing...")
 	_, e = dbmap.Exec(`
 		UPDATE wcc_trn w
-				JOIN
-			(SELECT 
-				mean m, std s
-			FROM
-				fs_stats
-			WHERE
-				method = 'standardization'
-					AND tab = 'wcc_trn'
-					AND fields = 'corl') f 
-		SET 
-			corl_stz = (corl - f.m) / f.s
-	`)
+		SET corl_stz = (corl - ?) / ?
+	`, stat.mean, stat.std)
 	if e != nil {
 		log.Printf("failed to standardize wcc corl: %+v", errors.WithStack(e))
 		return
@@ -160,7 +157,7 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 			code, maxk+1, prior)
 		return
 	}
-	start := 0
+	start, end := 0, maxk-span+1
 	if len(syear) > 0 {
 		sklid, err := dbmap.SelectInt(`select min(klid) from kline_d_b where code = ? and date >= ?`, code, syear)
 		if err != nil {
@@ -176,13 +173,34 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	} else if prior > 0 {
 		start = prior - shift
 	}
+	//skip existing records
+	var klids []int
+	dbmap.Select(&klids, `SELECT 
+								klid
+							FROM
+								kline_d_b
+							WHERE
+								code = ?
+								AND klid BETWEEN ? AND ?
+								AND klid NOT IN (SELECT DISTINCT
+									klid
+								FROM
+									wcc_trn
+								WHERE
+									code = ?)`,
+		code, start, end, code,
+	)
+	num := int(float64(len(klids)) * portion)
+	if num == 0 {
+		log.Printf("%s insufficient data for wcc_trn sampling", code)
+		return
+	}
+	sklids := rand.Perm(len(klids))[:num]
+	log.Printf("%s selected %d klids from kline_d_b", code, num)
 	retry := false
 	var e error
 	var wccs []*model.WccTrn
-	for klid := start; klid <= maxk-span+1; klid++ {
-		if rand.Float64() > portion {
-			continue
-		}
+	for _, klid := range sklids {
 		for rt := 0; rt < 3; rt++ {
 			retry, wccs, e = sampWccTrnAt(stock, klid)
 			if !retry && e == nil {
