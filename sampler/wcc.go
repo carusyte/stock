@@ -99,12 +99,12 @@ func updateWcc() {
 		return
 	}
 	log.Printf("collecting corl stats...")
-	_, e = dbmap.Exec(`delete from fs_stats where method = ? and tab = ? and fields = ?`,
-		"standardization", "wcc_trn", "corl")
-	if e != nil {
-		log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
-		return
-	}
+	// _, e = dbmap.Exec(`delete from fs_stats where method = ? and tab = ? and fields = ?`,
+	// 	"standardization", "wcc_trn", "corl")
+	// if e != nil {
+	// 	log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
+	// 	return
+	// }
 	type stats struct {
 		mean float64
 		std  float64
@@ -117,7 +117,8 @@ func updateWcc() {
 	}
 	_, e = dbmap.Exec(`
 		INSERT INTO fs_stats (method, tab, fields, mean, std, vmax, udate, utime)
-		VALUES('standardization', 'wcc_trn', 'corl', ?, ?, ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S')) 
+		VALUES('standardization', 'wcc_trn', 'corl', ?, ?, ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S'))
+		ON DUPLICATE KEY UPDATE mean=values(mean),std=values(std),vmax=values(vmax),udate=values(udate),utime=values(utime)
 	`, stat.mean, stat.std, max)
 	if e != nil {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
@@ -195,12 +196,13 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 		log.Printf("%s insufficient data for wcc_trn sampling", code)
 		return
 	}
-	sklids := rand.Perm(len(klids))[:num]
-	log.Printf("%s selected %d klids from kline_d_b", code, num)
+	sidx := rand.Perm(len(klids))[:num]
+	log.Printf("%s selected %d/%d klids from kline_d_b", code, num, len(klids))
 	retry := false
 	var e error
 	var wccs []*model.WccTrn
-	for _, klid := range sklids {
+	for _, idx := range sidx {
+		klid := klids[idx]
 		for rt := 0; rt < 3; rt++ {
 			retry, wccs, e = sampWccTrnAt(stock, klid)
 			if !retry && e == nil {

@@ -568,6 +568,7 @@ FROM
             kline_d
         WHERE
             code IN ('sz399001' , 'sh000001')) t1
+ON DUPLICATE KEY UPDATE mean=AVG(t1.col), std=STD(t1.col), udate=DATE_FORMAT(now(), '%%Y-%%m-%%d'), utime=DATE_FORMAT(now(), '%%H:%%i:%%S')
 
 -- name: COLLECT_INDICATOR_STANDARDIZATION_STATS
 INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
@@ -579,7 +580,7 @@ FROM
     FROM
         %[1]s 
 	) t1
-
+ON DUPLICATE KEY UPDATE mean=AVG(t1.col), std=STD(t1.col), udate=DATE_FORMAT(now(), '%%Y-%%m-%%d'), utime=DATE_FORMAT(now(), '%%H:%%i:%%S')
 
 -- name: QUERY_BWR_DAILY_4_XCORL_TRN
 SELECT 
