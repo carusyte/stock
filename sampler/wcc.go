@@ -59,7 +59,7 @@ func CalWcc(stocks *model.Stocks) {
 	close(suc)
 	wgr.Wait()
 
-	updateWcc()
+	UpdateWcc()
 
 	log.Printf("wcc_trn data saved. sampled stocks: %d / %d", len(rstks), stocks.Size())
 	if stocks.Size() != len(rstks) {
@@ -74,8 +74,8 @@ func CalWcc(stocks *model.Stocks) {
 	}
 }
 
-//updates corl column in the wcc_trn table based on sampled min_diff and max_diff
-func updateWcc() {
+//UpdateWcc updates corl and corl_stz column in the wcc_trn table based on sampled min_diff and max_diff
+func UpdateWcc() {
 	//remap [0, x] to [1, -1] (in opposite direction)
 	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
 	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
@@ -85,18 +85,30 @@ func updateWcc() {
 		log.Printf("failed to update corl: %+v", errors.WithStack(e))
 		return
 	}
-	log.Printf("max: %f, updating corl_stz value...", max)
-	_, e = dbmap.Exec(`
-		UPDATE wcc_trn  
-		SET
-			corl = CASE
-				WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
-				ELSE  - max_diff / :mx * 2 + 1
-			END
-	`, map[string]interface{}{"mx": max})
+	//update corl stock by stock to avoid undo file explosion
+	var codes []string
+	_, e = dbmap.Select(&codes, `select distinct code from wcc_trn order by code`)
 	if e != nil {
-		log.Printf("failed to update corl: %+v", errors.WithStack(e))
+		log.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
 		return
+	}
+	log.Printf("max: %f, updating corl value for %d stocks...", max, len(codes))
+	for i, c := range codes {
+		prog := float32(i+1) / float32(len(codes)) * 100.
+		log.Printf("updating corl for %s, progress: %.3f%%", c, prog)
+		_, e = dbmap.Exec(`
+			UPDATE wcc_trn  
+			SET
+				corl = CASE
+					WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
+					ELSE  - max_diff / :mx * 2 + 1
+				END
+			WHERE code = :code
+	`, map[string]interface{}{"mx": max, "code": c})
+		if e != nil {
+			log.Printf("failed to update corl for %s: %+v", c, errors.WithStack(e))
+			return
+		}
 	}
 	log.Printf("collecting corl stats...")
 	// _, e = dbmap.Exec(`delete from fs_stats where method = ? and tab = ? and fields = ?`,
@@ -125,13 +137,19 @@ func updateWcc() {
 		return
 	}
 	log.Printf("standardizing...")
-	_, e = dbmap.Exec(`
-		UPDATE wcc_trn w
-		SET corl_stz = (corl - ?) / ?
-	`, stat.mean, stat.std)
-	if e != nil {
-		log.Printf("failed to standardize wcc corl: %+v", errors.WithStack(e))
-		return
+	//update stock by stock to avoid undo file explosion
+	for i, c := range codes {
+		prog := float32(i+1) / float32(len(codes)) * 100.
+		log.Printf("standardizing %s, progress: %.3f%%", c, prog)
+		_, e = dbmap.Exec(`
+				UPDATE wcc_trn w
+				SET corl_stz = (corl - ?) / ?
+				WHERE code = ?
+			`, stat.mean, stat.std, c)
+		if e != nil {
+			log.Printf("failed to standardize wcc corl for %s: %+v", c, errors.WithStack(e))
+			return
+		}
 	}
 }
 
@@ -166,11 +184,10 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 			return
 		}
 		if int(sklid)+1 < prior {
-			log.Printf("%s insufficient data for wcc_trn sampling: got %d, prior of %d required",
-				code, int(sklid)+1, prior)
-			return
+			start = prior - shift
+		} else {
+			start = int(sklid)
 		}
-		start = int(sklid)
 	} else if prior > 0 {
 		start = prior - shift
 	}
