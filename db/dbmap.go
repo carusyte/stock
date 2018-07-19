@@ -21,7 +21,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 	// connect to db using standard Go database/sql API
 	// use whatever database/sql driver you wish
 	// db, err := sql.Open("mysql", "tcp:localhost:3306*secu/mysql/123456")
-	db, err := sql.Open("mysql", "mysql:123456@/secu?readTimeout='12h'&writeTimeout='12h'")
+	db, err := sql.Open("mysql", "mysql:123456@/secu?readTimeout=12h&writeTimeout=12h")
 	if err != nil {
 		log.Panic("sql.Open failed", err)
 	}

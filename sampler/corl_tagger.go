@@ -25,7 +25,7 @@ const (
 //TagCorlTrn tags the sampled correlation training table (such as xcorl_trn or wcc_trn) data
 //with specified flag as prefix by randomly and evenly selecting untagged samples.
 func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
-	log.Printf("tagging %v using %s as prefix...", table, flag)
+	log.Printf("tagging %v for dataset %s...", table, flag)
 	startno := 0
 	vflag := ""
 	switch flag {
