@@ -2,9 +2,12 @@ package main
 
 import (
 	"log"
+	"strings"
 
 	"github.com/carusyte/stock/cmd"
+	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
+	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
@@ -14,6 +17,12 @@ import (
 )
 
 func main() {
+	switch strings.ToLower(conf.Args.Profiling) {
+	case "cpu":
+		defer profile.Start().Stop()
+	case "mem":
+		defer profile.Start(profile.MemProfile).Stop()
+	}
 	cmd.Execute()
 }
 

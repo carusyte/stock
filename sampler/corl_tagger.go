@@ -63,10 +63,9 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
 	log.Println("loading untagged records...")
-	var untagged []string
-	_, e = dbmap.Select(&untagged, fmt.Sprintf(`select uuid from %v where flag is null order by corl`, table))
+	untagged, e := getUntaggedCorls(table)
 	if e != nil {
-		return errors.WithStack(e)
+		return e
 	}
 	total := len(untagged)
 	log.Printf("total of untagged records: %d", total)
@@ -113,6 +112,7 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 		}
 	}
 	untagged = nil
+	remOwn = nil
 	for i := 0; i < len(grps); i++ {
 		g := grps[i]
 		uuids := util.Join(g, ",", true)
@@ -133,8 +133,29 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 				return errors.WithStack(e)
 			}
 		}
+		g = nil
 		grps[i] = nil
 	}
 	log.Printf("%v %s set tagged: %d", table, flag, batches)
 	return nil
+}
+
+func getUntaggedCorls(table CorlTab) (uuids []string, e error) {
+	stmt, e := dbmap.Prepare(fmt.Sprintf(`select uuid from %v where flag is null order by corl`, table))
+	if e != nil {
+		return nil, errors.WithStack(e)
+	}
+	defer stmt.Close()
+	rows, e := stmt.Query()
+	if e != nil {
+		return nil, errors.WithStack(e)
+	}
+	defer rows.Close()
+	var uuid string
+	for rows.Next() {
+		rows.Scan(&uuid)
+		uuids = append(uuids, uuid)
+	}
+	e = rows.Err()
+	return
 }

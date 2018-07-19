@@ -41,6 +41,7 @@ type Arguments struct {
 	Concurrency       int      `mapstructure:"concurrency"`
 	CPUUsageThreshold float64  `mapstructure:"cpu_usage_threshold"`
 	LogLevel          string   `mapstructure:"log_level"`
+	Profiling         string   `mapstructure:"profiling"`
 	SQLFileLocation   string   `mapstructure:"sql_file_location"`
 	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
 	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
