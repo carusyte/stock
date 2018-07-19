@@ -102,7 +102,9 @@ func UpdateWcc() {
 				corl = CASE
 					WHEN min_diff < :mx - max_diff THEN - min_diff / :mx * 2 + 1
 					ELSE  - max_diff / :mx * 2 + 1
-				END
+				END,
+				udate=DATE_FORMAT(now(), '%Y-%m-%d'), 
+				utime=DATE_FORMAT(now(), '%H:%i:%S')
 			WHERE code = :code
 	`, map[string]interface{}{"mx": max, "code": c})
 		if e != nil {
@@ -117,21 +119,11 @@ func UpdateWcc() {
 	// 	log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
 	// 	return
 	// }
-	type stats struct {
-		mean float64
-		std  float64
-	}
-	var stat stats
-	e = dbmap.SelectOne(&stat, "select AVG(corl) `mean`, STD(corl) `std` from wcc_trn")
-	if e != nil {
-		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
-		return
-	}
 	_, e = dbmap.Exec(`
 		INSERT INTO fs_stats (method, tab, fields, mean, std, vmax, udate, utime)
-		VALUES('standardization', 'wcc_trn', 'corl', ?, ?, ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S'))
+		SELECT 'standardization', 'wcc_trn', 'corl', AVG(corl), STD(corl), ?, DATE_FORMAT(now(), '%Y-%m-%d'), DATE_FORMAT(now(), '%H:%i:%S') FROM wcc_trn
 		ON DUPLICATE KEY UPDATE mean=values(mean),std=values(std),vmax=values(vmax),udate=values(udate),utime=values(utime)
-	`, stat.mean, stat.std, max)
+	`, max)
 	if e != nil {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
@@ -142,10 +134,22 @@ func UpdateWcc() {
 		prog := float32(i+1) / float32(len(codes)) * 100.
 		log.Printf("standardizing %s, progress: %.3f%%", c, prog)
 		_, e = dbmap.Exec(`
-				UPDATE wcc_trn w
-				SET corl_stz = (corl - ?) / ?
-				WHERE code = ?
-			`, stat.mean, stat.std, c)
+			UPDATE wcc_trn w
+					JOIN
+				(SELECT 
+					mean m, std s
+				FROM
+					fs_stats
+				WHERE
+					method = 'standardization'
+						AND tab = 'wcc_trn'
+						AND fields = 'corl') f 
+			SET 
+				corl_stz = (corl - f.m) / f.s,
+				udate=DATE_FORMAT(now(), '%Y-%m-%d'), 
+				utime=DATE_FORMAT(now(), '%H:%i:%S')
+			WHERE code = ?
+		`, c)
 		if e != nil {
 			log.Printf("failed to standardize wcc corl for %s: %+v", c, errors.WithStack(e))
 			return
