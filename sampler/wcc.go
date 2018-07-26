@@ -166,9 +166,9 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	var err error
 	prior := conf.Args.Sampler.PriorLength
 	shift := conf.Args.Sampler.WccMaxShift
-	span := conf.Args.Sampler.XCorlSpan
-	syear := conf.Args.Sampler.XCorlStartYear
-	portion := conf.Args.Sampler.XCorlPortion
+	span := conf.Args.Sampler.CorlSpan
+	syear := conf.Args.Sampler.CorlStartYear
+	portion := conf.Args.Sampler.CorlPortion
 	maxKlid, err := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
 	if err != nil {
 		log.Printf(`%s failed to query max klid, %+v`, code, err)
@@ -254,10 +254,10 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 
 //klid is not included in target code span
 func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTrn, e error) {
-	span := conf.Args.Sampler.XCorlSpan
+	span := conf.Args.Sampler.CorlSpan
 	shift := conf.Args.Sampler.WccMaxShift
 	minReq := conf.Args.Sampler.PriorLength
-	prior := conf.Args.Sampler.XCorlPrior
+	prior := conf.Args.Sampler.CorlPrior
 	code := stock.Code
 	qryKlid := ""
 	offset := prior + shift - 1

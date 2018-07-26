@@ -111,11 +111,11 @@ type Arguments struct {
 		TestSetBatchSize   int     `mapstructure:"test_set_batch_size"`
 		TestSetGroups      int     `mapstructure:"test_set_groups"`
 		TrainSetBatchSize  int     `mapstructure:"train_set_batch_size"`
-		XCorlStartYear     string  `mapstructure:"xcorl_start_year"`
-		XCorlPrior         int     `mapstructure:"xcorl_prior"`
-		XCorlPortion       float64 `mapstructure:"xcorl_portion"`
+		CorlStartYear     string  `mapstructure:"corl_start_year"`
+		CorlPrior         int     `mapstructure:"corl_prior"`
+		CorlPortion       float64 `mapstructure:"corl_portion"`
+		CorlSpan          int     `mapstructure:"corl_span"`
 		XCorlShift         int     `mapstructure:"xcorl_shift"`
-		XCorlSpan          int     `mapstructure:"xcorl_span"`
 		WccMaxShift        int     `mapstructure:"wcc_max_shift"`
 	}
 	//TODO logrus log to file
