@@ -12,7 +12,6 @@ import (
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/util"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
@@ -82,7 +81,7 @@ func UpdateWcc() {
 	log.Printf("querying max(max_diff) + min(min_diff)...")
 	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
 	if e != nil {
-		log.Printf("failed to update corl: %+v", errors.WithStack(e))
+		log.Printf("failed to query max(max_diff) + min(min_diff) for wcc: %+v", errors.WithStack(e))
 		return
 	}
 	//update corl stock by stock to avoid undo file explosion
@@ -128,33 +127,49 @@ func UpdateWcc() {
 		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
 	}
+
+	StzWcc(codes...)
+}
+
+//StzWcc standardizes wcc_trn corl value and updates corl_stz field in the table.
+func StzWcc(codes ...string) (e error) {
 	log.Printf("standardizing...")
+	if codes == nil {
+		log.Printf("querying codes in wcc_trn table...")
+		_, e = dbmap.Select(&codes, `select distinct code from wcc_trn order by code`)
+		if e != nil {
+			log.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
+			return
+		}
+	}
+	var cstat struct {
+		Mean, Std, Vmax float32
+	}
+	e = dbmap.SelectOne(&cstat, `select mean, std, vmax from fs_stats where method = ? and tab = ? and fields = ?`,
+		`standardization`, `wcc_trn`, `corl`)
+	if e != nil {
+		log.Printf("failed to query corl stats: %+v", errors.WithStack(e))
+		return
+	}
+	log.Printf("%d codes, mean: %f std: %f, vmax: %f", len(codes), cstat.Mean, cstat.Std, cstat.Vmax)
 	//update stock by stock to avoid undo file explosion
 	for i, c := range codes {
 		prog := float32(i+1) / float32(len(codes)) * 100.
 		log.Printf("standardizing %s, progress: %.3f%%", c, prog)
 		_, e = dbmap.Exec(`
 			UPDATE wcc_trn w
-					JOIN
-				(SELECT 
-					mean m, std s
-				FROM
-					fs_stats
-				WHERE
-					method = 'standardization'
-						AND tab = 'wcc_trn'
-						AND fields = 'corl') f 
 			SET 
-				corl_stz = (corl - f.m) / f.s,
+				corl_stz = (corl - ?) / ?,
 				udate=DATE_FORMAT(now(), '%Y-%m-%d'), 
 				utime=DATE_FORMAT(now(), '%H:%i:%S')
 			WHERE code = ?
-		`, c)
+		`, cstat.Mean, cstat.Std, c)
 		if e != nil {
 			log.Printf("failed to standardize wcc corl for %s: %+v", c, errors.WithStack(e))
 			return
 		}
 	}
+	return nil
 }
 
 func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *wccTrnDBJob) {
@@ -381,7 +396,6 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 		}
 		dt, tm := util.TimeStr()
 		w := &model.WccTrn{
-			UUID:    fmt.Sprintf("%s", uuid.NewV1()),
 			Code:    code,
 			Klid:    skl.Klid,
 			Date:    skl.Date,
@@ -438,10 +452,9 @@ func saveWccTrn(ws ...*model.WccTrn) (err error) {
 	}
 	code := ws[0].Code
 	valueStrings := make([]string, 0, len(ws))
-	valueArgs := make([]interface{}, 0, len(ws)*10)
+	valueArgs := make([]interface{}, 0, len(ws)*9)
 	for _, e := range ws {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-		valueArgs = append(valueArgs, e.UUID)
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs, e.Code)
 		valueArgs = append(valueArgs, e.Klid)
 		valueArgs = append(valueArgs, e.Date)
@@ -452,7 +465,7 @@ func saveWccTrn(ws ...*model.WccTrn) (err error) {
 		valueArgs = append(valueArgs, e.Udate)
 		valueArgs = append(valueArgs, e.Utime)
 	}
-	stmt := fmt.Sprintf("INSERT INTO wcc_trn (uuid,code,klid,date,rcode,corl,"+
+	stmt := fmt.Sprintf("INSERT INTO wcc_trn (code,klid,date,rcode,corl,"+
 		"min_diff,max_diff,udate,utime) VALUES %s "+
 		"on duplicate key update corl=values(corl), min_diff=values(min_diff),"+
 		"max_diff=values(max_diff),udate=values(udate),utime=values(utime)",

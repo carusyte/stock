@@ -8,6 +8,7 @@ import (
 
 func init() {
 	wccCmd.AddCommand(updateWccCmd)
+	wccCmd.AddCommand(stzWccCmd)
 }
 
 var wccCmd = &cobra.Command{
@@ -20,5 +21,13 @@ var updateWccCmd = &cobra.Command{
 	Short: "Update fields in the wcc_trn table.",
 	Run: func(cmd *cobra.Command, args []string) {
 		sampler.UpdateWcc()
+	},
+}
+
+var stzWccCmd = &cobra.Command{
+	Use:   "stz",
+	Short: "Standardize corl value in the wcc_trn table.",
+	Run: func(cmd *cobra.Command, args []string) {
+		sampler.StzWcc()
 	},
 }

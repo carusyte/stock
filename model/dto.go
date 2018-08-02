@@ -1182,15 +1182,17 @@ func (x *XCorlTrn) String() string {
 
 //WccTrn represents Warping Correlation Coefficient training samples.
 type WccTrn struct {
-	UUID    string
+	UUID    int
 	Code    string
 	Klid    int
 	Date    string
 	Rcode   string
 	Corl    float64
-	MinDiff float64
-	MaxDiff float64
+	CorlStz sql.NullFloat64 `db:"corl_stz"`
+	MinDiff float64         `db:"min_diff"`
+	MaxDiff float64         `db:"max_diff"`
 	Flag    sql.NullString
+	Bno     sql.NullInt64
 	Udate   sql.NullString
 	Utime   sql.NullString
 }

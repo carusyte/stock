@@ -5,15 +5,24 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/carusyte/stock/conf"
-	"github.com/carusyte/stock/util"
 
 	"github.com/pkg/errors"
 )
 
 //CorlTab type, such as XcorlTrn, WccTrn, etc.
 type CorlTab string
+type tagJob struct {
+	flag  string
+	bno   int
+	uuids []int
+	done  bool
+}
 
 const (
 	//XcorlTrn Cross Correlation Training
@@ -90,13 +99,13 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	} else {
 		batches = segment
 	}
-	grps := make([][]string, batches)
+	grps := make([][]int, batches)
 	for i := 0; i < bsize; i++ {
 		limit := segment
 		if _, ok := remOwn[i]; ok {
 			limit++
 		}
-		var uuids []string
+		var uuids []int
 		if i < bsize-1 {
 			uuids = untagged[offset : offset+limit]
 		} else {
@@ -113,34 +122,82 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	}
 	untagged = nil
 	remOwn = nil
+	var wg, wgr sync.WaitGroup
+	chjob := make(chan *tagJob, conf.Args.DBQueueCapacity)
+	chr := make(chan *tagJob, conf.Args.DBQueueCapacity)
+	ngrps := len(grps)
+	//start cpu_num/2 of goroutines
+	pll := int(math.Max(float64(runtime.NumCPU())*0.5, 1.0))
+	wgr.Add(1)
+	go collectTagJob(ngrps, &wgr, chr)
+	for i := 0; i < pll; i++ {
+		wg.Add(1)
+		go procTagJob(table, &wg, chjob, chr)
+	}
 	for i := 0; i < len(grps); i++ {
-		g := grps[i]
-		uuids := util.Join(g, ",", true)
-		bno := startno + i + 1
-		prog := float64(float64(i+1)/float64(len(grps))) * 100.
-		log.Printf("step %d/%d(%.3f%%) tagging %s,%d size: %d", i+1, len(grps), prog, vflag, bno, len(g))
+		chjob <- &tagJob{
+			flag:  vflag,
+			bno:   startno + i + 1,
+			uuids: grps[i],
+		}
+	}
+	close(chjob)
+	wg.Wait()
+	close(chr)
+	wgr.Wait()
+
+	log.Printf("%v %s set tagged: %d", table, flag, ngrps)
+	return nil
+}
+
+func collectTagJob(ngrps int, wgr *sync.WaitGroup, chr chan *tagJob) {
+	defer wgr.Done()
+	i := 0
+	f := 0
+	for j := range chr {
+		//report progres
+		i++
+		status := "done"
+		if !j.done {
+			f++
+			status = "failed"
+		}
+		prog := float64(float64(i)/float64(ngrps)) * 100.
+		log.Printf("job %s_%d %s, progress: %d/%d(%.3f%%), failed:%d", j.flag, j.bno, status, i, ngrps, prog, f)
+	}
+}
+
+func procTagJob(table CorlTab, wg *sync.WaitGroup, chjob chan *tagJob, chr chan *tagJob) {
+	defer wg.Done()
+	var e error
+	for j := range chjob {
+		var strg []string
+		for _, i := range j.uuids {
+			strg = append(strg, strconv.Itoa(i))
+		}
+		uuids := strings.Join(strg, ",")
+		flag, bno := j.flag, j.bno
+		log.Printf("tagging %s,%d size: %d", flag, bno, len(strg))
 		rt := 0
 		for ; rt < 3; rt++ {
-			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ?, bno = ? where uuid in (%s)`, table, uuids), vflag, bno)
+			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ?, bno = ? where uuid in (%s)`, table, uuids), flag, bno)
 			if e != nil {
-				log.Printf("failed to update flag %s,%d: %+v, retrying %d...", vflag, bno, e, rt+1)
+				log.Printf("failed to update flag %s,%d: %+v, retrying %d...", flag, bno, e, rt+1)
 			} else {
 				break
 			}
 		}
 		if rt >= 3 {
 			if e != nil {
-				return errors.WithStack(e)
+				chr <- j
 			}
 		}
-		g = nil
-		grps[i] = nil
+		j.done = true
+		chr <- j
 	}
-	log.Printf("%v %s set tagged: %d", table, flag, batches)
-	return nil
 }
 
-func getUntaggedCorls(table CorlTab) (uuids []string, e error) {
+func getUntaggedCorls(table CorlTab) (uuids []int, e error) {
 	stmt, e := dbmap.Prepare(fmt.Sprintf(`select uuid from %v where flag is null order by corl`, table))
 	if e != nil {
 		return nil, errors.WithStack(e)
@@ -151,7 +208,7 @@ func getUntaggedCorls(table CorlTab) (uuids []string, e error) {
 		return nil, errors.WithStack(e)
 	}
 	defer rows.Close()
-	var uuid string
+	var uuid int
 	for rows.Next() {
 		rows.Scan(&uuid)
 		uuids = append(uuids, uuid)

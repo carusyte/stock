@@ -119,6 +119,7 @@ CREATE TABLE `fs_stats` (
   `tab` varchar(45) DEFAULT NULL,
   `mean` double DEFAULT NULL,
   `std` double DEFAULT NULL,
+  `vmax` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`method`,`fields`)
@@ -530,7 +531,9 @@ CREATE TABLE `kline_d_b` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_B_IDX1` (`code`,`date`),
   KEY `KLINE_D_B_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（后复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED COMMENT='日K线（后复权）'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
 
 CREATE TABLE `kline_d_n` (
   `code` varchar(8) NOT NULL,
@@ -1490,6 +1493,21 @@ CREATE TABLE `kpts60` (
   KEY `kpts60_lr_rema` (`rema_lr`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60-days key points';
 
+CREATE TABLE `proxy_list` (
+  `source` varchar(20) NOT NULL,
+  `host` varchar(15) NOT NULL,
+  `port` varchar(5) NOT NULL,
+  `type` varchar(10) NOT NULL,
+  `status` varchar(10) NOT NULL,
+  `fail` int(11) NOT NULL,
+  `last_check` varchar(20) NOT NULL,
+  `last_scanned` varchar(20) NOT NULL,
+  PRIMARY KEY (`host`,`port`),
+  KEY `last_check` (`last_check`,`status`),
+  KEY `source` (`source`,`last_scanned`),
+  KEY `status` (`status`,`fail`,`host`,`port`,`type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE `stats` (
   `code` varchar(6) NOT NULL,
   `start` varchar(20) DEFAULT NULL,
@@ -1497,6 +1515,23 @@ CREATE TABLE `stats` (
   `dur` decimal(10,5) DEFAULT NULL,
   PRIMARY KEY (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `stockrel` (
+  `code` varchar(6) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `rcode_pos` varchar(6) DEFAULT NULL,
+  `rcode_pos_hs` varchar(6) DEFAULT NULL,
+  `rcode_neg` varchar(6) DEFAULT NULL,
+  `rcode_neg_hs` varchar(6) DEFAULT NULL,
+  `pos_corl` double DEFAULT NULL,
+  `pos_corl_hs` double DEFAULT NULL,
+  `neg_corl` double DEFAULT NULL,
+  `neg_corl_hs` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL,
+  `utime` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`code`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='relationship between stocks';
 
 CREATE TABLE `tradecal` (
   `index` bigint(20) DEFAULT NULL,
@@ -1508,22 +1543,25 @@ CREATE TABLE `tradecal` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `wcc_trn` (
-  `uuid` varchar(50) NOT NULL,
+  `uuid` int(11) NOT NULL AUTO_INCREMENT,
   `code` varchar(8) NOT NULL,
   `date` varchar(10) NOT NULL,
   `klid` int(11) NOT NULL,
   `rcode` varchar(8) NOT NULL,
   `corl` double DEFAULT NULL,
+  `corl_stz` double DEFAULT NULL COMMENT 'standardized correlation',
   `min_diff` double DEFAULT NULL,
   `max_diff` double DEFAULT NULL,
-  `flag` varchar(20) DEFAULT NULL,
+  `flag` varchar(2) DEFAULT NULL,
+  `bno` int(10) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`code`,`date`,`klid`,`rcode`),
-  UNIQUE KEY `UNI_IDX_01` (`uuid`),
-  KEY `IDX_FLAG` (`flag`,`uuid`),
-  KEY `IDX_CORL` (`corl`,`uuid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+  PRIMARY KEY (`uuid`),
+  KEY `wcc_trn_idx_02` (`code`,`klid`),
+  KEY `wcc_trn_idx_01` (`flag`,`bno`)
+) ENGINE=InnoDB AUTO_INCREMENT=210140890 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED
+/*!50100 PARTITION BY LINEAR HASH (`uuid`)
+PARTITIONS 1024 */;
 
 CREATE TABLE `worst_rec` (
   `model` varchar(45) NOT NULL,
