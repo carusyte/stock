@@ -51,6 +51,10 @@ type Arguments struct {
 		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
 	}
+	GCS struct {
+		Connection int    `mapstructure:"connection"`
+		Bucket     string `mapstructure:"bucket"`
+	}
 	Kdjv struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
 		StatsRetroSpan int `mapstructure:"stats_retro_span"`
@@ -101,22 +105,26 @@ type Arguments struct {
 		HidBlueRearWarnRatio float64  `mapstructure:"hid_blue_rear_warn_ratio"`
 	}
 	Sampler struct {
-		Sample             bool    `mapstructure:"sample"`
-		PriorLength        int     `mapstructure:"prior_length"`
-		Resample           int     `mapstructure:"resample"`
-		Grader             string  `mapstructure:"grader"`
-		GraderTimeFrames   []int   `mapstructure:"grader_time_frames"`
-		GraderScoreClass   int     `mapstructure:"grader_score_class"`
-		RefreshGraderStats bool    `mapstructure:"refresh_grader_stats"`
-		TestSetBatchSize   int     `mapstructure:"test_set_batch_size"`
-		TestSetGroups      int     `mapstructure:"test_set_groups"`
-		TrainSetBatchSize  int     `mapstructure:"train_set_batch_size"`
-		CorlStartYear     string  `mapstructure:"corl_start_year"`
-		CorlPrior         int     `mapstructure:"corl_prior"`
-		CorlPortion       float64 `mapstructure:"corl_portion"`
-		CorlSpan          int     `mapstructure:"corl_span"`
-		XCorlShift         int     `mapstructure:"xcorl_shift"`
-		WccMaxShift        int     `mapstructure:"wcc_max_shift"`
+		Sample             bool     `mapstructure:"sample"`
+		PriorLength        int      `mapstructure:"prior_length"`
+		Resample           int      `mapstructure:"resample"`
+		Grader             string   `mapstructure:"grader"`
+		GraderTimeFrames   []int    `mapstructure:"grader_time_frames"`
+		GraderScoreClass   int      `mapstructure:"grader_score_class"`
+		RefreshGraderStats bool     `mapstructure:"refresh_grader_stats"`
+		TestSetBatchSize   int      `mapstructure:"test_set_batch_size"`
+		TestSetGroups      int      `mapstructure:"test_set_groups"`
+		TrainSetBatchSize  int      `mapstructure:"train_set_batch_size"`
+		VolSize            int      `mapstructure:"vol_size"`
+		CorlStartYear      string   `mapstructure:"corl_start_year"`
+		CorlPrior          int      `mapstructure:"corl_prior"`
+		CorlPortion        float64  `mapstructure:"corl_portion"`
+		CorlSpan           int      `mapstructure:"corl_span"`
+		CorlTimeSteps      int      `mapstructure:"corl_time_steps"`
+		CorlTimeShift      int      `mapstructure:"corl_time_shift"`
+		XCorlShift         int      `mapstructure:"xcorl_shift"`
+		WccMaxShift        int      `mapstructure:"wcc_max_shift"`
+		FeatureCols        []string `mapstructure:"feature_cols"`
 	}
 	//TODO logrus log to file
 }

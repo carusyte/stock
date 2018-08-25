@@ -1,17 +1,27 @@
 package sampler
 
 import (
+	"bufio"
+	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/util"
+	"github.com/ssgreg/repeat"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
@@ -20,13 +30,57 @@ import (
 )
 
 var (
-	wccMaxLr = math.NaN()
+	wccMaxLr          = math.NaN()
+	curVolPath        string
+	curVolSize        int
+	volLock           sync.RWMutex
+	ftQryInit         sync.Once
+	qryKline, qryDate string
 )
 
 type wccTrnDBJob struct {
 	stock *model.Stock
 	fin   int //-1:abort, 0:unfinished, 1:finished
 	wccs  []*model.WccTrn
+}
+
+type pcaljob struct {
+	Code string
+	Klid int
+}
+
+//ExpJob stores wcc inference file export job information.
+type ExpJob struct {
+	Code   string
+	Klid   int
+	Date   string
+	Rcodes []string
+}
+
+type fileUploadJob struct {
+	localFile string
+	dest      string
+}
+
+//Pcal pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
+func Pcal(expInferFile, upload, nocache bool, localPath string) {
+	// TODO: realize Pcal()
+	jobs, e := getPcalJobs()
+	if e != nil || len(jobs) <= 0 {
+		return
+	}
+	var expch chan<- *ExpJob
+	var expwg *sync.WaitGroup
+	if expInferFile {
+		expch, expwg = ExpInferFile(localPath, upload, nocache)
+	}
+	// make db job channel & waitgroup, start db goroutine
+
+	// make job channel & waitgroup, start calculation goroutine
+	// iterate through qualified kline data, create wcc calculation job instance and push it to job channel
+	// close job channel, wait for job completion
+	// close db job channel wait for db job completion
+	// close exp channel wait for exp job completion
 }
 
 //CalWcc calculates Warping Correlation Coefficient for stocks
@@ -170,6 +224,377 @@ func StzWcc(codes ...string) (e error) {
 		}
 	}
 	return nil
+}
+
+//ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
+func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
+	var fuc chan *fileUploadJob
+	var fuwg *sync.WaitGroup
+	if upload {
+		fuc = make(chan *fileUploadJob, math.MaxInt32)
+		fuwg = new(sync.WaitGroup)
+		for i := 0; i < conf.Args.GCS.Connection; i++ {
+			fuwg.Add(1)
+			go procInferFileUpload(fuc, fuwg, nocache)
+		}
+	}
+	// TODO realize me
+	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
+	fec = fileExpCh
+	fewg = new(sync.WaitGroup)
+	fewg.Add(1)
+	go fileExporter(localPath, fileExpCh, fuc, fewg, fuwg)
+	return
+}
+
+func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
+	defer fewg.Done()
+	fwwg := new(sync.WaitGroup)
+	pl := int(float64(runtime.NumCPU()) * 0.8)
+	for i := 0; i < pl; i++ {
+		fwwg.Add(1)
+		go fileExpWorker(localPath, fec, fuc, fwwg)
+	}
+	fwwg.Wait()
+	if fuc != nil {
+		close(fuc)
+		fuwg.Wait()
+		// clean empty volume sub-folders
+		dirs, err := ioutil.ReadDir(localPath)
+		if err != nil {
+			log.Printf("failed to read local path %s, unable to clean sub-folders: %+v", localPath, err)
+			return
+		}
+		for _, d := range dirs {
+			if d.IsDir() && strings.HasPrefix(d.Name(), "vol_") {
+				p := filepath.Join(localPath, d.Name())
+				files, err := ioutil.ReadDir(p)
+				if err != nil {
+					log.Printf("failed to read local path %s, unable to clean this sub-folder: %+v", p, err)
+					continue
+				}
+				removable := true
+				for _, f := range files {
+					if !f.IsDir() && strings.HasSuffix(f.Name(), ".json.gz") {
+						removable = false
+						break
+					}
+				}
+				if removable {
+					os.Remove(p)
+				}
+			}
+		}
+	}
+}
+
+func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, wg *sync.WaitGroup) {
+	//TODO realize me
+	defer wg.Done()
+	step := conf.Args.Sampler.CorlTimeSteps
+	shift := conf.Args.Sampler.CorlTimeShift
+	limit := step + shift
+	for job := range fec {
+		name := fmt.Sprintf("%s_%d.json.gz")
+		exists, e := fileExists(localPath, name)
+		if e != nil {
+			panic(e)
+		}
+		if exists {
+			continue
+		}
+		//TODO query inference klines
+		code := job.Code
+		klid := job.Klid
+		rcodes := job.Rcodes
+		volSize := conf.Args.Sampler.VolSize
+		s := int(math.Max(0., float64(klid-step+1-shift)))
+		for _, rc := range rcodes {
+			batch, seqlen, e := getSeries(code, rc, s, klid, limit)
+		}
+		tmp := fmt.Sprintf("%s_%d.json.tmp")
+	}
+}
+
+func getSeries(code, rcode string, start, end, limit int) (series [][]float64, seqlen int, err error) {
+	qk, qd := getFeatQuery()
+	step := conf.Args.Sampler.CorlTimeSteps
+	shift := conf.Args.Sampler.CorlTimeShift
+	op := func(c int) error {
+		if c > 0 {
+			log.Printf("retry #%d getting feature batch [%s, %s, %d, %d]", c, code, rcode, start, end)
+		}
+		rows, e := dbmap.Query(qk, code, code, start, end, limit)
+		defer rows.Close()
+		if e != nil {
+			log.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
+			return repeat.HintTemporary(e)
+		}
+		cols, e := rows.Columns()
+		unitFeatLen := len(cols) - 1
+		featSize := unitFeatLen * 2
+		shiftFeatSize := featSize * (shift + 1)
+		count, rcount := 0, 0
+		dates := make([]string, 0, 16)
+		table, rtable := make([][]float64, 0, 16), make([][]float64, 0, 16)
+		for ; rows.Next(); count++ {
+			frow := make([]float64, unitFeatLen)
+			table[count] = frow
+			vals := make([]interface{}, len(cols))
+			// for i := range vals{
+			// 	vals[i] = new(interface{})
+			// }
+			if e := rows.Scan(vals...); e != nil {
+				log.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
+				return repeat.HintTemporary(e)
+			}
+			dates = append(dates, vals[0].(string))
+			for i := 0; i < unitFeatLen; i++ {
+				frow[i] = vals[i+1].(float64)
+			}
+		}
+		if e := rows.Err(); e != nil {
+			log.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
+			return repeat.HintTemporary(e)
+		}
+		qdates := util.Join(dates, ",", true)
+		qd = fmt.Sprintf(qd, qdates)
+		rRows, e := dbmap.Query(qd, rcode, rcode, limit)
+		defer rRows.Close()
+		if e != nil {
+			log.Printf("failed to query by dates [%s,%s]: %+v", code, rcode, e)
+			return repeat.HintTemporary(e)
+		}
+		for ; rRows.Next(); rcount++ {
+			frow := make([]float64, unitFeatLen)
+			rtable[rcount] = frow
+			vals := make([]interface{}, len(cols))
+			// for i := range vals{
+			// 	vals[i] = new(interface{})
+			// }
+			if e := rows.Scan(vals...); e != nil {
+				log.Printf("failed to scan rcode result set [%s]: %+v", rcode, e)
+				return repeat.HintTemporary(e)
+			}
+			for i := 0; i < unitFeatLen; i++ {
+				frow[i] = vals[i+1].(float64)
+			}
+		}
+		if e := rRows.Err(); e != nil {
+			log.Printf("found error scanning rcode result set [%s]: %+v", rcode, e)
+			return repeat.HintTemporary(e)
+		}
+		if count != rcount {
+			e = errors.New(fmt.Sprintf("rcode[%s] prior data size %d != code[%s]: %d", rcode, rcount, code, count))
+			return repeat.HintStop(e)
+		}
+		if count < limit {
+			e = errors.New(fmt.Sprintf("[%s,%s,%d,%d] insufficient data. get %d, %d required",
+				code, rcode, start, end, count, limit))
+			return repeat.HintStop(e)
+		}
+		series = make([][]float64, step)
+		for st := shift; st < count; st++ {
+			feats := make([]float64, 0, shiftFeatSize)
+			for sf := shift; sf >= 0; sf-- {
+				i := st - sf
+				for j := 0; j <= unitFeatLen; j++ {
+					feats = append(feats, table[i][j])
+				}
+				for j := 0; j <= unitFeatLen; j++ {
+					feats = append(feats, rtable[i][j])
+				}
+			}
+			series[st-shift] = feats
+		}
+		seqlen = count - shift
+		return nil
+	}
+
+	err = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).Set(),
+		),
+	)
+
+	if err != nil {
+		log.Printf("failed to get series [%s, %s, %d, %d]: %+v", code, rcode, start, end, err)
+	}
+
+	return
+}
+
+func getFeatQuery() (qk, qd string) {
+	if qryKline != "" && qryDate != "" {
+		return qryKline, qryDate
+	}
+	ftQryInit.Do(initFeatQuery)
+	return qryKline, qryDate
+}
+
+func initFeatQuery() {
+	tmpl, e := dot.Raw("CORL_FEAT_QUERY_TMPL")
+	if e != nil {
+		log.Panicf("failed to load sql CORL_FEAT_QUERY_TMPL:%+v", e)
+	}
+	var strs []string
+	cols := conf.Args.Sampler.FeatureCols
+	for _, c := range cols {
+		strs = append(strs, fmt.Sprintf("(d.%[0]s-s.%[0]s_mean)/s.%[0]s_std %[0]s,", c))
+	}
+	pkline := strings.Join(strs, " ")
+	pkline = pkline[:len(pkline)-1] // strip last comma
+
+	strs = make([]string, 0, 8)
+	statsTmpl := `
+        MAX(CASE
+            WHEN t.fields = '%[0]s' THEN t.mean
+            ELSE NULL 
+        END) AS %[0]s_mean, 
+        MAX(CASE
+            WHEN t.fields = '%[0]s' THEN t.std
+            ELSE NULL 
+        END) AS %[0]s_std,
+	`
+	for _, c := range cols {
+		strs = append(strs, fmt.Sprintf(statsTmpl, c))
+	}
+	stats := strings.Join(strs, " ")
+	stats = stats[:len(stats)-1] // strip last comma
+
+	qryKline = fmt.Sprintf(tmpl, pkline, stats, " AND d.klid BETWEEN ? AND ? ")
+	qryDate = fmt.Sprintf(tmpl, pkline, stats, " AND d.date in (%s)")
+}
+
+func fileExists(path, name string) (bool, error) {
+	paths := []string{filepath.Join(path, name)}
+	dirs, err := ioutil.ReadDir(path)
+	if err != nil {
+		log.Printf("failed to read content from %s: %+v", path, err)
+		return false, errors.WithStack(err)
+	}
+	for _, d := range dirs {
+		if d.IsDir() {
+			paths = append(paths, filepath.Join(path, d.Name(), name))
+		}
+	}
+	for _, p := range paths {
+		_, err = os.Stat(p)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Printf("failed to check existence of %s : %+v", p, err)
+				return false, errors.WithStack(err)
+			}
+		} else {
+			log.Printf("%s already exists.", p)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func procInferFileUpload(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
+	defer wg.Done()
+	for job := range ch {
+		op := func(c int) error {
+			if c > 0 {
+				log.Printf("retry #%d uploading %s to %s", c, job.localFile, job.dest)
+			}
+			ctx := context.Background()
+			client, err := storage.NewClient(ctx)
+			if err != nil {
+				log.Printf("failed to create gcs client when uploading %s: %+v", job.localFile, err)
+				return repeat.HintTemporary(err)
+			}
+			defer func() {
+				if err := client.Close(); err != nil {
+					log.Printf("failed to close client after uploading %s: %+v", job.localFile, err)
+				}
+			}()
+			// check if target object exists
+			obj := client.Bucket(conf.Args.GCS.Bucket).Object(job.dest)
+			rc, err := obj.NewReader(ctx)
+			defer rc.Close()
+			if err != nil {
+				if err != storage.ErrObjectNotExist {
+					log.Printf("failed to check existence for %s: %+v", job.dest, err)
+					return repeat.HintTemporary(err)
+				}
+			} else {
+				// file already exists
+				return nil
+			}
+			file, err := os.Open(job.localFile)
+			if err != nil {
+				log.Printf("failed to open %s: %+v", job.localFile, err)
+				return repeat.HintTemporary(err)
+			}
+			wc := obj.NewWriter(ctx)
+			wc.ContentType = "application/json"
+			// wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
+			if _, err := io.Copy(wc, bufio.NewReader(file)); err != nil {
+				log.Printf("failed to upload %s: %+v", job.localFile, err)
+				return repeat.HintTemporary(err)
+			}
+			if err := wc.Close(); err != nil {
+				log.Printf("failed to upload %s: %+v", job.localFile, err)
+				return repeat.HintTemporary(err)
+			}
+			log.Printf("%s uploaded", job.dest)
+			if nocache {
+				err = os.Remove(job.localFile)
+				if err != nil {
+					log.Printf("failed to remove %s: %+v", job.localFile, err)
+				}
+			}
+			return nil
+		}
+
+		err := repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).Set(),
+			),
+		)
+
+		if err != nil {
+			log.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
+		}
+	}
+}
+
+//getPcalJobs fetchs kline data not in stockrel with non-blank value
+func getPcalJobs() (jobs []*pcaljob, e error) {
+	sklid := conf.Args.Sampler.CorlPrior
+	_, e = dbmap.Select(&jobs, `
+		SELECT 
+			t.code code, t.klid klid
+		FROM
+			(SELECT 
+				code, klid
+			FROM
+				kline_d_b
+			WHERE
+				klid >= ?
+			ORDER BY code , klid) t
+		WHERE
+			(code , klid) NOT IN (SELECT 
+					code, klid
+				FROM
+					stockrel
+				WHERE
+					rcode_pos_hs IS NOT NULL)
+	`, sklid)
+	if e != nil {
+		log.Printf("failed to query pcal jobs: %+v", e)
+		e = errors.WithStack(e)
+	}
+	return
 }
 
 func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *wccTrnDBJob) {

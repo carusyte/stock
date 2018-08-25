@@ -604,3 +604,25 @@ FROM
 WHERE
     t.code IN (%s) AND t.date IN (%s)
 ORDER BY code , klid
+
+-- name: CORL_FEAT_QUERY_TMPL
+SELECT
+    date,
+    %s
+FROM
+    kline_d_b d
+        LEFT OUTER JOIN
+    (SELECT
+        ? code,
+        t.method,
+        %s
+    FROM
+        fs_stats t
+    WHERE
+        t.method = 'standardization'
+    GROUP BY code , t.method) s USING (code) 
+WHERE
+    d.code = ?
+    %s 
+ORDER BY klid 
+LIMIT ?

@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	dbmap  = global.Dbmap
 	chkpts map[int]chan []*model.KeyPoint
 )
 

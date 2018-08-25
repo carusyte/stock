@@ -6,12 +6,15 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 
 	"github.com/carusyte/stock/model"
 )
 
 var (
 	grader Grader
+	dbmap  = global.Dbmap
+	dot = global.Dot
 )
 
 func init() {

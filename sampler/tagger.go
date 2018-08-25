@@ -20,10 +20,6 @@ const (
 	TrainFlag = "TRAIN"
 )
 
-var (
-	dot = global.Dot
-)
-
 //TagTestSetByIndustry tags the sampled keypoint data in kpts table with "TEST" flag.
 // tagging is randomly selected amongst stocks of various industry in which
 // the number of member stocks is no less than 10. In each industry, about
