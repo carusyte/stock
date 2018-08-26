@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ var (
 	wccMaxLr          = math.NaN()
 	curVolPath        string
 	curVolSize        int
+	curVolNo          = -1
 	volLock           sync.RWMutex
 	ftQryInit         sync.Once
 	qryKline, qryDate string
@@ -60,6 +62,15 @@ type ExpJob struct {
 type fileUploadJob struct {
 	localFile string
 	dest      string
+}
+
+//CorlInferFile represents the structure of json formatted corl inference file
+type CorlInferFile struct {
+	Code     string
+	Klid     int
+	Refs     []string
+	Features [][][]float64
+	SeqLens  []int
 }
 
 //Pcal pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
@@ -235,7 +246,7 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
 			fuwg.Add(1)
-			go procInferFileUpload(fuc, fuwg, nocache)
+			go uploadToGCS(fuc, fuwg, nocache)
 		}
 	}
 	// TODO realize me
@@ -289,31 +300,101 @@ func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJo
 }
 
 func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, wg *sync.WaitGroup) {
-	//TODO realize me
 	defer wg.Done()
 	step := conf.Args.Sampler.CorlTimeSteps
 	shift := conf.Args.Sampler.CorlTimeShift
 	limit := step + shift
 	for job := range fec {
-		name := fmt.Sprintf("%s_%d.json.gz")
-		exists, e := fileExists(localPath, name)
+		code := job.Code
+		klid := job.Klid
+		ex, p, e := util.FileExists(localPath, fmt.Sprintf("%s_%d.json.gz", code, klid), true)
 		if e != nil {
 			panic(e)
 		}
-		if exists {
+		if ex {
+			log.Printf("%s already exists.", p)
 			continue
 		}
-		//TODO query inference klines
-		code := job.Code
-		klid := job.Klid
 		rcodes := job.Rcodes
-		volSize := conf.Args.Sampler.VolSize
+		frcodes := make([]string, 0, len(rcodes))
 		s := int(math.Max(0., float64(klid-step+1-shift)))
+		feats := make([][][]float64, 0, len(rcodes))
+		seqlens := make([]int, 0, len(rcodes))
 		for _, rc := range rcodes {
 			batch, seqlen, e := getSeries(code, rc, s, klid, limit)
+			if e != nil {
+				log.Panicf("failed to get series for %s and %s, exiting program", code, rc)
+			}
+			if len(batch) == 0 {
+				log.Printf("no inference data for %s and %s", code, rc)
+				continue
+			}
+			frcodes = append(frcodes, rc)
+			feats = append(feats, batch)
+			seqlens = append(seqlens, seqlen)
 		}
-		tmp := fmt.Sprintf("%s_%d.json.tmp")
+		if len(feats) == 0 {
+			log.Printf("no inference data for %s", code)
+			continue
+		}
+		// write lv9 gzipped json file, send it to fuc if the channel is not nil
+		dir, e := syncVolDir(localPath)
+		if e != nil {
+			log.Panicf("%s failed to read volume directory, exiting program", code)
+		}
+		cif := &CorlInferFile{
+			Code:     code,
+			Klid:     klid,
+			Refs:     frcodes,
+			Features: feats,
+			SeqLens:  seqlens,
+		}
+		path := filepath.Join(dir, fmt.Sprintf("%s_%d", code, klid))
+		path, e = util.WriteJSONFile(cif, path, true)
+		if e != nil {
+			log.Panicf("%s failed to export json file %s, exiting program", code, path)
+		}
+		if fuc != nil {
+			sep := os.PathSeparator
+			pattern := fmt.Sprintf(`.*([^%[1]c]*%[1]c[^%[1]c]*)`, sep)
+			r := regexp.MustCompile(pattern).FindStringSubmatch(path)
+			var gcsDest string
+			if len(r) > 0 {
+				gcsDest = r[len(r)-1]
+			} else {
+				gcsDest = filepath.Base(path)
+			}
+			fuc <- &fileUploadJob{
+				localFile: path,
+				dest:      gcsDest,
+			}
+		}
 	}
+}
+
+func syncVolDir(localPath string) (dir string, e error) {
+	volLock.Lock()
+	defer volLock.Unlock()
+	volSize := conf.Args.Sampler.VolSize
+	if curVolPath == "" || curVolSize >= volSize {
+		newPath := ""
+		c := 0
+		for true {
+			curVolNo++
+			newPath = filepath.Join(localPath, fmt.Sprintf("vol_%d", curVolNo))
+			c, e = util.NumOfFiles(newPath, ".*\\.json\\.gz", false)
+			if e != nil {
+				return dir, errors.WithStack(e)
+			}
+			if c < volSize {
+				break
+			}
+		}
+		curVolPath = newPath
+		curVolSize = c
+	}
+	curVolSize++
+	return curVolPath, nil
 }
 
 func getSeries(code, rcode string, start, end, limit int) (series [][]float64, seqlen int, err error) {
@@ -416,7 +497,7 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 		repeat.StopOnSuccess(),
 		repeat.LimitMaxTries(conf.Args.DefaultRetry),
 		repeat.WithDelay(
-			repeat.FullJitterBackoff(500*time.Millisecond).Set(),
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
 		),
 	)
 
@@ -443,7 +524,7 @@ func initFeatQuery() {
 	var strs []string
 	cols := conf.Args.Sampler.FeatureCols
 	for _, c := range cols {
-		strs = append(strs, fmt.Sprintf("(d.%[0]s-s.%[0]s_mean)/s.%[0]s_std %[0]s,", c))
+		strs = append(strs, fmt.Sprintf("(d.%[1]s-s.%[1]s_mean)/s.%[1]s_std %[1]s,", c))
 	}
 	pkline := strings.Join(strs, " ")
 	pkline = pkline[:len(pkline)-1] // strip last comma
@@ -451,13 +532,13 @@ func initFeatQuery() {
 	strs = make([]string, 0, 8)
 	statsTmpl := `
         MAX(CASE
-            WHEN t.fields = '%[0]s' THEN t.mean
+            WHEN t.fields = '%[1]s' THEN t.mean
             ELSE NULL 
-        END) AS %[0]s_mean, 
+        END) AS %[1]s_mean, 
         MAX(CASE
-            WHEN t.fields = '%[0]s' THEN t.std
+            WHEN t.fields = '%[1]s' THEN t.std
             ELSE NULL 
-        END) AS %[0]s_std,
+        END) AS %[1]s_std,
 	`
 	for _, c := range cols {
 		strs = append(strs, fmt.Sprintf(statsTmpl, c))
@@ -469,34 +550,7 @@ func initFeatQuery() {
 	qryDate = fmt.Sprintf(tmpl, pkline, stats, " AND d.date in (%s)")
 }
 
-func fileExists(path, name string) (bool, error) {
-	paths := []string{filepath.Join(path, name)}
-	dirs, err := ioutil.ReadDir(path)
-	if err != nil {
-		log.Printf("failed to read content from %s: %+v", path, err)
-		return false, errors.WithStack(err)
-	}
-	for _, d := range dirs {
-		if d.IsDir() {
-			paths = append(paths, filepath.Join(path, d.Name(), name))
-		}
-	}
-	for _, p := range paths {
-		_, err = os.Stat(p)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				log.Printf("failed to check existence of %s : %+v", p, err)
-				return false, errors.WithStack(err)
-			}
-		} else {
-			log.Printf("%s already exists.", p)
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func procInferFileUpload(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
+func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 	defer wg.Done()
 	for job := range ch {
 		op := func(c int) error {
@@ -558,7 +612,7 @@ func procInferFileUpload(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache b
 			repeat.StopOnSuccess(),
 			repeat.LimitMaxTries(conf.Args.DefaultRetry),
 			repeat.WithDelay(
-				repeat.FullJitterBackoff(500*time.Millisecond).Set(),
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(30*time.Second).Set(),
 			),
 		)
 

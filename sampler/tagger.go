@@ -8,7 +8,6 @@ import (
 
 	"github.com/carusyte/stock/util"
 
-	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
 )

@@ -400,7 +400,7 @@ func kdjScoresAuto(code string, klhist []*model.Quote, expvr, mxrt float64, mxho
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 		return
 	}
-	cpu, e := util.CpuUsage()
+	cpu, e := util.CPUUsage()
 	if e != nil {
 		logr.Warnf("%s failed to get cpu usage: %+v", code, e)
 	}
