@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -46,6 +47,12 @@ type wccTrnDBJob struct {
 	wccs  []*model.WccTrn
 }
 
+type stockrelDBJob struct {
+	code     string
+	fin      int
+	stockrel *model.StockRel
+}
+
 type pcaljob struct {
 	Code string
 	Klid int
@@ -73,9 +80,8 @@ type CorlInferFile struct {
 	SeqLens  []int
 }
 
-//Pcal pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
-func Pcal(expInferFile, upload, nocache bool, localPath string) {
-	// TODO: realize Pcal()
+//PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
+func PcalWcc(expInferFile, upload, nocache bool, localPath string) {
 	jobs, e := getPcalJobs()
 	if e != nil || len(jobs) <= 0 {
 		return
@@ -86,12 +92,33 @@ func Pcal(expInferFile, upload, nocache bool, localPath string) {
 		expch, expwg = ExpInferFile(localPath, upload, nocache)
 	}
 	// make db job channel & waitgroup, start db goroutine
-
+	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
+	dbwg := new(sync.WaitGroup)
+	dbwg.Add(1)
+	collectStockRels(dbwg, dbch)
 	// make job channel & waitgroup, start calculation goroutine
+	pcch := make(chan *pcaljob, conf.Args.Concurrency)
+	pcwg := new(sync.WaitGroup)
+	pl := int(float64(runtime.NumCPU()) * 0.8)
+	for i := 0; i < pl; i++ {
+		pcwg.Add(1)
+		go pcalWccWorker(pcch, expch, dbch, pcwg)
+	}
 	// iterate through qualified kline data, create wcc calculation job instance and push it to job channel
+	for _, j := range jobs {
+		pcch <- j
+	}
 	// close job channel, wait for job completion
+	close(pcch)
+	pcwg.Wait()
 	// close db job channel wait for db job completion
-	// close exp channel wait for exp job completion
+	close(dbch)
+	dbwg.Wait()
+	// close exp channel wait for exp job completion, if the channel is not nil
+	if expch != nil {
+		close(expch)
+		expwg.Wait()
+	}
 }
 
 //CalWcc calculates Warping Correlation Coefficient for stocks
@@ -249,13 +276,17 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 			go uploadToGCS(fuc, fuwg, nocache)
 		}
 	}
-	// TODO realize me
 	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
 	fec = fileExpCh
 	fewg = new(sync.WaitGroup)
 	fewg.Add(1)
 	go fileExporter(localPath, fileExpCh, fuc, fewg, fuwg)
 	return
+}
+
+func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
+	defer wg.Done()
+	//TODO realize me
 }
 
 func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
@@ -1003,4 +1034,118 @@ func warpingCorl(lrs, bucket []float64) (minDiff, maxDiff float64, e error) {
 	minDiff = sumMin / flen
 	maxDiff = sumMax / flen
 	return
+}
+
+func collectStockRels(wg *sync.WaitGroup, ch <-chan *stockrelDBJob) {
+	defer wg.Done()
+	size := 64
+	bucket := make([]*model.StockRel, 0, size)
+	ticker := time.NewTicker(time.Second * 5)
+	for {
+		select {
+		case <-ticker.C:
+			if len(bucket) > 0 {
+				saveStockRel(bucket...)
+				bucket = make([]*model.StockRel, 0, size)
+			}
+		case job, ok := <-ch:
+			if ok {
+				bucket = append(bucket, job.stockrel)
+				if len(bucket) >= size {
+					saveStockRel(bucket...)
+					bucket = make([]*model.StockRel, 0, size)
+				}
+			} else {
+				//channel has been closed
+				ticker.Stop()
+				if len(bucket) > 0 {
+					saveStockRel(bucket...)
+					bucket = nil
+				}
+				break
+			}
+		}
+	}
+}
+
+func saveStockRel(rels ...*model.StockRel) {
+	if len(rels) == 0 {
+		return
+	}
+	valueHolders := make([]string, 0, len(rels))
+	valueArgs := make([]interface{}, 0, len(rels)*16)
+	cols := []string{"code", "klid"}
+	valueUpdates := make([]string, 0, 16)
+	addcol := func(i int, cn string, f interface{}, num *int) {
+		valid := false
+		switch f.(type) {
+		case sql.NullString:
+			valid = f.(sql.NullString).Valid
+		case sql.NullFloat64:
+			valid = f.(sql.NullFloat64).Valid
+		default:
+			log.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
+		}
+		if valid {
+			valueArgs = append(valueArgs, f)
+			if i == 0 {
+				cols = append(cols, cn)
+				valueUpdates = append(valueUpdates, fmt.Sprintf("%[1]s=values(%[1]s)", cn))
+			}
+		}
+		*num++
+	}
+	for i, r := range rels {
+		numFields := 2
+		valueArgs = append(valueArgs, r.Code)
+		valueArgs = append(valueArgs, r.Klid)
+		addcol(i, "date", r.Date, &numFields)
+		addcol(i, "neg_corl", r.NegCorl, &numFields)
+		addcol(i, "neg_corl_hs", r.NegCorlHs, &numFields)
+		addcol(i, "pos_corl", r.PosCorl, &numFields)
+		addcol(i, "pos_corl_hs", r.PosCorlHs, &numFields)
+		addcol(i, "rcode_neg", r.RcodeNeg, &numFields)
+		addcol(i, "rcode_neg_hs", r.RcodeNegHs, &numFields)
+		addcol(i, "rcode_pos", r.RcodePos, &numFields)
+		addcol(i, "rcode_pos_hs", r.RcodePosHs, &numFields)
+		addcol(i, "udate", r.Udate, &numFields)
+		addcol(i, "utime", r.Utime, &numFields)
+		holders := make([]string, numFields)
+		for i := range holders {
+			holders[i] = "?"
+		}
+		holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
+		valueHolders = append(valueHolders, holderString)
+	}
+	stmt := fmt.Sprintf("INSERT INTO stockrel (%s) VALUES %s on duplicate key update %s",
+		strings.Join(cols, ","),
+		strings.Join(valueHolders, ","),
+		strings.Join(valueUpdates, ","))
+	code := rels[0].Code
+	klid := rels[0].Klid
+	var e error
+	op := func(c int) error {
+		if c > 0 {
+			log.Printf("retry #%d saving stockrel for %s@%d", code, klid)
+		}
+		_, e = dbmap.Exec(stmt, valueArgs...)
+		if e != nil {
+			log.Printf("failed to save stockrel for %s@%d: %+v", code, klid, e)
+			return repeat.HintTemporary(errors.WithStack(e))
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("give up saving stockrel for %s@%d: %+v", code, klid, e)
+	}
 }
