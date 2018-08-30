@@ -38,7 +38,9 @@ var (
 	curVolNo          = -1
 	volLock           sync.RWMutex
 	ftQryInit         sync.Once
+	statsQryInit      sync.Once
 	qryKline, qryDate string
+	wccStats          *model.FsStats
 )
 
 type wccTrnDBJob struct {
@@ -49,12 +51,12 @@ type wccTrnDBJob struct {
 
 type stockrelDBJob struct {
 	code     string
-	fin      int
 	stockrel *model.StockRel
 }
 
 type pcaljob struct {
 	Code string
+	Date string
 	Klid int
 }
 
@@ -62,7 +64,6 @@ type pcaljob struct {
 type ExpJob struct {
 	Code   string
 	Klid   int
-	Date   string
 	Rcodes []string
 }
 
@@ -82,13 +83,16 @@ type CorlInferFile struct {
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
 func PcalWcc(expInferFile, upload, nocache bool, localPath string) {
+	log.Println("starting wcc pre-calculation...")
 	jobs, e := getPcalJobs()
 	if e != nil || len(jobs) <= 0 {
 		return
 	}
+	log.Printf("#jobs: %d", len(jobs))
 	var expch chan<- *ExpJob
 	var expwg *sync.WaitGroup
 	if expInferFile {
+		log.Println("inference file exportation enabled")
 		expch, expwg = ExpInferFile(localPath, upload, nocache)
 	}
 	// make db job channel & waitgroup, start db goroutine
@@ -269,6 +273,7 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 	var fuc chan *fileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
+		log.Println("GCS uploading enabled")
 		fuc = make(chan *fileUploadJob, math.MaxInt32)
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
@@ -286,7 +291,330 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 
 func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
 	defer wg.Done()
-	//TODO realize me
+	stats := getWccFeatStats()
+	for pcjob := range pcch {
+		code := pcjob.Code
+		klid := pcjob.Klid
+		date := pcjob.Date
+		rcodes, e := getRcodes4WccInfer(code, klid)
+		if e != nil {
+			continue
+		}
+		log.Printf("%s has %d eligible reference codes for inference", code, len(rcodes))
+		if expch != nil {
+			expch <- &ExpJob{
+				Code:   code,
+				Klid:   klid,
+				Rcodes: rcodes,
+			}
+		}
+		lrs, reflrs, e := getKlines4WccPreCalculation(code, klid, rcodes...)
+		if len(lrs) == 0 || len(reflrs) == 0 || e == nil {
+			continue
+		}
+		log.Printf("%s has %d eligible reference codes for pre-calculation", code, len(reflrs))
+		var minc, maxc string
+		minv, maxv := math.MaxFloat64, -math.MaxFloat64
+		for rc, rlrs := range reflrs {
+			minDiff, maxDiff, e := warpingCorl(lrs, rlrs)
+			if e != nil {
+				log.Printf(`%s@%d failed to pre-calculate wcc with %s, skipping: %+v`, code, klid, rc, e)
+				continue
+			}
+			corl := 0.
+			vmax := stats.Vmax.Float64
+			if maxDiff > vmax {
+				maxDiff = vmax //clipping
+			}
+			if minDiff < vmax-maxDiff {
+				corl = -minDiff/vmax*2. + 1.
+			} else {
+				corl = -maxDiff/vmax*2. + 1.
+			}
+			mean, std := stats.Mean.Float64, stats.Std.Float64
+			corl = (corl - mean) / std
+			if corl < minv {
+				minv = corl
+				minc = rc
+			}
+			if corl > maxv {
+				maxv = corl
+				maxc = rc
+			}
+		}
+		log.Printf("%s: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}", code, maxc, maxv, minc, minv)
+		ud, ut := util.TimeStr()
+		dbch <- &stockrelDBJob{
+			code: code,
+			stockrel: &model.StockRel{
+				Code:       code,
+				Date:       sql.NullString{String: date, Valid: true},
+				Klid:       klid,
+				RcodePosHs: sql.NullString{String: maxc, Valid: true},
+				RcodeNegHs: sql.NullString{String: minc, Valid: true},
+				PosCorlHs:  sql.NullFloat64{Float64: maxv, Valid: true},
+				NegCorlHs:  sql.NullFloat64{Float64: minv, Valid: true},
+				Udate:      sql.NullString{String: ud, Valid: true},
+				Utime:      sql.NullString{String: ut, Valid: true},
+			},
+		}
+	}
+}
+
+func getWccFeatStats() (stats *model.FsStats) {
+	if wccStats != nil {
+		return wccStats
+	}
+	query := func() {
+		op := func(c int) (e error) {
+			if c > 0 {
+				log.Printf("#%d retrying to query fs_stats...", c)
+			}
+			e = dbmap.SelectOne(&wccStats, `select * from fs_stats where method = ? and fields = ? and tab = ?`,
+				"standardization", "corl", "wcc")
+			if e != nil {
+				if sql.ErrNoRows != e {
+					log.Printf(`failed to query fs_stats: %+v`, e)
+					return repeat.HintTemporary(e)
+				}
+				return repeat.HintStop(errors.New(`wcc stats not ready`))
+			}
+			return nil
+		}
+		e := repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+			),
+		)
+		if e != nil {
+			log.Panicf("give up querying wcc stats: %+v", e)
+		}
+	}
+	statsQryInit.Do(query)
+	return wccStats
+}
+
+func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs []float64, reflrs map[string][]float64, e error) {
+	span := conf.Args.Sampler.CorlSpan
+	shift := conf.Args.Sampler.WccMaxShift
+	start := klid - shift + 1
+	end := klid + span
+	qryKlid := " and klid >= ? and klid <= ?"
+	op := func(c int) error {
+		lrs = make([]float64, 0, span)
+		reflrs = make(map[string][]float64)
+		maxKlid, e := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
+		if e != nil {
+			if sql.ErrNoRows != e {
+				log.Printf(`#%d %s failed to query max klid, %+v`, c, code, e)
+				return repeat.HintTemporary(e)
+			}
+			log.Printf(`%s no data in kline_d_b`, code)
+			return repeat.HintStop(e)
+		}
+		maxk := int(maxKlid)
+
+		if maxk < end {
+			return repeat.HintStop(fmt.Errorf("%s ineligible for wcc pre-calculation: %d < %d", code, maxk, klid+span))
+		}
+		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
+		if e != nil {
+			log.Printf(`#%d %s@%d-%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, start, end, e)
+			return repeat.HintTemporary(errors.WithStack(e))
+		}
+		query = fmt.Sprintf(query, qryKlid)
+		var klhist []*model.Quote
+		_, e = dbmap.Select(&klhist, query, code, start, end)
+		if e != nil {
+			if sql.ErrNoRows != e {
+				log.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, end, e)
+				return repeat.HintTemporary(e)
+			}
+			log.Printf(`%s@%d-%d no data in kline_d_b`, code, start, end)
+			return repeat.HintStop(e)
+		}
+		if len(klhist) < span {
+			e = errors.WithStack(
+				fmt.Errorf("%s [severe]: some kline data between %d(exclusive) and %d may be missing. skipping",
+					code, start, end))
+			return repeat.HintStop(e)
+		}
+		// search for reference codes by matching dates
+		var args []interface{}
+		var dates []string
+		for _, rc := range rcodes {
+			args = append(args, rc)
+		}
+		for i, k := range klhist {
+			if i >= shift {
+				if k.Lr.Valid {
+					lrs = append(lrs, k.Lr.Float64)
+				} else {
+					e = fmt.Errorf(`%s [severe] reference %s@%d %s log return is null. skipping`, code, k.Code, k.Klid, k.Date)
+					repeat.HintStop(e)
+				}
+			}
+			if i < len(klhist)-1 {
+				dates = append(dates, k.Date)
+				args = append(args, k.Date)
+			}
+		}
+		args = append(args, len(dates))
+		qry := fmt.Sprintf(`select code from kline_d_b where code in (?%s) and date in (?%s) `+
+			`group by code having count(*) = ?`, strings.Repeat(",?", len(rcodes)-1), strings.Repeat(",?", len(klhist)-2))
+		var frcodes []string
+		_, e = dbmap.Select(&frcodes, qry, args...)
+		if e != nil {
+			if sql.ErrNoRows != e {
+				log.Printf(`#%d %s@%d-%d failed to query reference codes: %+v`, c, code, start, end, e)
+				return repeat.HintTemporary(e)
+			}
+			log.Printf(`%s@%d-%d no matching reference code`, code, start, end)
+			return repeat.HintStop(e)
+		}
+		if len(frcodes) == 0 {
+			log.Printf(`%s no available reference data between %d and %d`,
+				code, start, end)
+			return repeat.HintStop(e)
+		}
+		//query klines for frcode
+		args = make([]interface{}, len(dates)+1)
+		for i, d := range dates {
+			args[i+1] = d
+		}
+		qry = fmt.Sprintf(`
+			SELECT 
+				t.code,
+				t.klid,
+				t.date,
+				t.lr
+			FROM
+				kline_d_b t
+			WHERE
+				t.code = ? AND t.date IN (?%s)
+			ORDER BY code , klid
+		`, strings.Repeat(",?", len(args)-2))
+	LOOPRCODES:
+		for _, rc := range frcodes {
+			args[0] = rc //replace code argument
+			var rhist []*model.Quote
+			_, e = dbmap.Select(&rhist, qry, args...)
+			if e != nil {
+				if sql.ErrNoRows != e {
+					log.Printf(`#%d %s@%d-%d failed to load reference kline of %s: %+v`, c, code, start, end, rc, e)
+					return repeat.HintTemporary(errors.WithStack(e))
+				}
+				log.Printf(`%s reference code %s has no available data between %s and %s, skipping this one`,
+					code, rc, args[1], args[len(args)-1])
+				continue
+			}
+			if len(rhist) != len(args)-1 {
+				log.Printf(`%s reference code %s has missing data between %s and %s, skipping this one`,
+					code, rc, args[1], args[len(args)-1])
+				continue
+			}
+			rlrs := make([]float64, len(rhist))
+			for i, k := range rhist {
+				if k.Lr.Valid {
+					rlrs[i] = k.Lr.Float64
+				} else {
+					log.Printf(`%s [severe] reference %s@%d %s log return is null. skipping`, code, k.Code, k.Klid, k.Date)
+					continue LOOPRCODES
+				}
+			}
+			reflrs[rc] = rlrs
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("%s@%d give up querying klines for wcc pre-calculation: %+v", code, klid, e)
+	}
+
+	return
+}
+
+func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
+	shift := conf.Args.Sampler.CorlTimeShift
+	steps := conf.Args.Sampler.CorlTimeSteps
+	start := klid - steps - shift + 1
+	qryKlid := " and klid >= ? and klid <= ?"
+	op := func(c int) error {
+		rcodes := make([]string, 0, 64)
+		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
+		if e != nil {
+			log.Printf(`#%d %s@%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, klid, e)
+			return repeat.HintTemporary(errors.WithStack(e))
+		}
+		query = fmt.Sprintf(query, qryKlid)
+		var klhist []*model.Quote
+		_, e = dbmap.Select(&klhist, query, code, start, klid)
+		if e != nil {
+			if sql.ErrNoRows != e {
+				log.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, klid, e)
+				return repeat.HintTemporary(e)
+			}
+			log.Printf(`%s@%d-%d no data in kline_d_b`, code, start, klid)
+			return repeat.HintStop(e)
+		}
+		if len(klhist) < steps+shift {
+			e = errors.WithStack(
+				fmt.Errorf("%s [severe]: some kline data between %d and %d may be missing. skipping",
+					code, start, klid))
+			return repeat.HintStop(e)
+		}
+		// search for reference codes by matching dates
+		args := []interface{}{code}
+		for _, k := range klhist {
+			args = append(args, k.Date)
+		}
+		args = append(args, len(klhist))
+		qry := fmt.Sprintf(`select code from kline_d_b where code <> ? and date in (%s%s) `+
+			`group by code having count(*) = ?`, "?", strings.Repeat(",?", len(klhist)-1))
+		_, e = dbmap.Select(&rcodes, qry, args...)
+		if e != nil {
+			if sql.ErrNoRows != e {
+				log.Printf(`#%d %s@%d-%d failed to query reference codes, %+v`, c, code, start, klid, e)
+				return repeat.HintTemporary(e)
+			}
+			log.Printf(`%s@%d-%d no matching reference code`, code, start, klid)
+			return repeat.HintStop(e)
+		}
+		if len(rcodes) == 0 {
+			log.Printf(`%s no available reference data between %d and %d`,
+				code, start, klid)
+			return repeat.HintStop(e)
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("%s %d failed to get wcc reference codes for inference: %+v", code, klid, e)
+		return nil, e
+	}
+
+	return rcodes, nil
 }
 
 func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
@@ -323,6 +651,7 @@ func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJo
 					}
 				}
 				if removable {
+					log.Printf("removing empty volume folder: %s", p)
 					os.Remove(p)
 				}
 			}
@@ -385,6 +714,7 @@ func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJ
 		if e != nil {
 			log.Panicf("%s failed to export json file %s, exiting program", code, path)
 		}
+		log.Printf("json file exported: %s", path)
 		if fuc != nil {
 			sep := os.PathSeparator
 			pattern := fmt.Sprintf(`.*([^%[1]c]*%[1]c[^%[1]c]*)`, sep)
@@ -434,6 +764,8 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 	shift := conf.Args.Sampler.CorlTimeShift
 	op := func(c int) error {
 		if c > 0 {
+			series = make([][]float64, 0, step)
+			seqlen = 0
 			log.Printf("retry #%d getting feature batch [%s, %s, %d, %d]", c, code, rcode, start, end)
 		}
 		rows, e := dbmap.Query(qk, code, code, start, end, limit)
@@ -655,13 +987,14 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 
 //getPcalJobs fetchs kline data not in stockrel with non-blank value
 func getPcalJobs() (jobs []*pcaljob, e error) {
+	log.Println("querying klines for candidate...")
 	sklid := conf.Args.Sampler.CorlPrior
 	_, e = dbmap.Select(&jobs, `
 		SELECT 
-			t.code code, t.klid klid
+			t.code code, t.date date, t.klid klid
 		FROM
 			(SELECT 
-				code, klid
+				code, date, klid
 			FROM
 				kline_d_b
 			WHERE
@@ -720,7 +1053,6 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	} else if prior > 0 {
 		start = prior - shift
 	}
-	//skip existing records
 	var klids []int
 	dbmap.Select(&klids, `SELECT 
 								klid

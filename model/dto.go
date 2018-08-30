@@ -1229,3 +1229,23 @@ func (x *StockRel) String() string {
 	}
 	return fmt.Sprintf("%v", string(j))
 }
+
+//FsStats represents feature scaling statistics. A mapping of the fs_stats table
+type FsStats struct {
+	Method string
+	Fields string
+	Tab    sql.NullString
+	Mean   sql.NullFloat64
+	Std    sql.NullFloat64
+	Vmax   sql.NullFloat64
+	Udate  sql.NullString
+	Utime  sql.NullString
+}
+
+func (x *FsStats) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}
