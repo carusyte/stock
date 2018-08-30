@@ -52,8 +52,9 @@ type Arguments struct {
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
 	}
 	GCS struct {
-		Connection int    `mapstructure:"connection"`
-		Bucket     string `mapstructure:"bucket"`
+		Connection  int    `mapstructure:"connection"`
+		Bucket      string `mapstructure:"bucket"`
+		UploadQueue int    `mapstructure:"upload_queue"`
 	}
 	Kdjv struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`

@@ -30,9 +30,28 @@ func CPUUsage() (idle float64, e error) {
 	return ps[0], e
 }
 
-//FileExists checks whether the specified file exists
+//MkDirAll similar to os.MkDirAll, but with retry when failed.
+func MkDirAll(path string, perm os.FileMode) (e error) {
+	op := func(c int) error {
+		if e = os.MkdirAll(path, perm); e != nil {
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+		),
+	)
+	return
+}
+
+//FileExists checks (with retry) whether the specified file exists
 //in the provided directory (or optionally its sub-directory).
-func FileExists(dir, name string, searchSubDirectory bool) (exists bool, path string, e error) {
+func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, path string, e error) {
 	paths := []string{filepath.Join(dir, name)}
 	op := func(c int) error {
 		if searchSubDirectory {
@@ -62,15 +81,18 @@ func FileExists(dir, name string, searchSubDirectory bool) (exists bool, path st
 		}
 		return nil
 	}
-
-	e = repeat.Repeat(
-		repeat.FnWithCounter(op),
-		repeat.StopOnSuccess(),
-		repeat.LimitMaxTries(conf.Args.DefaultRetry),
-		repeat.WithDelay(
-			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(5*time.Second).Set(),
-		),
-	)
+	if retry {
+		e = repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+			),
+		)
+	} else {
+		op(0)
+	}
 
 	return
 }
@@ -81,15 +103,19 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 	op := func(c int) error {
 		num = 0
 		if _, e = os.Stat(dir); e != nil {
-			log.Printf("#%d failed to read stat for %s: %+v", c, dir, e)
-			return repeat.HintTemporary(errors.WithStack(e))
+			if os.IsNotExist(e) {
+				return repeat.HintStop(e)
+			} else {
+				log.Printf("#%d failed to read stat for %s: %+v", c, dir, e)
+				return repeat.HintTemporary(e)
+			}
 		}
 		paths := []string{dir}
 		if searchSubDirectory {
 			dirs, e := ioutil.ReadDir(dir)
 			if e != nil {
 				log.Printf("#%d failed to read content from %s: %+v", c, dir, e)
-				return repeat.HintTemporary(errors.WithStack(e))
+				return repeat.HintTemporary(e)
 			}
 			for _, d := range dirs {
 				if d.IsDir() {
@@ -101,13 +127,13 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 			files, e := ioutil.ReadDir(p)
 			if e != nil {
 				log.Printf("#%d failed to read content from %s: %+v", c, p, e)
-				return repeat.HintTemporary(errors.WithStack(e))
+				return repeat.HintTemporary(e)
 			}
 			for _, f := range files {
 				if !f.IsDir() {
 					m, e := regexp.MatchString(pattern, f.Name())
 					if e != nil {
-						return repeat.HintStop(errors.WithStack(e))
+						return repeat.HintStop(e)
 					}
 					if m {
 						num++
@@ -123,7 +149,7 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 		repeat.StopOnSuccess(),
 		repeat.LimitMaxTries(conf.Args.DefaultRetry),
 		repeat.WithDelay(
-			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(5*time.Second).Set(),
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
 		),
 	)
 
@@ -136,6 +162,9 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 //path parameter should not include file extensions.
 func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath string, e error) {
 	op := func(c int) error {
+		if c > 0 {
+			log.Printf("#%d retrying to write json file to %s...", c, path)
+		}
 		tmp := fmt.Sprintf("%s.tmp", path)
 		if compress {
 			finalPath = fmt.Sprintf("%s.json.gz", path)
@@ -143,7 +172,7 @@ func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath s
 			finalPath = fmt.Sprintf("%s.json", path)
 		}
 		dir, name := filepath.Dir(tmp), filepath.Base(tmp)
-		ex, _, e := FileExists(dir, name, false)
+		ex, _, e := FileExists(dir, name, false, false)
 		if e != nil {
 			return repeat.HintStop(errors.WithMessage(errors.WithStack(e), "unable to check existence for "+tmp))
 		}
@@ -151,7 +180,7 @@ func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath s
 			os.Remove(tmp)
 		}
 		dir, name = filepath.Dir(finalPath), filepath.Base(finalPath)
-		ex, _, e = FileExists(dir, name, false)
+		ex, _, e = FileExists(dir, name, false, false)
 		if e != nil {
 			return repeat.HintStop(errors.WithMessage(errors.WithStack(e), "unable to check existence for "+finalPath))
 		}

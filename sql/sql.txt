@@ -620,7 +620,7 @@ FROM
         fs_stats t
     WHERE
         t.method = 'standardization'
-    GROUP BY code , t.method) s USING (code) 
+    GROUP BY code, t.method) s USING (code) 
 WHERE
     d.code = ?
     %s 

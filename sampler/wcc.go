@@ -99,7 +99,7 @@ func PcalWcc(expInferFile, upload, nocache bool, localPath string) {
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
 	dbwg := new(sync.WaitGroup)
 	dbwg.Add(1)
-	collectStockRels(dbwg, dbch)
+	go collectStockRels(dbwg, dbch)
 	// make job channel & waitgroup, start calculation goroutine
 	pcch := make(chan *pcaljob, conf.Args.Concurrency)
 	pcwg := new(sync.WaitGroup)
@@ -274,7 +274,7 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 	var fuwg *sync.WaitGroup
 	if upload {
 		log.Println("GCS uploading enabled")
-		fuc = make(chan *fileUploadJob, math.MaxInt32)
+		fuc = make(chan *fileUploadJob, conf.Args.GCS.UploadQueue)
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
 			fuwg.Add(1)
@@ -296,11 +296,12 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		code := pcjob.Code
 		klid := pcjob.Klid
 		date := pcjob.Date
+		log.Printf("processing %s@%d, %s...", code, klid, date)
 		rcodes, e := getRcodes4WccInfer(code, klid)
-		if e != nil {
+		if e != nil || len(rcodes) == 0 {
 			continue
 		}
-		log.Printf("%s has %d eligible reference codes for inference", code, len(rcodes))
+		log.Printf("%s@%s has %d eligible reference codes for inference", code, date, len(rcodes))
 		if expch != nil {
 			expch <- &ExpJob{
 				Code:   code,
@@ -371,7 +372,7 @@ func getWccFeatStats() (stats *model.FsStats) {
 				log.Printf("#%d retrying to query fs_stats...", c)
 			}
 			e = dbmap.SelectOne(&wccStats, `select * from fs_stats where method = ? and fields = ? and tab = ?`,
-				"standardization", "corl", "wcc")
+				"standardization", "corl", "wcc_trn")
 			if e != nil {
 				if sql.ErrNoRows != e {
 					log.Printf(`failed to query fs_stats: %+v`, e)
@@ -423,7 +424,7 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
 		if e != nil {
 			log.Printf(`#%d %s@%d-%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, start, end, e)
-			return repeat.HintTemporary(errors.WithStack(e))
+			return repeat.HintTemporary(e)
 		}
 		query = fmt.Sprintf(query, qryKlid)
 		var klhist []*model.Quote
@@ -437,9 +438,8 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 			return repeat.HintStop(e)
 		}
 		if len(klhist) < span {
-			e = errors.WithStack(
-				fmt.Errorf("%s [severe]: some kline data between %d(exclusive) and %d may be missing. skipping",
-					code, start, end))
+			e = fmt.Errorf("%s [severe]: some kline data between %d(exclusive) and %d may be missing. skipping",
+				code, start, end)
 			return repeat.HintStop(e)
 		}
 		// search for reference codes by matching dates
@@ -505,7 +505,7 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 			if e != nil {
 				if sql.ErrNoRows != e {
 					log.Printf(`#%d %s@%d-%d failed to load reference kline of %s: %+v`, c, code, start, end, rc, e)
-					return repeat.HintTemporary(errors.WithStack(e))
+					return repeat.HintTemporary(e)
 				}
 				log.Printf(`%s reference code %s has no available data between %s and %s, skipping this one`,
 					code, rc, args[1], args[len(args)-1])
@@ -546,17 +546,20 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 	return
 }
 
+//getRcodes4WccInfer fetches eligible reference codes based on prior data.
+//the returned rcodes array may have 0 elements if no eligible data can be found.
 func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	shift := conf.Args.Sampler.CorlTimeShift
 	steps := conf.Args.Sampler.CorlTimeSteps
 	start := klid - steps - shift + 1
 	qryKlid := " and klid >= ? and klid <= ?"
 	op := func(c int) error {
-		rcodes := make([]string, 0, 64)
+		log.Printf("#%d getting rcodes for %s@%d", c, code, klid)
+		rcodes = make([]string, 0, 64)
 		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
 		if e != nil {
 			log.Printf(`#%d %s@%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, klid, e)
-			return repeat.HintTemporary(errors.WithStack(e))
+			return repeat.HintTemporary(e)
 		}
 		query = fmt.Sprintf(query, qryKlid)
 		var klhist []*model.Quote
@@ -570,9 +573,8 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 			return repeat.HintStop(e)
 		}
 		if len(klhist) < steps+shift {
-			e = errors.WithStack(
-				fmt.Errorf("%s [severe]: some kline data between %d and %d may be missing. skipping",
-					code, start, klid))
+			e = fmt.Errorf("%s [severe]: some kline data between %d and %d may be missing. skipping",
+				code, start, klid)
 			return repeat.HintStop(e)
 		}
 		// search for reference codes by matching dates
@@ -667,7 +669,7 @@ func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJ
 	for job := range fec {
 		code := job.Code
 		klid := job.Klid
-		ex, p, e := util.FileExists(localPath, fmt.Sprintf("%s_%d.json.gz", code, klid), true)
+		ex, p, e := util.FileExists(localPath, fmt.Sprintf("%s_%d.json.gz", code, klid), true, true)
 		if e != nil {
 			panic(e)
 		}
@@ -710,6 +712,7 @@ func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJ
 			SeqLens:  seqlens,
 		}
 		path := filepath.Join(dir, fmt.Sprintf("%s_%d", code, klid))
+		//FIXME failed to export json file, with no useful trace message
 		path, e = util.WriteJSONFile(cif, path, true)
 		if e != nil {
 			log.Panicf("%s failed to export json file %s, exiting program", code, path)
@@ -742,12 +745,25 @@ func syncVolDir(localPath string) (dir string, e error) {
 		c := 0
 		for true {
 			curVolNo++
-			newPath = filepath.Join(localPath, fmt.Sprintf("vol_%d", curVolNo))
-			c, e = util.NumOfFiles(newPath, ".*\\.json\\.gz", false)
+			volDir := fmt.Sprintf("vol_%d", curVolNo)
+			ex := false
+			ex, newPath, e = util.FileExists(localPath, volDir, false, true)
 			if e != nil {
-				return dir, errors.WithStack(e)
+				return
 			}
-			if c < volSize {
+			if ex {
+				c, e = util.NumOfFiles(newPath, ".*\\.json\\.gz", false)
+				if e != nil {
+					return
+				}
+				if c < volSize {
+					break
+				}
+			} else {
+				newPath = filepath.Join(localPath, volDir)
+				if e = util.MkDirAll(newPath, 0666); e != nil {
+					return
+				}
 				break
 			}
 		}
@@ -782,19 +798,31 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 		dates := make([]string, 0, 16)
 		table, rtable := make([][]float64, 0, 16), make([][]float64, 0, 16)
 		for ; rows.Next(); count++ {
-			frow := make([]float64, unitFeatLen)
-			table[count] = frow
+			row := make([]float64, unitFeatLen)
+			table = append(table, row)
 			vals := make([]interface{}, len(cols))
-			// for i := range vals{
-			// 	vals[i] = new(interface{})
-			// }
+			for i := range vals {
+				vals[i] = new(interface{})
+			}
 			if e := rows.Scan(vals...); e != nil {
 				log.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
 				return repeat.HintTemporary(e)
 			}
-			dates = append(dates, vals[0].(string))
+			if d, ok := vals[0].(*interface{}); ok {
+				dates = append(dates, string((*d).([]uint8)))
+			} else {
+				return repeat.HintStop(
+					fmt.Errorf("[%s,%d,%d] column type conversion error, unable to parse date string", code, start, end),
+				)
+			}
 			for i := 0; i < unitFeatLen; i++ {
-				frow[i] = vals[i+1].(float64)
+				if f, ok := vals[i+1].(*interface{}); ok {
+					row[i] = (*f).(float64)
+				} else {
+					return repeat.HintStop(
+						fmt.Errorf("[%s,%d,%d] column type conversion error, unable to parse float64", code, start, end),
+					)
+				}
 			}
 		}
 		if e := rows.Err(); e != nil {
@@ -802,26 +830,31 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 			return repeat.HintTemporary(e)
 		}
 		qdates := util.Join(dates, ",", true)
-		qd = fmt.Sprintf(qd, qdates)
-		rRows, e := dbmap.Query(qd, rcode, rcode, limit)
+		rRows, e := dbmap.Query(fmt.Sprintf(qd, qdates), rcode, rcode, limit)
 		defer rRows.Close()
 		if e != nil {
 			log.Printf("failed to query by dates [%s,%s]: %+v", code, rcode, e)
 			return repeat.HintTemporary(e)
 		}
 		for ; rRows.Next(); rcount++ {
-			frow := make([]float64, unitFeatLen)
-			rtable[rcount] = frow
+			row := make([]float64, unitFeatLen)
+			rtable = append(rtable, row)
 			vals := make([]interface{}, len(cols))
-			// for i := range vals{
-			// 	vals[i] = new(interface{})
-			// }
-			if e := rows.Scan(vals...); e != nil {
+			for i := range vals {
+				vals[i] = new(interface{})
+			}
+			if e := rRows.Scan(vals...); e != nil {
 				log.Printf("failed to scan rcode result set [%s]: %+v", rcode, e)
 				return repeat.HintTemporary(e)
 			}
 			for i := 0; i < unitFeatLen; i++ {
-				frow[i] = vals[i+1].(float64)
+				if f, ok := vals[i+1].(*interface{}); ok {
+					row[i] = (*f).(float64)
+				} else {
+					return repeat.HintStop(
+						fmt.Errorf("[%s,%d,%d] column type conversion error, unable to parse float64", code, start, end),
+					)
+				}
 			}
 		}
 		if e := rRows.Err(); e != nil {
@@ -842,10 +875,10 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 			feats := make([]float64, 0, shiftFeatSize)
 			for sf := shift; sf >= 0; sf-- {
 				i := st - sf
-				for j := 0; j <= unitFeatLen; j++ {
+				for j := 0; j < unitFeatLen; j++ {
 					feats = append(feats, table[i][j])
 				}
-				for j := 0; j <= unitFeatLen; j++ {
+				for j := 0; j < unitFeatLen; j++ {
 					feats = append(feats, rtable[i][j])
 				}
 			}
@@ -875,42 +908,39 @@ func getFeatQuery() (qk, qd string) {
 	if qryKline != "" && qryDate != "" {
 		return qryKline, qryDate
 	}
-	ftQryInit.Do(initFeatQuery)
+	ftQryInit.Do(func() {
+		tmpl, e := dot.Raw("CORL_FEAT_QUERY_TMPL")
+		if e != nil {
+			log.Panicf("failed to load sql CORL_FEAT_QUERY_TMPL:%+v", e)
+		}
+		var strs []string
+		cols := conf.Args.Sampler.FeatureCols
+		for _, c := range cols {
+			strs = append(strs, fmt.Sprintf("(d.%[1]s-s.%[1]s_mean)/s.%[1]s_std %[1]s,", c))
+		}
+		pkline := strings.Join(strs, " ")
+		pkline = pkline[:len(pkline)-1] // strip last comma
+
+		strs = make([]string, 0, 8)
+		statsTmpl := `
+			MAX(CASE
+				WHEN t.fields = '%[1]s' THEN t.mean
+				ELSE NULL 
+			END) AS %[1]s_mean, 
+			MAX(CASE
+				WHEN t.fields = '%[1]s' THEN t.std
+				ELSE NULL 
+			END) AS %[1]s_std,`
+		for _, c := range cols {
+			strs = append(strs, fmt.Sprintf(statsTmpl, c))
+		}
+		stats := strings.Join(strs, " ")
+		stats = stats[:len(stats)-1] // strip last comma
+
+		qryKline = fmt.Sprintf(tmpl, pkline, stats, " AND d.klid BETWEEN ? AND ? ")
+		qryDate = fmt.Sprintf(tmpl, pkline, stats, " AND d.date in (%s)")
+	})
 	return qryKline, qryDate
-}
-
-func initFeatQuery() {
-	tmpl, e := dot.Raw("CORL_FEAT_QUERY_TMPL")
-	if e != nil {
-		log.Panicf("failed to load sql CORL_FEAT_QUERY_TMPL:%+v", e)
-	}
-	var strs []string
-	cols := conf.Args.Sampler.FeatureCols
-	for _, c := range cols {
-		strs = append(strs, fmt.Sprintf("(d.%[1]s-s.%[1]s_mean)/s.%[1]s_std %[1]s,", c))
-	}
-	pkline := strings.Join(strs, " ")
-	pkline = pkline[:len(pkline)-1] // strip last comma
-
-	strs = make([]string, 0, 8)
-	statsTmpl := `
-        MAX(CASE
-            WHEN t.fields = '%[1]s' THEN t.mean
-            ELSE NULL 
-        END) AS %[1]s_mean, 
-        MAX(CASE
-            WHEN t.fields = '%[1]s' THEN t.std
-            ELSE NULL 
-        END) AS %[1]s_std,
-	`
-	for _, c := range cols {
-		strs = append(strs, fmt.Sprintf(statsTmpl, c))
-	}
-	stats := strings.Join(strs, " ")
-	stats = stats[:len(stats)-1] // strip last comma
-
-	qryKline = fmt.Sprintf(tmpl, pkline, stats, " AND d.klid BETWEEN ? AND ? ")
-	qryDate = fmt.Sprintf(tmpl, pkline, stats, " AND d.date in (%s)")
 }
 
 func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
@@ -1458,12 +1488,12 @@ func saveStockRel(rels ...*model.StockRel) {
 	var e error
 	op := func(c int) error {
 		if c > 0 {
-			log.Printf("retry #%d saving stockrel for %s@%d", code, klid)
+			log.Printf("retry #%d saving stockrel for %s@%d", c, code, klid)
 		}
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
 			log.Printf("failed to save stockrel for %s@%d: %+v", code, klid, e)
-			return repeat.HintTemporary(errors.WithStack(e))
+			return repeat.HintTemporary(e)
 		}
 		return nil
 	}
