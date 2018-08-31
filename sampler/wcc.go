@@ -729,7 +729,7 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *file
 		log.Printf("json file exported: %s", path)
 		if fuc != nil {
 			sep := os.PathSeparator
-			pattern := fmt.Sprintf(`.*([^%[1]c]*%[1]c[^%[1]c]*)`, sep)
+			pattern := fmt.Sprintf(`.*(vol_\d*%[1]c[^%[1]c]*)`, sep)
 			r := regexp.MustCompile(pattern).FindStringSubmatch(path)
 			var gcsDest string
 			if len(r) > 0 {
