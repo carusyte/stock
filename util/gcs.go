@@ -2,26 +2,24 @@ package util
 
 import (
 	"context"
-	"log"
-	"net/http"
+	"os"
 	"sync"
-	"time"
-
-	"github.com/carusyte/stock/conf"
-	"golang.org/x/net/proxy"
-	"google.golang.org/api/option"
 
 	"cloud.google.com/go/storage"
+	"github.com/carusyte/stock/conf"
 )
+
+const userAgent = "gcloud-golang-storage/20151204"
 
 //GCSClient may serve as a handy wrapper for google cloud storage client,
 //Caller can reuse the same storage.Client instance in concurrent goroutines.
 //Initialization is performed automatically, and is thread-safe.
 //Get the GCSClient via NewGCSClient function.
 type GCSClient struct {
-	init     sync.Once
-	c        *storage.Client
-	useProxy bool
+	init                          sync.Once
+	c                             *storage.Client
+	useProxy                      bool
+	origHTTPProxy, origHTTPsProxy string
 }
 
 //NewGCSClient creates a new storage.Client instance.
@@ -35,27 +33,33 @@ func NewGCSClient(useProxy bool) *GCSClient {
 //may perform initialization for the first call.
 //This function is thread-safe.
 func (g *GCSClient) Get() (c *storage.Client, e error) {
-	if g != nil {
+	if g.c != nil {
 		return g.c, nil
 	}
 	g.init.Do(func() {
-		opts := make([]option.ClientOption, 0, 1)
 		if g.useProxy {
-			// create a socks5 dialer
-			dialer, err := proxy.SOCKS5("tcp", conf.Args.Network.MasterProxyAddr, nil, proxy.Direct)
-			if err != nil {
-				log.Printf("can't connect to the master proxy: %+v", err)
-				e = err
+			// gcs api doesn't support proxy setting very well for now,
+			// setting the environment variables as a workaround
+			proxy := conf.Args.Network.MasterHttpProxy
+			if v, ok := os.LookupEnv("http_proxy"); ok {
+				if v != proxy {
+					g.origHTTPProxy = v
+				}
+			} else {
+				e = os.Setenv("http_proxy", proxy)
+			}
+			if v, ok := os.LookupEnv("https_proxy"); ok {
+				if v != proxy {
+					g.origHTTPsProxy = v
+				}
+			} else {
+				e = os.Setenv("https_proxy", proxy)
+			}
+			if e != nil {
 				return
 			}
-			// setup a http client
-			httpTransport := &http.Transport{Dial: dialer.Dial}
-			opts = append(opts, option.WithHTTPClient(
-				&http.Client{Timeout: time.Second * time.Duration(conf.Args.GCS.Timeout),
-					Transport: httpTransport}),
-			)
 		}
-		c, e = storage.NewClient(context.Background(), opts...)
+		c, e = storage.NewClient(context.Background())
 		if e != nil {
 			return
 		}
@@ -66,5 +70,15 @@ func (g *GCSClient) Get() (c *storage.Client, e error) {
 
 //Close delegates to *storage.Client.Close()
 func (g *GCSClient) Close() (e error) {
+	if g.origHTTPProxy != "" {
+		if e = os.Setenv("http_proxy", g.origHTTPProxy); e != nil {
+			return
+		}
+	}
+	if g.origHTTPsProxy != "" {
+		if e = os.Setenv("https_proxy", g.origHTTPsProxy); e != nil {
+			return
+		}
+	}
 	return g.c.Close()
 }

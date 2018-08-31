@@ -301,7 +301,7 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		date := pcjob.Date
 		log.Printf("processing %s@%d, %s...", code, klid, date)
 		rcodes, e := getRcodes4WccInfer(code, klid)
-		if e != nil || len(rcodes) == 0 {
+		if e != nil || len(rcodes) < 2 {
 			continue
 		}
 		log.Printf("%s@%s has %d eligible reference codes for inference", code, date, len(rcodes))
@@ -313,40 +313,43 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 			}
 		}
 		lrs, reflrs, e := getKlines4WccPreCalculation(code, klid, rcodes...)
-		if len(lrs) == 0 || len(reflrs) == 0 || e != nil {
+		var minc, maxc sql.NullString
+		minv := sql.NullFloat64{Float64: math.Inf(0)}
+		maxv := sql.NullFloat64{Float64: math.Inf(-1)}
+		if len(lrs) > 0 && len(reflrs) > 0 && e == nil {
+			log.Printf("%s has %d eligible reference codes for pre-calculation", code, len(reflrs))
+			for rc, rlrs := range reflrs {
+				minDiff, maxDiff, e := warpingCorl(lrs, rlrs)
+				if e != nil {
+					log.Printf(`%s@%d failed to pre-calculate wcc with %s, skipping: %+v`, code, klid, rc, e)
+					continue
+				}
+				corl := 0.
+				vmax := stats.Vmax.Float64
+				if maxDiff > vmax {
+					maxDiff = vmax //clipping
+				}
+				if minDiff < vmax-maxDiff {
+					corl = -minDiff/vmax*2. + 1.
+				} else {
+					corl = -maxDiff/vmax*2. + 1.
+				}
+				mean, std := stats.Mean.Float64, stats.Std.Float64
+				corl = (corl - mean) / std
+				if corl < minv.Float64 {
+					minv = sql.NullFloat64{Float64: corl, Valid: true}
+					minc = sql.NullString{String: rc, Valid: true}
+				}
+				if corl > maxv.Float64 {
+					maxv = sql.NullFloat64{Float64: corl, Valid: true}
+					maxc = sql.NullString{String: rc, Valid: true}
+				}
+			}
+		} else if e != nil {
 			continue
 		}
-		log.Printf("%s has %d eligible reference codes for pre-calculation", code, len(reflrs))
-		var minc, maxc string
-		minv, maxv := math.MaxFloat64, -math.MaxFloat64
-		for rc, rlrs := range reflrs {
-			minDiff, maxDiff, e := warpingCorl(lrs, rlrs)
-			if e != nil {
-				log.Printf(`%s@%d failed to pre-calculate wcc with %s, skipping: %+v`, code, klid, rc, e)
-				continue
-			}
-			corl := 0.
-			vmax := stats.Vmax.Float64
-			if maxDiff > vmax {
-				maxDiff = vmax //clipping
-			}
-			if minDiff < vmax-maxDiff {
-				corl = -minDiff/vmax*2. + 1.
-			} else {
-				corl = -maxDiff/vmax*2. + 1.
-			}
-			mean, std := stats.Mean.Float64, stats.Std.Float64
-			corl = (corl - mean) / std
-			if corl < minv {
-				minv = corl
-				minc = rc
-			}
-			if corl > maxv {
-				maxv = corl
-				maxc = rc
-			}
-		}
-		log.Printf("%s: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}", code, maxc, maxv, minc, minv)
+		log.Printf("%s: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}",
+			code, maxc.String, maxv.Float64, minc.String, minv.Float64)
 		ud, ut := util.TimeStr()
 		dbch <- &stockrelDBJob{
 			code: code,
@@ -354,10 +357,10 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 				Code:       code,
 				Date:       sql.NullString{String: date, Valid: true},
 				Klid:       klid,
-				RcodePosHs: sql.NullString{String: maxc, Valid: true},
-				RcodeNegHs: sql.NullString{String: minc, Valid: true},
-				PosCorlHs:  sql.NullFloat64{Float64: maxv, Valid: true},
-				NegCorlHs:  sql.NullFloat64{Float64: minv, Valid: true},
+				RcodePosHs: maxc,
+				RcodeNegHs: minc,
+				PosCorlHs:  maxv,
+				NegCorlHs:  minv,
 				Udate:      sql.NullString{String: ud, Valid: true},
 				Utime:      sql.NullString{String: ut, Valid: true},
 			},
@@ -597,9 +600,9 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 			log.Printf(`%s@%d-%d no matching reference code`, code, start, klid)
 			return repeat.HintStop(e)
 		}
-		if len(rcodes) == 0 {
-			log.Printf(`%s no available reference data between %d and %d`,
-				code, start, klid)
+		if len(rcodes) < 2 {
+			log.Printf(`%s insufficient reference code between %d and %d: %d`,
+				code, start, klid, len(rcodes))
 			return repeat.HintStop(e)
 		}
 		return nil
@@ -969,7 +972,11 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 			tctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			rc, err := obj.NewReader(tctx)
-			defer rc.Close()
+			defer func() {
+				if rc != nil {
+					rc.Close()
+				}
+			}()
 			if err != nil {
 				if err != storage.ErrObjectNotExist {
 					log.Printf("failed to check existence for %s: %+v", job.dest, err)
@@ -1464,8 +1471,8 @@ func saveStockRel(rels ...*model.StockRel) {
 				cols = append(cols, cn)
 				valueUpdates = append(valueUpdates, fmt.Sprintf("%[1]s=values(%[1]s)", cn))
 			}
+			*num++
 		}
-		*num++
 	}
 	for i, r := range rels {
 		numFields := 2
@@ -1493,9 +1500,6 @@ func saveStockRel(rels ...*model.StockRel) {
 		strings.Join(cols, ","),
 		strings.Join(valueHolders, ","),
 		strings.Join(valueUpdates, ","))
-
-	log.Println(stmt)
-
 	code := rels[0].Code
 	klid := rels[0].Klid
 	var e error

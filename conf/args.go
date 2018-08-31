@@ -47,6 +47,7 @@ type Arguments struct {
 	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
 	Network           struct {
 		MasterProxyAddr            string  `mapstructure:"master_proxy_addr"`
+		MasterHttpProxy            string  `mapstructure:"master_http_proxy"`
 		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`
 		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
