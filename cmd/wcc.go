@@ -10,7 +10,7 @@ import (
 
 var (
 	expInferFile, upload, nocache bool
-	localPath                     string
+	localPath, rbase              string
 )
 
 func init() {
@@ -22,6 +22,8 @@ func init() {
 		"specify whether to delete local exported file after successful upload")
 	pcalWccCmd.Flags().StringVarP(&localPath, "path", "p", os.TempDir(),
 		"specify local directory for exported inference file")
+	pcalWccCmd.Flags().StringVar(&rbase, "rbase", "",
+		"specify remote base directory to upload the exported file")
 
 	wccCmd.AddCommand(updateWccCmd)
 	wccCmd.AddCommand(stzWccCmd)
@@ -53,6 +55,6 @@ var pcalWccCmd = &cobra.Command{
 	Use:   "pcal",
 	Short: "Pre-calculate eligible wcc and optionally export and upload inference file for cloud inference.",
 	Run: func(cmd *cobra.Command, args []string) {
-		sampler.PcalWcc(expInferFile, upload, nocache, localPath)
+		sampler.PcalWcc(expInferFile, upload, nocache, localPath, rbase)
 	},
 }

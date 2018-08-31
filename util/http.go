@@ -23,8 +23,8 @@ import (
 
 const RETRY int = 3
 
-var PART_PROXY float64 = 0
-var PROXY_ADDR string = ""
+var PART_PROXY float64
+var PROXY_ADDR string
 
 //HTTPGetResponse initiates HTTP get request and returns its response
 func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rotateProxy, rotateAgent bool) (res *http.Response, e error) {

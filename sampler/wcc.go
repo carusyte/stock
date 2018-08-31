@@ -41,6 +41,7 @@ var (
 	statsQryInit      sync.Once
 	qryKline, qryDate string
 	wccStats          *model.FsStats
+	gcsClient         *util.GCSClient
 )
 
 type wccTrnDBJob struct {
@@ -82,7 +83,7 @@ type CorlInferFile struct {
 }
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
-func PcalWcc(expInferFile, upload, nocache bool, localPath string) {
+func PcalWcc(expInferFile, upload, nocache bool, localPath, rbase string) {
 	log.Println("starting wcc pre-calculation...")
 	jobs, e := getPcalJobs()
 	if e != nil || len(jobs) <= 0 {
@@ -93,7 +94,7 @@ func PcalWcc(expInferFile, upload, nocache bool, localPath string) {
 	var expwg *sync.WaitGroup
 	if expInferFile {
 		log.Println("inference file exportation enabled")
-		expch, expwg = ExpInferFile(localPath, upload, nocache)
+		expch, expwg = ExpInferFile(localPath, rbase, upload, nocache)
 	}
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
@@ -269,11 +270,12 @@ func StzWcc(codes ...string) (e error) {
 }
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
-func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
+func ExpInferFile(localPath, rbase string, upload, nocache bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
 	var fuc chan *fileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
 		log.Println("GCS uploading enabled")
+		gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
 		fuc = make(chan *fileUploadJob, conf.Args.GCS.UploadQueue)
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
@@ -285,12 +287,13 @@ func ExpInferFile(localPath string, upload, nocache bool) (fec chan<- *ExpJob, f
 	fec = fileExpCh
 	fewg = new(sync.WaitGroup)
 	fewg.Add(1)
-	go fileExporter(localPath, fileExpCh, fuc, fewg, fuwg)
+	go fileExporter(localPath, rbase, fileExpCh, fuc, fewg, fuwg)
 	return
 }
 
 func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
 	defer wg.Done()
+	log.Println("pcal worker started")
 	stats := getWccFeatStats()
 	for pcjob := range pcch {
 		code := pcjob.Code
@@ -310,7 +313,7 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 			}
 		}
 		lrs, reflrs, e := getKlines4WccPreCalculation(code, klid, rcodes...)
-		if len(lrs) == 0 || len(reflrs) == 0 || e == nil {
+		if len(lrs) == 0 || len(reflrs) == 0 || e != nil {
 			continue
 		}
 		log.Printf("%s has %d eligible reference codes for pre-calculation", code, len(reflrs))
@@ -619,18 +622,21 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	return rcodes, nil
 }
 
-func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
+func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
 	defer fewg.Done()
 	fwwg := new(sync.WaitGroup)
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	for i := 0; i < pl; i++ {
 		fwwg.Add(1)
-		go fileExpWorker(localPath, fec, fuc, fwwg)
+		go fileExpWorker(localPath, rbase, fec, fuc, fwwg)
 	}
 	fwwg.Wait()
 	if fuc != nil {
 		close(fuc)
 		fuwg.Wait()
+		if e := gcsClient.Close(); e != nil {
+			log.Printf("failed to close gcs client: %+v", e)
+		}
 		// clean empty volume sub-folders
 		dirs, err := ioutil.ReadDir(localPath)
 		if err != nil {
@@ -661,8 +667,9 @@ func fileExporter(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJo
 	}
 }
 
-func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, wg *sync.WaitGroup) {
+func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, wg *sync.WaitGroup) {
 	defer wg.Done()
+	log.Println("file export worker started")
 	step := conf.Args.Sampler.CorlTimeSteps
 	shift := conf.Args.Sampler.CorlTimeShift
 	limit := step + shift
@@ -712,10 +719,9 @@ func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJ
 			SeqLens:  seqlens,
 		}
 		path := filepath.Join(dir, fmt.Sprintf("%s_%d", code, klid))
-		//FIXME failed to export json file, with no useful trace message
 		path, e = util.WriteJSONFile(cif, path, true)
 		if e != nil {
-			log.Panicf("%s failed to export json file %s, exiting program", code, path)
+			log.Panicf("%s failed to export json file %s, exiting program: %+v", code, path, e)
 		}
 		log.Printf("json file exported: %s", path)
 		if fuc != nil {
@@ -724,9 +730,9 @@ func fileExpWorker(localPath string, fec <-chan *ExpJob, fuc chan<- *fileUploadJ
 			r := regexp.MustCompile(pattern).FindStringSubmatch(path)
 			var gcsDest string
 			if len(r) > 0 {
-				gcsDest = r[len(r)-1]
+				gcsDest = filepath.Join(rbase, r[len(r)-1])
 			} else {
-				gcsDest = filepath.Base(path)
+				gcsDest = filepath.Join(rbase, filepath.Base(path))
 			}
 			fuc <- &fileUploadJob{
 				localFile: path,
@@ -743,7 +749,7 @@ func syncVolDir(localPath string) (dir string, e error) {
 	if curVolPath == "" || curVolSize >= volSize {
 		newPath := ""
 		c := 0
-		for true {
+		for {
 			curVolNo++
 			volDir := fmt.Sprintf("vol_%d", curVolNo)
 			ex := false
@@ -945,25 +951,24 @@ func getFeatQuery() (qk, qd string) {
 
 func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 	defer wg.Done()
+	log.Println("gcs upload worker started")
 	for job := range ch {
+		// gcs api may have utilized retry mechanism already.
+		// see https://godoc.org/cloud.google.com/go/storage
 		op := func(c int) error {
-			if c > 0 {
-				log.Printf("retry #%d uploading %s to %s", c, job.localFile, job.dest)
-			}
+			log.Printf("#%d uploading %s to %s", c, job.localFile, job.dest)
 			ctx := context.Background()
-			client, err := storage.NewClient(ctx)
+			client, err := gcsClient.Get()
 			if err != nil {
 				log.Printf("failed to create gcs client when uploading %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
-			defer func() {
-				if err := client.Close(); err != nil {
-					log.Printf("failed to close client after uploading %s: %+v", job.localFile, err)
-				}
-			}()
+			timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
 			// check if target object exists
 			obj := client.Bucket(conf.Args.GCS.Bucket).Object(job.dest)
-			rc, err := obj.NewReader(ctx)
+			tctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			rc, err := obj.NewReader(tctx)
 			defer rc.Close()
 			if err != nil {
 				if err != storage.ErrObjectNotExist {
@@ -979,7 +984,7 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 				log.Printf("failed to open %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
-			wc := obj.NewWriter(ctx)
+			wc := obj.NewWriter(tctx)
 			wc.ContentType = "application/json"
 			// wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
 			if _, err := io.Copy(wc, bufio.NewReader(file)); err != nil {
@@ -1005,7 +1010,7 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 			repeat.StopOnSuccess(),
 			repeat.LimitMaxTries(conf.Args.DefaultRetry),
 			repeat.WithDelay(
-				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(30*time.Second).Set(),
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
 			),
 		)
 
@@ -1400,13 +1405,16 @@ func warpingCorl(lrs, bucket []float64) (minDiff, maxDiff float64, e error) {
 
 func collectStockRels(wg *sync.WaitGroup, ch <-chan *stockrelDBJob) {
 	defer wg.Done()
+	log.Println("db worker started")
 	size := 64
+	wait := 15 * time.Second
 	bucket := make([]*model.StockRel, 0, size)
 	ticker := time.NewTicker(time.Second * 5)
+	var lastSaved time.Time
 	for {
 		select {
 		case <-ticker.C:
-			if len(bucket) > 0 {
+			if len(bucket) > 0 && time.Since(lastSaved) >= wait {
 				saveStockRel(bucket...)
 				bucket = make([]*model.StockRel, 0, size)
 			}
@@ -1416,6 +1424,7 @@ func collectStockRels(wg *sync.WaitGroup, ch <-chan *stockrelDBJob) {
 				if len(bucket) >= size {
 					saveStockRel(bucket...)
 					bucket = make([]*model.StockRel, 0, size)
+					lastSaved = time.Now()
 				}
 			} else {
 				//channel has been closed
@@ -1434,6 +1443,7 @@ func saveStockRel(rels ...*model.StockRel) {
 	if len(rels) == 0 {
 		return
 	}
+	log.Printf("saving stockrel data, size: %d", len(rels))
 	valueHolders := make([]string, 0, len(rels))
 	valueArgs := make([]interface{}, 0, len(rels)*16)
 	cols := []string{"code", "klid"}
@@ -1483,12 +1493,15 @@ func saveStockRel(rels ...*model.StockRel) {
 		strings.Join(cols, ","),
 		strings.Join(valueHolders, ","),
 		strings.Join(valueUpdates, ","))
+
+	log.Println(stmt)
+
 	code := rels[0].Code
 	klid := rels[0].Klid
 	var e error
 	op := func(c int) error {
 		if c > 0 {
-			log.Printf("retry #%d saving stockrel for %s@%d", c, code, klid)
+			log.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(rels))
 		}
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
@@ -1508,6 +1521,6 @@ func saveStockRel(rels ...*model.StockRel) {
 	)
 
 	if e != nil {
-		log.Printf("give up saving stockrel for %s@%d: %+v", code, klid, e)
+		log.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(rels), e)
 	}
 }

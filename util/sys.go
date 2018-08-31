@@ -72,6 +72,8 @@ func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, 
 				if !os.IsNotExist(e) {
 					log.Printf("#%d failed to check existence of %s : %+v", c, p, e)
 					return repeat.HintTemporary(errors.WithStack(e))
+				} else{
+					e = nil
 				}
 			} else {
 				exists = true
@@ -174,7 +176,7 @@ func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath s
 		dir, name := filepath.Dir(tmp), filepath.Base(tmp)
 		ex, _, e := FileExists(dir, name, false, false)
 		if e != nil {
-			return repeat.HintStop(errors.WithMessage(errors.WithStack(e), "unable to check existence for "+tmp))
+			return repeat.HintStop(errors.WithMessage(e, "unable to check existence for "+tmp))
 		}
 		if ex {
 			os.Remove(tmp)
@@ -182,7 +184,7 @@ func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath s
 		dir, name = filepath.Dir(finalPath), filepath.Base(finalPath)
 		ex, _, e = FileExists(dir, name, false, false)
 		if e != nil {
-			return repeat.HintStop(errors.WithMessage(errors.WithStack(e), "unable to check existence for "+finalPath))
+			return repeat.HintStop(errors.WithMessage(e, "unable to check existence for "+finalPath))
 		}
 		if ex {
 			return repeat.HintStop(fmt.Errorf("%s already exists", finalPath))

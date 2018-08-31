@@ -53,8 +53,10 @@ type Arguments struct {
 	}
 	GCS struct {
 		Connection  int    `mapstructure:"connection"`
+		UseProxy    bool   `mapstructure:"use_proxy"`
 		Bucket      string `mapstructure:"bucket"`
 		UploadQueue int    `mapstructure:"upload_queue"`
+		Timeout     int    `mapstructure:"timeout"`
 	}
 	Kdjv struct {
 		SampleSizeMin  int `mapstructure:"sample_size_min"`
