@@ -1528,10 +1528,14 @@ CREATE TABLE `stockrel` (
   `pos_corl_hs` double DEFAULT NULL,
   `neg_corl` double DEFAULT NULL,
   `neg_corl_hs` double DEFAULT NULL,
+  `rcode_size` int(11) DEFAULT NULL,
+  `rcode_size_hs` int(11) DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`code`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='relationship between stocks';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED COMMENT='relationship between stocks'
+/*!50100 PARTITION BY LINEAR KEY (`code`,klid)
+PARTITIONS 512 */;
 
 CREATE TABLE `tradecal` (
   `index` bigint(20) DEFAULT NULL,

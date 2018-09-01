@@ -304,7 +304,8 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		if e != nil || len(rcodes) < 2 {
 			continue
 		}
-		log.Printf("%s@%s has %d eligible reference codes for inference", code, date, len(rcodes))
+		rcodeSize := sql.NullInt64{Int64: int64(len(rcodes)), Valid: true}
+		log.Printf("%s@%d has %d eligible reference codes for inference", code, klid, len(rcodes))
 		if expch != nil {
 			expch <- &ExpJob{
 				Code:   code,
@@ -316,8 +317,11 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		var minc, maxc sql.NullString
 		minv := sql.NullFloat64{Float64: math.Inf(0)}
 		maxv := sql.NullFloat64{Float64: math.Inf(-1)}
+		var rcodeSizeHs sql.NullInt64
 		if len(lrs) > 0 && len(reflrs) > 0 && e == nil {
-			log.Printf("%s has %d eligible reference codes for pre-calculation", code, len(reflrs))
+			//when different rcodes have equivalent corl, the first rcode win
+			log.Printf("%s@%d has %d eligible reference codes for pre-calculation", code, klid, len(reflrs))
+			rcodeSizeHs = sql.NullInt64{Int64: int64(len(reflrs)), Valid: true}
 			for rc, rlrs := range reflrs {
 				minDiff, maxDiff, e := warpingCorl(lrs, rlrs)
 				if e != nil {
@@ -344,25 +348,31 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 					maxv = sql.NullFloat64{Float64: corl, Valid: true}
 					maxc = sql.NullString{String: rc, Valid: true}
 				}
+				log.Printf("%s@%d calculating wcc with reference %s, len(rlrs):%d, minDiff:%f, maxDiff:%f, "+
+					"corl:%f, minv:%f, maxv:%f, minc:%s, maxc:%s, e:%+v",
+					code, klid, rc, len(rlrs), minDiff, maxDiff, corl, minv.Float64, maxv.Float64,
+					minc.String, maxc.String, e)
 			}
 		} else if e != nil {
 			continue
 		}
-		log.Printf("%s: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}",
-			code, maxc.String, maxv.Float64, minc.String, minv.Float64)
+		log.Printf("%s@%d: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}  / %d",
+			code, klid, maxc.String, maxv.Float64, minc.String, minv.Float64, rcodeSizeHs.Int64)
 		ud, ut := util.TimeStr()
 		dbch <- &stockrelDBJob{
 			code: code,
 			stockrel: &model.StockRel{
-				Code:       code,
-				Date:       sql.NullString{String: date, Valid: true},
-				Klid:       klid,
-				RcodePosHs: maxc,
-				RcodeNegHs: minc,
-				PosCorlHs:  maxv,
-				NegCorlHs:  minv,
-				Udate:      sql.NullString{String: ud, Valid: true},
-				Utime:      sql.NullString{String: ut, Valid: true},
+				Code:        code,
+				Date:        sql.NullString{String: date, Valid: true},
+				Klid:        klid,
+				RcodePosHs:  maxc,
+				RcodeNegHs:  minc,
+				PosCorlHs:   maxv,
+				NegCorlHs:   minv,
+				RcodeSize:   rcodeSize,
+				RcodeSizeHs: rcodeSizeHs,
+				Udate:       sql.NullString{String: ud, Valid: true},
+				Utime:       sql.NullString{String: ut, Valid: true},
 			},
 		}
 	}
@@ -374,9 +384,7 @@ func getWccFeatStats() (stats *model.FsStats) {
 	}
 	query := func() {
 		op := func(c int) (e error) {
-			if c > 0 {
-				log.Printf("#%d retrying to query fs_stats...", c)
-			}
+			log.Printf("#%d querying fs_stats for wcc_trn...", c)
 			e = dbmap.SelectOne(&wccStats, `select * from fs_stats where method = ? and fields = ? and tab = ?`,
 				"standardization", "corl", "wcc_trn")
 			if e != nil {
@@ -983,7 +991,7 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 					return repeat.HintTemporary(err)
 				}
 			} else {
-				// file already exists
+				log.Printf("%s already exists, skip uploading", job.dest)
 				return nil
 			}
 			file, err := os.Open(job.localFile)
@@ -1462,6 +1470,8 @@ func saveStockRel(rels ...*model.StockRel) {
 			valid = f.(sql.NullString).Valid
 		case sql.NullFloat64:
 			valid = f.(sql.NullFloat64).Valid
+		case sql.NullInt64:
+			valid = f.(sql.NullInt64).Valid
 		default:
 			log.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
 		}
@@ -1487,6 +1497,8 @@ func saveStockRel(rels ...*model.StockRel) {
 		addcol(i, "rcode_neg_hs", r.RcodeNegHs, &numFields)
 		addcol(i, "rcode_pos", r.RcodePos, &numFields)
 		addcol(i, "rcode_pos_hs", r.RcodePosHs, &numFields)
+		addcol(i, "rcode_size", r.RcodeSize, &numFields)
+		addcol(i, "rcode_size_hs", r.RcodeSizeHs, &numFields)
 		addcol(i, "udate", r.Udate, &numFields)
 		addcol(i, "utime", r.Utime, &numFields)
 		holders := make([]string, numFields)

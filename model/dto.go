@@ -1207,19 +1207,21 @@ func (x *WccTrn) String() string {
 
 //StockRel represents stock relations regarding the correlation coefficients at different times.
 type StockRel struct {
-	Code       string
-	Date       sql.NullString
-	Klid       int
-	RcodePos   sql.NullString
-	RcodePosHs sql.NullString
-	RcodeNeg   sql.NullString
-	RcodeNegHs sql.NullString
-	PosCorl    sql.NullFloat64
-	PosCorlHs  sql.NullFloat64
-	NegCorl    sql.NullFloat64
-	NegCorlHs  sql.NullFloat64
-	Udate      sql.NullString
-	Utime      sql.NullString
+	Code        string
+	Date        sql.NullString
+	Klid        int
+	RcodePos    sql.NullString
+	RcodePosHs  sql.NullString
+	RcodeNeg    sql.NullString
+	RcodeNegHs  sql.NullString
+	PosCorl     sql.NullFloat64
+	PosCorlHs   sql.NullFloat64
+	NegCorl     sql.NullFloat64
+	NegCorlHs   sql.NullFloat64
+	RcodeSize   sql.NullInt64
+	RcodeSizeHs sql.NullInt64
+	Udate       sql.NullString
+	Utime       sql.NullString
 }
 
 func (x *StockRel) String() string {
