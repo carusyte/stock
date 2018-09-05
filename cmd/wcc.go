@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	expInferFile, upload, nocache bool
-	localPath, rbase              string
+	expInferFile, upload, nocache, overwrite bool
+	localPath, rbase                         string
 )
 
 func init() {
@@ -20,10 +20,13 @@ func init() {
 		"specify whether to upload inference file.")
 	pcalWccCmd.Flags().BoolVarP(&nocache, "nocache", "n", true,
 		"specify whether to delete local exported file after successful upload")
+	pcalWccCmd.Flags().BoolVarP(&overwrite, "overwrite", "o", true,
+		"specify whether to overwrite existing files on cloud storage.")
 	pcalWccCmd.Flags().StringVarP(&localPath, "path", "p", os.TempDir(),
 		"specify local directory for exported inference file")
 	pcalWccCmd.Flags().StringVar(&rbase, "rbase", "",
-		"specify remote base directory to upload the exported file")
+		"specify remote base directory to upload the exported file"+
+			"(the relative path after the gs://[bucket_name] segment).")
 
 	wccCmd.AddCommand(updateWccCmd)
 	wccCmd.AddCommand(stzWccCmd)
@@ -52,9 +55,10 @@ var stzWccCmd = &cobra.Command{
 }
 
 var pcalWccCmd = &cobra.Command{
-	Use:   "pcal",
-	Short: "Pre-calculate eligible wcc and optionally export and upload inference file for cloud inference.",
+	Use:     "pcal",
+	Short:   "Pre-calculate eligible wcc and optionally export and upload inference file for cloud inference.",
+	Example: "stock sample wcc pcal -p /Volumes/WD-1TB/wcc_infer --rbase wcc_infer",
 	Run: func(cmd *cobra.Command, args []string) {
-		sampler.PcalWcc(expInferFile, upload, nocache, localPath, rbase)
+		sampler.PcalWcc(expInferFile, upload, nocache, overwrite, localPath, rbase)
 	},
 }

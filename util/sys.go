@@ -30,6 +30,36 @@ func CPUUsage() (idle float64, e error) {
 	return ps[0], e
 }
 
+//ParseLines parses target file specified by absolute path into string array of lines.
+func ParseLines(path string, retry int, filter func(line []byte) error) (lines []string, e error) {
+	op := func(c int) error{
+		var f *os.File
+		if f, e = os.Open(path); e != nil{
+			log.Printf("#%d failed to open file %s: %+v", c, path, e)
+			return repeat.HintTemporary(e)
+		}
+		defer f.Close()
+		rd := bufio.NewReader(f)
+		//TODO realize me
+		rd.ReadBytes(delim)
+		rd.ReadLine()
+		return nil
+	}
+	if retry > 0 {
+		e = repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(retry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+			),
+		)
+	} else {
+		e = op(0)
+	}
+	return
+}
+
 //MkDirAll similar to os.MkDirAll, but with retry when failed.
 func MkDirAll(path string, perm os.FileMode) (e error) {
 	op := func(c int) error {
@@ -49,7 +79,7 @@ func MkDirAll(path string, perm os.FileMode) (e error) {
 	return
 }
 
-//FileExists checks (with retry) whether the specified file exists
+//FileExists checks (with optional retry) whether the specified file exists
 //in the provided directory (or optionally its sub-directory).
 func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, path string, e error) {
 	paths := []string{filepath.Join(dir, name)}
@@ -72,7 +102,7 @@ func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, 
 				if !os.IsNotExist(e) {
 					log.Printf("#%d failed to check existence of %s : %+v", c, p, e)
 					return repeat.HintTemporary(errors.WithStack(e))
-				} else{
+				} else {
 					e = nil
 				}
 			} else {
@@ -93,7 +123,7 @@ func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, 
 			),
 		)
 	} else {
-		op(0)
+		e = op(0)
 	}
 
 	return

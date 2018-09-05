@@ -6,12 +6,12 @@ import (
 )
 
 func TestWriteJSONFile(t *testing.T) {
-	p := struct {
-		Code     string
-		Klid     int
-		Refs     []string
-		Features [][][]float64
-		SeqLens  []int
+	p := &struct {
+		Code     string        `json:"code"`
+		Klid     int           `json:"klid"`
+		Refs     []string      `json:"refs"`
+		Features [][][]float64 `json:"features"`
+		SeqLens  []int         `json:"seqlens"`
 	}{
 		"this is a string",
 		5428,
@@ -28,7 +28,7 @@ func TestWriteJSONFile(t *testing.T) {
 		},
 		[]int{7, 5, 4, 3, 2, 1, 0},
 	}
-	path := "/Volumes/WD-1TB/wcc_infer/vol_0"
+	path := "/Volumes/WD-1TB/wcc_infer/wic_test"
 	c := true
 	fp, e := WriteJSONFile(p, path, c)
 	if e != nil {

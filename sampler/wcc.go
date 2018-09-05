@@ -73,17 +73,13 @@ type fileUploadJob struct {
 	dest      string
 }
 
-//CorlInferFile represents the structure of json formatted corl inference file
-type CorlInferFile struct {
-	Code     string
-	Klid     int
-	Refs     []string
-	Features [][][]float64
-	SeqLens  []int
+type impJob struct {
+	path string
+	idx  int
 }
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
-func PcalWcc(expInferFile, upload, nocache bool, localPath, rbase string) {
+func PcalWcc(expInferFile, upload, nocache, overwrite bool, localPath, rbase string) {
 	log.Println("starting wcc pre-calculation...")
 	jobs, e := getPcalJobs()
 	if e != nil || len(jobs) <= 0 {
@@ -94,7 +90,7 @@ func PcalWcc(expInferFile, upload, nocache bool, localPath, rbase string) {
 	var expwg *sync.WaitGroup
 	if expInferFile {
 		log.Println("inference file exportation enabled")
-		expch, expwg = ExpInferFile(localPath, rbase, upload, nocache)
+		expch, expwg = ExpInferFile(localPath, rbase, upload, nocache, overwrite)
 	}
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
@@ -270,7 +266,7 @@ func StzWcc(codes ...string) (e error) {
 }
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
-func ExpInferFile(localPath, rbase string, upload, nocache bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
+func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
 	var fuc chan *fileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
@@ -280,7 +276,7 @@ func ExpInferFile(localPath, rbase string, upload, nocache bool) (fec chan<- *Ex
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
 			fuwg.Add(1)
-			go uploadToGCS(fuc, fuwg, nocache)
+			go uploadToGCS(fuc, fuwg, nocache, overwrite)
 		}
 	}
 	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
@@ -289,6 +285,21 @@ func ExpInferFile(localPath, rbase string, upload, nocache bool) (fec chan<- *Ex
 	fewg.Add(1)
 	go fileExporter(localPath, rbase, fileExpCh, fuc, fewg, fuwg)
 	return
+}
+
+func ImpWcc(tasklog, path string) {
+	dir, name := filepath.Dir(tasklog), filepath.Base(tasklog)
+	ex, _, e := util.FileExists(dir, name, false, true)
+	if e != nil {
+		log.Panicf("failed to check existence for tasklog path: %s", tasklog)
+	}
+	if ex {
+		//parse tasklog for unimported file (with 'P' status)
+
+	}else{
+		//scan path for a list of result files pending for import
+		//generate tasklog file
+	}
 }
 
 func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
@@ -348,10 +359,10 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 					maxv = sql.NullFloat64{Float64: corl, Valid: true}
 					maxc = sql.NullString{String: rc, Valid: true}
 				}
-				log.Printf("%s@%d calculating wcc with reference %s, len(rlrs):%d, minDiff:%f, maxDiff:%f, "+
-					"corl:%f, minv:%f, maxv:%f, minc:%s, maxc:%s, e:%+v",
-					code, klid, rc, len(rlrs), minDiff, maxDiff, corl, minv.Float64, maxv.Float64,
-					minc.String, maxc.String, e)
+				// log.Printf("%s@%d calculating wcc with reference %s, len(rlrs):%d, minDiff:%f, maxDiff:%f, "+
+				// 	"corl:%f, minv:%f, maxv:%f, minc:%s, maxc:%s, e:%+v",
+				// 	code, klid, rc, len(rlrs), minDiff, maxDiff, corl, minv.Float64, maxv.Float64,
+				// 	minc.String, maxc.String, e)
 			}
 		} else if e != nil {
 			continue
@@ -722,12 +733,12 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *file
 		if e != nil {
 			log.Panicf("%s failed to read volume directory, exiting program", code)
 		}
-		cif := &CorlInferFile{
-			Code:     code,
-			Klid:     klid,
-			Refs:     frcodes,
-			Features: feats,
-			SeqLens:  seqlens,
+		cif := map[string]interface{}{
+			"code":     code,
+			"klid":     klid,
+			"refs":     frcodes,
+			"features": feats,
+			"seqlens":  seqlens,
 		}
 		path := filepath.Join(dir, fmt.Sprintf("%s_%d", code, klid))
 		path, e = util.WriteJSONFile(cif, path, true)
@@ -960,7 +971,7 @@ func getFeatQuery() (qk, qd string) {
 	return qryKline, qryDate
 }
 
-func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
+func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
 	defer wg.Done()
 	log.Println("gcs upload worker started")
 	for job := range ch {
@@ -979,26 +990,29 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache bool) {
 			obj := client.Bucket(conf.Args.GCS.Bucket).Object(job.dest)
 			tctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			rc, err := obj.NewReader(tctx)
-			defer func() {
-				if rc != nil {
-					rc.Close()
+			if !overwrite {
+				rc, err := obj.NewReader(tctx)
+				defer func() {
+					if rc != nil {
+						rc.Close()
+					}
+				}()
+				if err != nil {
+					if err != storage.ErrObjectNotExist {
+						log.Printf("failed to check existence for %s: %+v", job.dest, err)
+						return repeat.HintTemporary(err)
+					}
+				} else {
+					log.Printf("%s already exists, skip uploading", job.dest)
+					return nil
 				}
-			}()
-			if err != nil {
-				if err != storage.ErrObjectNotExist {
-					log.Printf("failed to check existence for %s: %+v", job.dest, err)
-					return repeat.HintTemporary(err)
-				}
-			} else {
-				log.Printf("%s already exists, skip uploading", job.dest)
-				return nil
 			}
 			file, err := os.Open(job.localFile)
 			if err != nil {
 				log.Printf("failed to open %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
+			defer file.Close()
 			wc := obj.NewWriter(tctx)
 			wc.ContentType = "application/json"
 			// wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
