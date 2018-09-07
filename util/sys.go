@@ -30,20 +30,38 @@ func CPUUsage() (idle float64, e error) {
 	return ps[0], e
 }
 
-//ParseLines parses target file specified by absolute path into string array of lines.
-func ParseLines(path string, retry int, filter func(line []byte) error) (lines []string, e error) {
-	op := func(c int) error{
+//ParseLines parses target file specified by absolute path.
+func ParseLines(path string, retry int, parser func(no int, line []byte) (error), init func()) (e error) {
+	op := func(c int) error {
 		var f *os.File
-		if f, e = os.Open(path); e != nil{
+		if f, e = os.Open(path); e != nil {
 			log.Printf("#%d failed to open file %s: %+v", c, path, e)
 			return repeat.HintTemporary(e)
 		}
 		defer f.Close()
 		rd := bufio.NewReader(f)
-		//TODO realize me
-		rd.ReadBytes(delim)
-		rd.ReadLine()
-		return nil
+		var line []byte
+		no := 1
+		init()
+		for {
+			ln, ispr, e := rd.ReadLine()
+			if e != nil {
+				if e == io.EOF {
+					return nil
+				}
+				log.Printf("failed to read line: %+v", e)
+				return repeat.HintTemporary(e)
+			}
+			line = append(line, ln...)
+			if !ispr {
+				if e := parser(no, line); e != nil {
+					log.Printf("failed to parse line@%d : %+v", no, e)
+					return repeat.HintStop(e)
+				}
+				no++
+				line = make([]byte, 0, 128)
+			}
+		}
 	}
 	if retry > 0 {
 		e = repeat.Repeat(

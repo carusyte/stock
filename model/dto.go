@@ -1251,3 +1251,34 @@ func (x *FsStats) String() string {
 	}
 	return fmt.Sprintf("%v", string(j))
 }
+
+//WccInferRecord represents the wcc inference record in a WccInferResult.
+type WccInferRecord struct {
+	Code     string  `json:"code"`
+	Klid     int     `json:"klid"`
+	Positive string  `json:"positive"`
+	Pcorl    float64 `json:"pcorl"`
+	Negative string  `json:"negative"`
+	Ncorl    float64 `json:"ncorl"`
+}
+
+func (x *WccInferRecord) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}
+
+//WccInferResult represents the wcc inference result file, in json format.
+type WccInferResult struct {
+	Records []*WccInferRecord `json:"records"`
+}
+
+func (x *WccInferResult) String() string {
+	j, e := json.Marshal(x)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
+}

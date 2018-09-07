@@ -1,7 +1,9 @@
 package sampler
 
 import (
+	"encoding/json"
 	"bufio"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
@@ -15,11 +17,13 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/util"
@@ -29,6 +33,15 @@ import (
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
+)
+
+const (
+	//TasklogSeparator is the separator for a tasklog file
+	TasklogSeparator = " | "
+	//TaskStatusP stands for the pending status of an import task
+	TaskStatusP = "P"
+	//TaskStatusO stands for the OK(completed) status of an import task
+	TaskStatusO = "O"
 )
 
 var (
@@ -74,8 +87,10 @@ type fileUploadJob struct {
 }
 
 type impJob struct {
+	//path is the relative path of an object in the gcs
 	path string
-	idx  int
+	//idx is the index of this task status in the tasklog file
+	idx int
 }
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
@@ -271,7 +286,9 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) (fec
 	var fuwg *sync.WaitGroup
 	if upload {
 		log.Println("GCS uploading enabled")
-		gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
+		if gcsClient == nil {
+			gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
+		}
 		fuc = make(chan *fileUploadJob, conf.Args.GCS.UploadQueue)
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
@@ -287,19 +304,237 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) (fec
 	return
 }
 
+//ImpWcc imports wcc inference result file from local or google cloud storage.
 func ImpWcc(tasklog, path string) {
 	dir, name := filepath.Dir(tasklog), filepath.Base(tasklog)
 	ex, _, e := util.FileExists(dir, name, false, true)
 	if e != nil {
 		log.Panicf("failed to check existence for tasklog path: %s", tasklog)
 	}
-	if ex {
-		//parse tasklog for unimported file (with 'P' status)
-
-	}else{
-		//scan path for a list of result files pending for import
-		//generate tasklog file
+	if gcsClient == nil {
+		gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
 	}
+	var jobs []*impJob
+	if ex {
+		jobs, e = parseTasklog(tasklog)
+		if e != nil {
+			log.Panicf("failed to parse tasklog file %s: %+v", tasklog, e)
+		}
+	} else {
+		jobs, e = scanTasklog(tasklog, path)
+		if e != nil {
+			log.Panicf("failed to scan %s and generate tasklog file %s : %+v", path, tasklog, e)
+		}
+	}
+	if len(jobs) <= 0 {
+		return
+	}
+	chjob := make(chan *impJob, conf.Args.Concurrency)
+	wg := new(sync.WaitGroup)
+	pl := int(float64(runtime.NumCPU()) * 0.8)
+	for i := 0; i < pl; i++ {
+		wg.Add(1)
+		go importWCCIR(chjob, wg, tasklog, path)
+	}
+	for _, j := range jobs {
+		chjob <- j
+	}
+	close(chjob)
+	wg.Wait()
+}
+
+func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
+	defer wg.Done()
+	pattern := fmt.Sprintf(`gs://%s/(.*)`, conf.Args.GCS.Bucket)
+	r := regexp.MustCompile(pattern).FindStringSubmatch(path)
+	var objt string
+	if len(r) > 0 {
+		objt = fmt.Sprintf("%s/vol_%%s.json.gz", r[len(r)-1])
+	} else {
+		log.Panicf(`can't parse object prefix from path: %s`, path)
+	}
+	for j := range chjob {
+		objn := fmt.Sprintf(objt, j.path)
+		op := func(c int) error {
+			log.Printf("#%d downloading gcs object %s", objn)
+			client, e := gcsClient.Get()
+			if e != nil {
+				log.Printf("failed to create gcs client: %+v", e)
+				return repeat.HintTemporary(e)
+			}
+			ctx := context.Background()
+			timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
+			tctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			rc, e := client.Bucket(conf.Args.GCS.Bucket).Object(objn).NewReader(tctx)
+			if e != nil {
+				log.Printf("failed to create reader for gcs object %s: %+v", objn, e)
+				return repeat.HintTemporary(e)
+			}
+			defer rc.Close()
+			gr, e := gzip.NewReader(rc)
+			if e != nil {
+				log.Printf("failed to gzip reader for gcs object %s: %+v", objn, e)
+				return repeat.HintTemporary(e)
+			}
+			defer gr.Close()
+			data, e := ioutil.ReadAll(bufio.NewReader(gr))
+			if e != nil{
+				log.Printf("failed to read data for gcs object %s: %+v", objn, e)
+				return repeat.HintTemporary(e)
+			}
+			var r model.WccInferResult
+			if e = json.Unmarshal(data, &r); e != nil{
+				log.Printf("failed to unmarshal json for gcs object %s: %+v", objn, e)
+				return repeat.HintTemporary(e)
+			}
+			e = saveWCCIR(r.Records)
+			if e != nil{
+				log.Printf("failed to save wcc inference result for %s: %+v", objn, e)
+				return repeat.HintStop(e)
+			}
+			//TODO update task log status
+			e = updateTasklogStatus(tasklog, j.idx, TaskStatusO)
+			return nil
+		}
+		e := repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+			),
+		)
+		if e != nil {
+			log.Printf("failed to process inference result file %s: %+v", objn, e)
+		}
+	}
+}
+
+//scanTasklog scan path for a list of result files pending for import
+//and generate tasklog file
+func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
+	//TODO support both local and gcs path
+	op := func(c int) error {
+		log.Printf("#%d scanning %s for inference result files...", c, path)
+		ctx := context.Background()
+		client, err := gcsClient.Get()
+		if err != nil {
+			log.Printf("failed to create gcs client: %+v", err)
+			return repeat.HintTemporary(err)
+		}
+		pattern := fmt.Sprintf(`gs://%s/(.*)`, conf.Args.GCS.Bucket)
+		r := regexp.MustCompile(pattern).FindStringSubmatch(path)
+		var prefix string
+		if len(r) > 0 {
+			prefix = r[len(r)-1]
+		} else {
+			return repeat.HintStop(fmt.Errorf(`can't parse object prefix from path: %s`, path))
+		}
+		timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
+		tctx, cancel := context.WithTimeout(ctx, timeout)
+		itr := client.Bucket(conf.Args.GCS.Bucket).Objects(tctx, &storage.Query{
+			Prefix:   prefix,
+			Versions: false,
+		})
+		defer cancel()
+		maxLen := 0
+		impjobs = make([]*impJob, 0, 128)
+		for {
+			attrs, e := itr.Next()
+			if e == iterator.Done {
+				break
+			}
+			if e != nil {
+				log.Printf("failed to iterate gcs objects with prefix %s: %+v", prefix, e)
+				return repeat.HintTemporary(e)
+			}
+			//TODO might need to shorten the path
+			impjobs = append(impjobs, &impJob{
+				path: attrs.Name,
+			})
+			maxLen = int(math.Max(float64(maxLen), float64(len([]byte(attrs.Name)))))
+		}
+		sep := TasklogSeparator
+		maxLen += len(sep) + len(TaskStatusO)
+		tf, e := os.OpenFile(tasklog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		if e != nil {
+			log.Printf("failed to create tasklog file at %s: %+v", tasklog, e)
+			return repeat.HintTemporary(e)
+		}
+		defer tf.Close()
+		bw := bufio.NewWriter(tf)
+		head := fmt.Sprintf("%s%s%d%s%d", path, sep, len(impjobs), sep, maxLen)
+		if _, e = bw.WriteString(head); e != nil {
+			log.Printf("failed to write header %s into %s: %+v", head, tasklog, e)
+			return repeat.HintTemporary(e)
+		}
+		lenHd := len([]byte(head))
+		for i, j := range impjobs {
+			offset := len([]byte(j.path + sep))
+			j.idx = lenHd + 1 + i*(maxLen+1) + offset
+			ln := fmt.Sprintf("%s%s%s", j.path, sep, TaskStatusP)
+			if _, e = bw.WriteString(ln); e != nil {
+				log.Printf("failed to write line %s into %s: %+v", ln, tasklog, e)
+				return repeat.HintTemporary(e)
+			}
+		}
+		if e = bw.Flush(); e != nil {
+			log.Printf("failed to flush into file %s: %+v", tasklog, e)
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("failed to scan for import jobs at %s: %+v", path, e)
+	}
+
+	return
+}
+
+func parseTasklog(tasklog string) (jobs []*impJob, e error) {
+	hdLen, lnLen := 0, 0
+	//parse tasklog for unimported file (with 'P' status)
+	e = util.ParseLines(tasklog, conf.Args.DefaultRetry, func(no int, line []byte) error {
+		lineStr := string(line)
+		if no == 1 {
+			hdLen = len([]byte(line))
+			//parse header
+			fs := strings.Split(lineStr, TasklogSeparator)
+			if len(fs) != 3 {
+				return fmt.Errorf("invalid header, expecting exactly 3 fields: %s", lineStr)
+			}
+			if lnLen, e = strconv.Atoi(fs[2]); e != nil {
+				return fmt.Errorf("invalid field#3, expecting an integer for line length: %s", lineStr)
+			}
+		}
+		fs := strings.Split(lineStr, TasklogSeparator)
+		if len(fs) != 2 {
+			return fmt.Errorf("invalid format, expecting exactly 2 fields: %s", line)
+		}
+		if TaskStatusP == fs[1] {
+			offset := strings.LastIndex(lineStr, TaskStatusP)
+			// got status P task
+			jobs = append(jobs, &impJob{
+				path: strings.TrimSpace(fs[0]),
+				idx:  int(hdLen) + 1 + (no-2)*int(lnLen) + offset,
+			})
+		}
+		return nil
+	}, func() {
+		jobs = make([]*impJob, 0, 128)
+	})
+	return
 }
 
 func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
