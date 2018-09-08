@@ -1,11 +1,11 @@
 package sampler
 
 import (
-	"encoding/json"
 	"bufio"
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -90,7 +90,7 @@ type impJob struct {
 	//path is the relative path of an object in the gcs
 	path string
 	//idx is the index of this task status in the tasklog file
-	idx int
+	idx int64
 }
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
@@ -349,14 +349,14 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
 	r := regexp.MustCompile(pattern).FindStringSubmatch(path)
 	var objt string
 	if len(r) > 0 {
-		objt = fmt.Sprintf("%s/vol_%%s.json.gz", r[len(r)-1])
+		objt = fmt.Sprintf("%s/r_%%s.json.gz", r[len(r)-1])
 	} else {
 		log.Panicf(`can't parse object prefix from path: %s`, path)
 	}
 	for j := range chjob {
 		objn := fmt.Sprintf(objt, j.path)
 		op := func(c int) error {
-			log.Printf("#%d downloading gcs object %s", objn)
+			log.Printf("#%d downloading gcs object %s", c, objn)
 			client, e := gcsClient.Get()
 			if e != nil {
 				log.Printf("failed to create gcs client: %+v", e)
@@ -379,22 +379,25 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
 			}
 			defer gr.Close()
 			data, e := ioutil.ReadAll(bufio.NewReader(gr))
-			if e != nil{
+			if e != nil {
 				log.Printf("failed to read data for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			var r model.WccInferResult
-			if e = json.Unmarshal(data, &r); e != nil{
+			if e = json.Unmarshal(data, &r); e != nil {
 				log.Printf("failed to unmarshal json for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			e = saveWCCIR(r.Records)
-			if e != nil{
+			if e != nil {
 				log.Printf("failed to save wcc inference result for %s: %+v", objn, e)
 				return repeat.HintStop(e)
 			}
-			//TODO update task log status
 			e = updateTasklogStatus(tasklog, j.idx, TaskStatusO)
+			if e != nil {
+				log.Printf("failed to update wcc inference tasklog status for %s: %+v", objn, e)
+				return repeat.HintStop(e)
+			}
 			return nil
 		}
 		e := repeat.Repeat(
@@ -409,6 +412,120 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
 			log.Printf("failed to process inference result file %s: %+v", objn, e)
 		}
 	}
+}
+
+func updateTasklogStatus(tasklog string, idx int64, status string) (e error) {
+	op := func(c int) error {
+		f, e := os.OpenFile(tasklog, os.O_WRONLY, 0666)
+		if e != nil {
+			log.Printf("#%d failed to open file %s: %+v", c, tasklog, e)
+			return repeat.HintTemporary(e)
+		}
+		if _, e := f.WriteAt([]byte(status), idx); e != nil {
+			log.Printf("#%d failed to update status at index %d for %s: %+v", c, idx, tasklog, e)
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("failed to update tasklog status %s: %+v", tasklog, e)
+	}
+
+	return
+}
+
+func saveWCCIR(records []*model.WccInferRecord) (e error) {
+	if len(records) == 0 {
+		return nil
+	}
+	log.Printf("updating stockrel data, size: %d", len(records))
+	valueHolders := make([]string, 0, len(records))
+	valueArgs := make([]interface{}, 0, len(records)*16)
+	cols := []string{"code", "klid"}
+	valueUpdates := make([]string, 0, 16)
+	addcol := func(i int, cn string, f interface{}, num *int) {
+		valid := false
+		switch f.(type) {
+		case sql.NullString:
+			valid = f.(sql.NullString).Valid
+		case sql.NullFloat64:
+			valid = f.(sql.NullFloat64).Valid
+		case sql.NullInt64:
+			valid = f.(sql.NullInt64).Valid
+		case float64, string:
+			valid = true
+		default:
+			log.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
+		}
+		if valid {
+			valueArgs = append(valueArgs, f)
+			if i == 0 {
+				cols = append(cols, cn)
+				valueUpdates = append(valueUpdates, fmt.Sprintf("%[1]s=values(%[1]s)", cn))
+			}
+			*num++
+		}
+	}
+	d, t := util.TimeStr()
+	for i, r := range records {
+		numFields := 2
+		valueArgs = append(valueArgs, r.Code)
+		valueArgs = append(valueArgs, r.Klid)
+		addcol(i, "neg_corl", r.Ncorl, &numFields)
+		addcol(i, "pos_corl", r.Pcorl, &numFields)
+		addcol(i, "rcode_neg", r.Negative, &numFields)
+		addcol(i, "rcode_pos", r.Positive, &numFields)
+		addcol(i, "udate", d, &numFields)
+		addcol(i, "utime", t, &numFields)
+		holders := make([]string, numFields)
+		for i := range holders {
+			holders[i] = "?"
+		}
+		holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
+		valueHolders = append(valueHolders, holderString)
+	}
+	stmt := fmt.Sprintf("INSERT INTO stockrel (%s) VALUES %s on duplicate key update %s",
+		strings.Join(cols, ","),
+		strings.Join(valueHolders, ","),
+		strings.Join(valueUpdates, ","))
+	code := records[0].Code
+	klid := records[0].Klid
+	op := func(c int) error {
+		if c > 0 {
+			log.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(records))
+		}
+		_, e = dbmap.Exec(stmt, valueArgs...)
+		if e != nil {
+			log.Printf("failed to save stockrel for %s@%d: %+v\n%s", code, klid, e, stmt)
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(15*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(records), e)
+	}
+
+	return
 }
 
 //scanTasklog scan path for a list of result files pending for import
@@ -440,6 +557,8 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 		defer cancel()
 		maxLen := 0
 		impjobs = make([]*impJob, 0, 128)
+		idxs := len(prefix + "/r_") // considering seperator "/"
+		idxe := len(".json.gz")
 		for {
 			attrs, e := itr.Next()
 			if e == iterator.Done {
@@ -449,9 +568,8 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 				log.Printf("failed to iterate gcs objects with prefix %s: %+v", prefix, e)
 				return repeat.HintTemporary(e)
 			}
-			//TODO might need to shorten the path
 			impjobs = append(impjobs, &impJob{
-				path: attrs.Name,
+				path: attrs.Name[idxs : len(attrs.Name)-idxe],
 			})
 			maxLen = int(math.Max(float64(maxLen), float64(len([]byte(attrs.Name)))))
 		}
@@ -465,16 +583,16 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 		defer tf.Close()
 		bw := bufio.NewWriter(tf)
 		head := fmt.Sprintf("%s%s%d%s%d", path, sep, len(impjobs), sep, maxLen)
-		if _, e = bw.WriteString(head); e != nil {
+		if _, e = bw.WriteString(head + "\n"); e != nil {
 			log.Printf("failed to write header %s into %s: %+v", head, tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		lenHd := len([]byte(head))
 		for i, j := range impjobs {
 			offset := len([]byte(j.path + sep))
-			j.idx = lenHd + 1 + i*(maxLen+1) + offset
+			j.idx = int64(lenHd + 1 + i*(maxLen+1) + offset)
 			ln := fmt.Sprintf("%s%s%s", j.path, sep, TaskStatusP)
-			if _, e = bw.WriteString(ln); e != nil {
+			if _, e = bw.WriteString(ln + "\n"); e != nil {
 				log.Printf("failed to write line %s into %s: %+v", ln, tasklog, e)
 				return repeat.HintTemporary(e)
 			}
@@ -517,17 +635,18 @@ func parseTasklog(tasklog string) (jobs []*impJob, e error) {
 			if lnLen, e = strconv.Atoi(fs[2]); e != nil {
 				return fmt.Errorf("invalid field#3, expecting an integer for line length: %s", lineStr)
 			}
+			return nil
 		}
 		fs := strings.Split(lineStr, TasklogSeparator)
 		if len(fs) != 2 {
-			return fmt.Errorf("invalid format, expecting exactly 2 fields: %s", line)
+			return fmt.Errorf("invalid format, expecting exactly 2 fields: %s", lineStr)
 		}
 		if TaskStatusP == fs[1] {
 			offset := strings.LastIndex(lineStr, TaskStatusP)
 			// got status P task
 			jobs = append(jobs, &impJob{
 				path: strings.TrimSpace(fs[0]),
-				idx:  int(hdLen) + 1 + (no-2)*int(lnLen) + offset,
+				idx:  int64(hdLen + 1 + (no-2)*lnLen + offset),
 			})
 		}
 		return nil
