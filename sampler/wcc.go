@@ -78,12 +78,15 @@ type pcaljob struct {
 type ExpJob struct {
 	Code   string
 	Klid   int
+	Date   string
 	Rcodes []string
 }
 
-type fileUploadJob struct {
+//FileUploadJob stores wcc inference file upload job information
+type FileUploadJob struct {
 	localFile string
 	dest      string
+	expJob    *ExpJob
 }
 
 type impJob struct {
@@ -102,16 +105,24 @@ func PcalWcc(expInferFile, upload, nocache, overwrite bool, localPath, rbase str
 	}
 	log.Printf("#jobs: %d", len(jobs))
 	var expch chan<- *ExpJob
+	var uploaded <-chan *FileUploadJob
 	var expwg *sync.WaitGroup
 	if expInferFile {
 		log.Println("inference file exportation enabled")
-		expch, expwg = ExpInferFile(localPath, rbase, upload, nocache, overwrite)
+		expch, uploaded, expwg = wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
 	}
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
 	dbwg := new(sync.WaitGroup)
 	dbwg.Add(1)
 	go collectStockRels(dbwg, dbch)
+	//drop uploaded signal
+	if uploaded != nil {
+		go func() {
+			for range uploaded {
+			}
+		}()
+	}
 	// make job channel & waitgroup, start calculation goroutine
 	pcch := make(chan *pcaljob, conf.Args.Concurrency)
 	pcwg := new(sync.WaitGroup)
@@ -281,31 +292,86 @@ func StzWcc(codes ...string) (e error) {
 }
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
-func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) (fec chan<- *ExpJob, fewg *sync.WaitGroup) {
-	var fuc chan *fileUploadJob
+func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
+	jobs, e := getWccInferExpJobs()
+	if e != nil {
+		panic(e)
+	}
+	log.Printf("got %d files to export.", len(jobs))
+	fec, uploaded, fewg := wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
+	// make db job channel & waitgroup, start db goroutine
+	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
+	dbwg := new(sync.WaitGroup)
+	dbwg.Add(1)
+	go func() {
+		defer dbwg.Done()
+		//convert fileUploadJob to stockrelDBJob
+		for j := range uploaded {
+			ej := j.expJob
+			ud, ut := util.TimeStr()
+			dbch <- &stockrelDBJob{
+				code: ej.Code,
+				stockrel: &model.StockRel{
+					Code:      ej.Code,
+					Date:      sql.NullString{String: ej.Date, Valid: true},
+					Klid:      ej.Klid,
+					RcodeSize: sql.NullInt64{Int64: int64(len(ej.Rcodes)), Valid: true},
+					Udate:     sql.NullString{String: ud, Valid: true},
+					Utime:     sql.NullString{String: ut, Valid: true},
+				},
+			}
+		}
+	}()
+	dbwg.Add(1)
+	go collectStockRels(dbwg, dbch)
+	for i, j := range jobs {
+		pg := float64(i+1) / float64(len(jobs)) * 100.
+		log.Printf("[%.3f%%] querying rcodes for %s@%d, %s ...", pg, j.Code, j.Klid, j.Date)
+		j.Rcodes, e = getRcodes4WccInfer(j.Code, j.Klid)
+		if e != nil {
+			log.Printf("%s@[%d,%s] error querying rcodes for inference. skipping", j.Code, j.Klid, j.Date)
+			continue
+		} else if len(j.Rcodes) < 2 {
+			log.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", j.Code, j.Klid, j.Date)
+			continue
+		}
+		log.Printf("%s@[%d,%s] got %d ref-codes.", j.Code, j.Klid, j.Date, len(j.Rcodes))
+		fec <- j
+	}
+	close(fec)
+	fewg.Wait()
+	close(dbch)
+	dbwg.Wait()
+}
+
+func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool) (fec chan<- *ExpJob, uploaded <-chan *FileUploadJob, fewg *sync.WaitGroup) {
+	var fuc, fucOut chan *FileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
 		log.Println("GCS uploading enabled")
 		if gcsClient == nil {
 			gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
 		}
-		fuc = make(chan *fileUploadJob, conf.Args.GCS.UploadQueue)
+		fuc = make(chan *FileUploadJob, conf.Args.GCS.UploadQueue)
+		fucOut = make(chan *FileUploadJob, conf.Args.Concurrency)
+		uploaded = fucOut
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
 			fuwg.Add(1)
-			go uploadToGCS(fuc, fuwg, nocache, overwrite)
+			go uploadToGCS(fuc, fucOut, fuwg, nocache, overwrite)
 		}
 	}
 	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
 	fec = fileExpCh
 	fewg = new(sync.WaitGroup)
 	fewg.Add(1)
-	go fileExporter(localPath, rbase, fileExpCh, fuc, fewg, fuwg)
+	go fileExporter(localPath, rbase, fileExpCh, fuc, fucOut, fewg, fuwg)
 	return
 }
 
 //ImpWcc imports wcc inference result file from local or google cloud storage.
 func ImpWcc(tasklog, path string) {
+	//TODO: support incremental import(resume)
 	dir, name := filepath.Dir(tasklog), filepath.Base(tasklog)
 	ex, _, e := util.FileExists(dir, name, false, true)
 	if e != nil {
@@ -675,6 +741,7 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 			expch <- &ExpJob{
 				Code:   code,
 				Klid:   klid,
+				Date:   date,
 				Rcodes: rcodes,
 			}
 		}
@@ -998,7 +1065,7 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	return rcodes, nil
 }
 
-func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, fewg, fuwg *sync.WaitGroup) {
+func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc, fucOut chan<- *FileUploadJob, fewg, fuwg *sync.WaitGroup) {
 	defer fewg.Done()
 	fwwg := new(sync.WaitGroup)
 	pl := int(float64(runtime.NumCPU()) * 0.8)
@@ -1010,6 +1077,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileU
 	if fuc != nil {
 		close(fuc)
 		fuwg.Wait()
+		close(fucOut)
 		if e := gcsClient.Close(); e != nil {
 			log.Printf("failed to close gcs client: %+v", e)
 		}
@@ -1043,7 +1111,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileU
 	}
 }
 
-func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *fileUploadJob, wg *sync.WaitGroup) {
+func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *FileUploadJob, wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Println("file export worker started")
 	step := conf.Args.Sampler.CorlTimeSteps
@@ -1110,15 +1178,17 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *file
 			} else {
 				gcsDest = filepath.Join(rbase, filepath.Base(path))
 			}
-			fuc <- &fileUploadJob{
+			fuc <- &FileUploadJob{
 				localFile: path,
 				dest:      gcsDest,
+				expJob:    job,
 			}
 		}
 	}
 }
 
 func syncVolDir(localPath string) (dir string, e error) {
+	//FIXME continue with left volume when we rerun the program, don't start all over from vol_0
 	volLock.Lock()
 	defer volLock.Unlock()
 	volSize := conf.Args.Sampler.VolSize
@@ -1160,7 +1230,15 @@ func getSeries(code, rcode string, start, end, limit int) (series [][]float64, s
 	qk, qd := getFeatQuery()
 	step := conf.Args.Sampler.CorlTimeSteps
 	shift := conf.Args.Sampler.CorlTimeShift
-	op := func(c int) error {
+	op := func(c int) (e error) {
+		defer func() {
+			if r := recover(); r != nil {
+				if er, hasError := r.(error); hasError {
+					log.Printf("caught runtime error:%+v, retrying...", er)
+					e = repeat.HintTemporary(er)
+				}
+			}
+		}()
 		if c > 0 {
 			series = make([][]float64, 0, step)
 			seqlen = 0
@@ -1325,7 +1403,7 @@ func getFeatQuery() (qk, qd string) {
 	return qryKline, qryDate
 }
 
-func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
+func uploadToGCS(ch <-chan *FileUploadJob, out chan<- *FileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
 	defer wg.Done()
 	log.Println("gcs upload worker started")
 	for job := range ch {
@@ -1399,8 +1477,38 @@ func uploadToGCS(ch <-chan *fileUploadJob, wg *sync.WaitGroup, nocache, overwrit
 
 		if err != nil {
 			log.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
+		} else {
+			out <- job
 		}
 	}
+}
+
+func getWccInferExpJobs() (jobs []*ExpJob, e error) {
+	log.Println("querying klines for candidate...")
+	sklid := conf.Args.Sampler.CorlPrior
+	_, e = dbmap.Select(&jobs, `
+		SELECT 
+			t.code code, t.date date, t.klid klid
+		FROM
+			(SELECT 
+				code, date, klid
+			FROM
+				kline_d_b
+			WHERE
+				klid >= ?
+			ORDER BY code , klid) t
+		WHERE
+			(code , klid) NOT IN (SELECT 
+					code, klid
+				FROM
+					stockrel
+			)
+	`, sklid)
+	if e != nil {
+		log.Printf("failed to query wcc inference export jobs: %+v", e)
+		e = errors.WithStack(e)
+	}
+	return
 }
 
 //getPcalJobs fetchs kline data not in stockrel with non-blank value
@@ -1756,7 +1864,7 @@ func saveWccTrn(ws ...*model.WccTrn) (err error) {
 func warpingCorl(lrs, bucket []float64) (minDiff, maxDiff float64, e error) {
 	lenLrs := len(lrs)
 	if len(bucket) < lenLrs {
-		return minDiff, maxDiff, errors.WithStack(errors.Errorf("len(bucket)(%d) must be greater than len(lrs)(%s)", len(bucket), len(lrs)))
+		return minDiff, maxDiff, errors.WithStack(errors.Errorf("len(bucket)(%d) must be greater than len(lrs)(%d)", len(bucket), len(lrs)))
 	}
 	shift := len(bucket) - lenLrs
 	sumMin, sumMax := 0., 0.
