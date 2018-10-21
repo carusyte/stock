@@ -82,11 +82,17 @@ type ExpJob struct {
 	Rcodes []string
 }
 
+type expJobRpt struct {
+	Code      string
+	Klid      int
+	Date      string
+	RcodeSize int
+}
+
 //FileUploadJob stores wcc inference file upload job information
 type FileUploadJob struct {
 	localFile string
 	dest      string
-	expJob    *ExpJob
 }
 
 type impJob struct {
@@ -105,11 +111,11 @@ func PcalWcc(expInferFile, upload, nocache, overwrite bool, localPath, rbase str
 	}
 	log.Printf("#jobs: %d", len(jobs))
 	var expch chan<- *ExpJob
-	var uploaded <-chan *FileUploadJob
+	var expcho <-chan *expJobRpt
 	var expwg *sync.WaitGroup
 	if expInferFile {
 		log.Println("inference file exportation enabled")
-		expch, uploaded, expwg = wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
+		expch, expcho, expwg = wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
 	}
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
@@ -117,9 +123,9 @@ func PcalWcc(expInferFile, upload, nocache, overwrite bool, localPath, rbase str
 	dbwg.Add(1)
 	go collectStockRels(dbwg, dbch)
 	//drop uploaded signal
-	if uploaded != nil {
+	if expcho != nil {
 		go func() {
-			for range uploaded {
+			for range expcho {
 			}
 		}()
 	}
@@ -298,7 +304,7 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
 		panic(e)
 	}
 	log.Printf("got %d files to export.", len(jobs))
-	fec, uploaded, fewg := wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
+	fec, feco, fewg := wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
 	dbwg := new(sync.WaitGroup)
@@ -306,16 +312,15 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
 	go func() {
 		defer dbwg.Done()
 		//convert fileUploadJob to stockrelDBJob
-		for j := range uploaded {
-			ej := j.expJob
+		for j := range feco {
 			ud, ut := util.TimeStr()
 			dbch <- &stockrelDBJob{
-				code: ej.Code,
+				code: j.Code,
 				stockrel: &model.StockRel{
-					Code:      ej.Code,
-					Date:      sql.NullString{String: ej.Date, Valid: true},
-					Klid:      ej.Klid,
-					RcodeSize: sql.NullInt64{Int64: int64(len(ej.Rcodes)), Valid: true},
+					Code:      j.Code,
+					Date:      sql.NullString{String: j.Date, Valid: true},
+					Klid:      j.Klid,
+					RcodeSize: sql.NullInt64{Int64: int64(j.RcodeSize), Valid: true},
 					Udate:     sql.NullString{String: ud, Valid: true},
 					Utime:     sql.NullString{String: ut, Valid: true},
 				},
@@ -337,6 +342,7 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
 		}
 		log.Printf("%s@[%d,%s] got %d ref-codes.", j.Code, j.Klid, j.Date, len(j.Rcodes))
 		fec <- j
+		jobs[i] = nil
 	}
 	close(fec)
 	fewg.Wait()
@@ -344,8 +350,8 @@ func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
 	dbwg.Wait()
 }
 
-func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool) (fec chan<- *ExpJob, uploaded <-chan *FileUploadJob, fewg *sync.WaitGroup) {
-	var fuc, fucOut chan *FileUploadJob
+func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool) (fec chan<- *ExpJob, feco <-chan *expJobRpt, fewg *sync.WaitGroup) {
+	var fuc chan *FileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
 		log.Println("GCS uploading enabled")
@@ -353,19 +359,19 @@ func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool
 			gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
 		}
 		fuc = make(chan *FileUploadJob, conf.Args.GCS.UploadQueue)
-		fucOut = make(chan *FileUploadJob, conf.Args.Concurrency)
-		uploaded = fucOut
 		fuwg = new(sync.WaitGroup)
 		for i := 0; i < conf.Args.GCS.Connection; i++ {
 			fuwg.Add(1)
-			go uploadToGCS(fuc, fucOut, fuwg, nocache, overwrite)
+			go uploadToGCS(fuc, fuwg, nocache, overwrite)
 		}
 	}
 	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
+	fileExpChOut := make(chan *expJobRpt, conf.Args.Concurrency)
 	fec = fileExpCh
+	feco = fileExpChOut
 	fewg = new(sync.WaitGroup)
 	fewg.Add(1)
-	go fileExporter(localPath, rbase, fileExpCh, fuc, fucOut, fewg, fuwg)
+	go fileExporter(localPath, rbase, fileExpCh, fileExpChOut, fuc, fewg, fuwg)
 	return
 }
 
@@ -1065,19 +1071,19 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	return rcodes, nil
 }
 
-func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc, fucOut chan<- *FileUploadJob, fewg, fuwg *sync.WaitGroup) {
+func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJobRpt, fuc chan<- *FileUploadJob, fewg, fuwg *sync.WaitGroup) {
 	defer fewg.Done()
 	fwwg := new(sync.WaitGroup)
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	for i := 0; i < pl; i++ {
 		fwwg.Add(1)
-		go fileExpWorker(localPath, rbase, fec, fuc, fwwg)
+		go fileExpWorker(localPath, rbase, fec, feco, fuc, fwwg)
 	}
 	fwwg.Wait()
 	if fuc != nil {
 		close(fuc)
 		fuwg.Wait()
-		close(fucOut)
+		close(feco)
 		if e := gcsClient.Close(); e != nil {
 			log.Printf("failed to close gcs client: %+v", e)
 		}
@@ -1111,7 +1117,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, fuc, fucOut chan<
 	}
 }
 
-func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *FileUploadJob, wg *sync.WaitGroup) {
+func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJobRpt, fuc chan<- *FileUploadJob, wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Println("file export worker started")
 	step := conf.Args.Sampler.CorlTimeSteps
@@ -1167,6 +1173,12 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *File
 		if e != nil {
 			log.Panicf("%s failed to export json file %s, exiting program: %+v", code, path, e)
 		}
+		feco <- &expJobRpt{
+			Code:      job.Code,
+			Date:      job.Date,
+			Klid:      job.Klid,
+			RcodeSize: len(frcodes),
+		}
 		log.Printf("json file exported: %s", path)
 		if fuc != nil {
 			sep := os.PathSeparator
@@ -1181,7 +1193,6 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, fuc chan<- *File
 			fuc <- &FileUploadJob{
 				localFile: path,
 				dest:      gcsDest,
-				expJob:    job,
 			}
 		}
 	}
@@ -1403,7 +1414,7 @@ func getFeatQuery() (qk, qd string) {
 	return qryKline, qryDate
 }
 
-func uploadToGCS(ch <-chan *FileUploadJob, out chan<- *FileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
+func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
 	defer wg.Done()
 	log.Println("gcs upload worker started")
 	for job := range ch {
@@ -1477,8 +1488,6 @@ func uploadToGCS(ch <-chan *FileUploadJob, out chan<- *FileUploadJob, wg *sync.W
 
 		if err != nil {
 			log.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
-		} else {
-			out <- job
 		}
 	}
 }
