@@ -23,16 +23,14 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"google.golang.org/api/iterator"
-
-	"github.com/carusyte/stock/getd"
-	"github.com/carusyte/stock/util"
-	"github.com/ssgreg/repeat"
-
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
+	"github.com/ssgreg/repeat"
+	"google.golang.org/api/iterator"
 )
 
 const (
@@ -48,7 +46,6 @@ var (
 	wccMaxLr          = math.NaN()
 	curVolPath        string
 	curVolSize        int
-	curVolNo          = -1
 	volLock           sync.RWMutex
 	ftQryInit         sync.Once
 	statsQryInit      sync.Once
@@ -365,8 +362,8 @@ func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool
 			go uploadToGCS(fuc, fuwg, nocache, overwrite)
 		}
 	}
-	fileExpCh := make(chan *ExpJob, conf.Args.Concurrency)
-	fileExpChOut := make(chan *expJobRpt, conf.Args.Concurrency)
+	fileExpCh := make(chan *ExpJob, conf.Args.DBQueueCapacity)
+	fileExpChOut := make(chan *expJobRpt, conf.Args.DBQueueCapacity)
 	fec = fileExpCh
 	feco = fileExpChOut
 	fewg = new(sync.WaitGroup)
@@ -1074,7 +1071,7 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJobRpt, fuc chan<- *FileUploadJob, fewg, fuwg *sync.WaitGroup) {
 	defer fewg.Done()
 	fwwg := new(sync.WaitGroup)
-	pl := int(float64(runtime.NumCPU()) * 0.8)
+	pl := conf.Args.Sampler.NumExporter
 	for i := 0; i < pl; i++ {
 		fwwg.Add(1)
 		go fileExpWorker(localPath, rbase, fec, feco, fuc, fwwg)
@@ -1124,6 +1121,19 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 	shift := conf.Args.Sampler.CorlTimeShift
 	limit := step + shift
 	for job := range fec {
+		//take a rest if CPU usage is above threshold
+		for {
+			u, e := util.CPUUsage()
+			if e == nil && u >= conf.Args.CPUUsageThreshold {
+				rt := 100 * time.Millisecond
+				if conf.Args.Sampler.ExporterMaxRestTime > 0 {
+					rt = time.Duration(rand.Intn(conf.Args.Sampler.ExporterMaxRestTime)) * time.Millisecond
+				}
+				time.Sleep(rt)
+			} else {
+				break
+			}
+		}
 		code := job.Code
 		klid := job.Klid
 		ex, p, e := util.FileExists(localPath, fmt.Sprintf("%s_%d.json.gz", code, klid), true, true)
@@ -1199,10 +1209,15 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 }
 
 func syncVolDir(localPath string) (dir string, e error) {
-	//FIXME continue with left volume when we rerun the program, don't start all over from vol_0
 	volLock.Lock()
 	defer volLock.Unlock()
 	volSize := conf.Args.Sampler.VolSize
+	//get current maximum volume number
+	fi, e := ioutil.ReadDir(localPath)
+	if e != nil {
+		return
+	}
+	curVolNo := len(fi) - 1
 	if curVolPath == "" || curVolSize >= volSize {
 		newPath := ""
 		c := 0
