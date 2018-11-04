@@ -20,7 +20,7 @@ import (
 	"github.com/ssgreg/repeat"
 )
 
-//CPUUsage returns current cpu idle percentage.
+//CPUUsage returns current cpu busy percentage.
 func CPUUsage() (idle float64, e error) {
 	var ps []float64
 	ps, e = cpu.Percent(0, false)

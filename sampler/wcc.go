@@ -362,8 +362,8 @@ func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool
 			go uploadToGCS(fuc, fuwg, nocache, overwrite)
 		}
 	}
-	fileExpCh := make(chan *ExpJob, conf.Args.DBQueueCapacity)
-	fileExpChOut := make(chan *expJobRpt, conf.Args.DBQueueCapacity)
+	fileExpCh := make(chan *ExpJob, 256)
+	fileExpChOut := make(chan *expJobRpt, 256)
 	fec = fileExpCh
 	feco = fileExpChOut
 	fewg = new(sync.WaitGroup)
