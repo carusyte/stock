@@ -296,6 +296,8 @@ func StzWcc(codes ...string) (e error) {
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
 func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
+	log.Printf("localPath=%v, rbase=%v, upload=%v, nocache=%v, overwrite=%v",
+		localPath, rbase, upload, nocache, overwrite)
 	jobs, e := getWccInferExpJobs()
 	if e != nil {
 		panic(e)

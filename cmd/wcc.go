@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/carusyte/stock/sampler"
-
 	"github.com/spf13/cobra"
 )
 
