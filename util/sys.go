@@ -31,7 +31,7 @@ func CPUUsage() (idle float64, e error) {
 }
 
 //ParseLines parses target file specified by absolute path.
-func ParseLines(path string, retry int, parser func(no int, line []byte) (error), init func()) (e error) {
+func ParseLines(path string, retry int, parser func(no int, line []byte) error, init func()) (e error) {
 	op := func(c int) error {
 		var f *os.File
 		if f, e = os.Open(path); e != nil {
@@ -82,6 +82,9 @@ func ParseLines(path string, retry int, parser func(no int, line []byte) (error)
 func MkDirAll(path string, perm os.FileMode) (e error) {
 	op := func(c int) error {
 		if e = os.MkdirAll(path, perm); e != nil {
+			return repeat.HintTemporary(e)
+		}
+		if e = os.Chmod(path, perm); e != nil {
 			return repeat.HintTemporary(e)
 		}
 		return nil

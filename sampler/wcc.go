@@ -1241,7 +1241,7 @@ func syncVolDir(localPath string) (dir string, e error) {
 				}
 			} else {
 				newPath = filepath.Join(localPath, volDir)
-				if e = util.MkDirAll(newPath, 0666); e != nil {
+				if e = util.MkDirAll(newPath, os.FileMode(0777)); e != nil {
 					return
 				}
 				break
