@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	expInferFile, upload, nocache, overwrite bool
-	localPath, rbase, tasklog, targetPath    string
+	expInferFile, upload, nocache, overwrite, del bool
+	localPath, rbase, tasklog, targetPath         string
 )
 
 func init() {
@@ -43,6 +43,8 @@ func init() {
 		"specify tasklog file for wcc inference result import.")
 	impWccCmd.Flags().StringVarP(&targetPath, "path", "p", "",
 		"specify local or google cloud storage path where the wcc inference result file resides.")
+	impWccCmd.Flags().BoolVarP(&del, "del", "d", false,
+		"specify whether to delete remote inference result file after importing.")
 
 	wccCmd.AddCommand(updateWccCmd)
 	wccCmd.AddCommand(stzWccCmd)
@@ -95,6 +97,6 @@ var impWccCmd = &cobra.Command{
 	Short:   "Import WCC inference result file from local or remote.",
 	Example: "stock sample wcc imp -t wccir_tasklog -p gs://carusytes_bucket/wcc_infer_results",
 	Run: func(cmd *cobra.Command, args []string) {
-		sampler.ImpWcc(tasklog, targetPath)
+		sampler.ImpWcc(tasklog, targetPath, del)
 	},
 }

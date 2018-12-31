@@ -375,7 +375,7 @@ func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool
 }
 
 //ImpWcc imports wcc inference result file from local or google cloud storage.
-func ImpWcc(tasklog, path string) {
+func ImpWcc(tasklog, path string, del bool) {
 	//TODO: support incremental import(resume)
 	dir, name := filepath.Dir(tasklog), filepath.Base(tasklog)
 	ex, _, e := util.FileExists(dir, name, false, true)
@@ -405,7 +405,7 @@ func ImpWcc(tasklog, path string) {
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	for i := 0; i < pl; i++ {
 		wg.Add(1)
-		go importWCCIR(chjob, wg, tasklog, path)
+		go importWCCIR(chjob, wg, tasklog, path, del)
 	}
 	for _, j := range jobs {
 		chjob <- j
@@ -414,7 +414,7 @@ func ImpWcc(tasklog, path string) {
 	wg.Wait()
 }
 
-func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
+func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, del bool) {
 	defer wg.Done()
 	pattern := fmt.Sprintf(`gs://%s/(.*)`, conf.Args.GCS.Bucket)
 	r := regexp.MustCompile(pattern).FindStringSubmatch(path)
@@ -437,7 +437,8 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
 			timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
 			tctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			rc, e := client.Bucket(conf.Args.GCS.Bucket).Object(objn).NewReader(tctx)
+			obj := client.Bucket(conf.Args.GCS.Bucket).Object(objn)
+			rc, e := obj.NewReader(tctx)
 			if e != nil {
 				log.Printf("failed to create reader for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
@@ -481,6 +482,39 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string) {
 		)
 		if e != nil {
 			log.Printf("failed to process inference result file %s: %+v", objn, e)
+			return
+		}
+		if !del {
+			return
+		}
+		//Delete result file if directed
+		op = func(c int) error {
+			client, e := gcsClient.Get()
+			if e != nil {
+				log.Printf("failed to create gcs client: %+v", e)
+				return repeat.HintTemporary(e)
+			}
+			ctx := context.Background()
+			timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
+			tctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			if e = client.Bucket(conf.Args.GCS.Bucket).Object(objn).Delete(tctx); e != nil {
+				log.Printf("failed to delete gcs object %s: %+v", objn, e)
+				return repeat.HintTemporary(e)
+			}
+			return nil
+		}
+		e = repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(200*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+			),
+		)
+		if e != nil {
+			log.Printf("failed to delete inference result file %s: %+v", objn, e)
+			return
 		}
 	}
 }
