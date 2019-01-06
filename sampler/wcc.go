@@ -673,6 +673,10 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 				log.Printf("failed to iterate gcs objects with prefix %s: %+v", prefix, e)
 				return repeat.HintTemporary(e)
 			}
+			if !strings.HasSuffix(attrs.Name, ".json.gz") {
+				continue
+			}
+			// log.Printf("idxs:%v idxe:%v name:%v", idxs, idxe, attrs.Name)
 			impjobs = append(impjobs, &impJob{
 				path: attrs.Name[idxs : len(attrs.Name)-idxe],
 			})
