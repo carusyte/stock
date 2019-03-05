@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -10,18 +11,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/carusyte/stock/global"
-	"github.com/pkg/errors"
-
 	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
+	"github.com/pkg/errors"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
 
 var (
 	proxyPool map[string]bool
-	proxyList []string
+	proxyList []Proxy
 	luProxy   time.Time
 	pxLock    = sync.RWMutex{}
 )
@@ -68,16 +68,16 @@ func PickProxyDirect() (httpProxy string, e error) {
 }
 
 //PickProxy randomly chooses a proxy from database.
-func PickProxy() (httpProxy string, e error) {
+func PickProxy() (proxy Proxy, e error) {
 	pxLock.Lock()
 	defer pxLock.Unlock()
 	if len(proxyList) > 0 && time.Since(luProxy).Minutes() < conf.Args.Network.RotateProxyRefreshInterval {
 		return proxyList[rand.Intn(len(proxyList))], nil
 	}
-	proxyList = make([]string, 0, 64)
+	proxyList = make([]Proxy, 0, 64)
 	query := `
 		SELECT 
-			CONCAT(type, '://', host, ':', port)
+			*
 		FROM
 			proxy_list
 		WHERE
@@ -85,11 +85,19 @@ func PickProxy() (httpProxy string, e error) {
 	_, e = global.Dbmap.Select(&proxyList, query, "OK")
 	if e != nil {
 		log.Println("failed to query proxy server from database", e)
-		return httpProxy, errors.WithStack(e)
+		return proxy, errors.WithStack(e)
 	}
 	luProxy = time.Now()
 	log.Printf("successfully fetched %d free proxy servers from database.", len(proxyList))
 	return proxyList[rand.Intn(len(proxyList))], nil
+}
+
+//MarkProxyFailure increases failure counter for the specified proxy.
+func MarkProxyFailure(p Proxy) {
+	_, e := global.Dbmap.Exec(`update proxy_list set fail = fail + 1 where host = ? and port = ?`, p.Host, p.Port)
+	if e != nil {
+		log.Printf("failed to increase fail counter for proxy %+v", p)
+	}
 }
 
 func checkProxy(host, port string) bool {
@@ -423,4 +431,28 @@ func fetchProxyFromSocksProxy(wg *sync.WaitGroup, chpx chan []string) {
 		})
 	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
+}
+
+//Proxy represents the table structure of proxy_list.
+type Proxy struct {
+	Source      string `db:"source"`
+	Host        string `db:"host"`
+	Port        string `db:"port"`
+	Type        string `db:"type"`
+	Status      string `db:"status"`
+	Fail        int    `db:"fail"`
+	LastCheck   string `db:"last_check"`
+	LastScanned string `db:"last_scanned"`
+}
+
+func (x *Proxy) String() string {
+	return toJSONString(x)
+}
+
+func toJSONString(i interface{}) string {
+	j, e := json.Marshal(i)
+	if e != nil {
+		fmt.Println(e)
+	}
+	return fmt.Sprintf("%v", string(j))
 }

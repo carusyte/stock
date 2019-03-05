@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -94,12 +93,20 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 			}
 		}
 
+		var prx Proxy
+		var proxyAddr string
 		if rotateProxy && !bypassed {
 			//determine if we must use a rotated proxy
-			proxyAddr, e := PickProxy()
-			if strings.HasPrefix(proxyAddr, "socks5://") {
+			prx, e = PickProxy()
+			if e != nil {
+				log.Printf("failed to acquire rotate proxy: %+v", e)
+				return nil, errors.WithStack(e)
+			}
+			proxyAddr := fmt.Sprintf("%s://%s:%s", prx.Type, prx.Host, prx.Port)
+			switch prx.Type {
+			case "socks5":
 				// create a socks5 dialer
-				dialer, err := proxy.SOCKS5("tcp", strings.TrimLeft(proxyAddr, "socks5://"), nil, proxy.Direct)
+				dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("%s:%s", prx.Host, prx.Port), nil, proxy.Direct)
 				if err != nil {
 					log.Printf("can't connect to the socks5 proxy: %+v", err)
 					return nil, errors.WithStack(err)
@@ -108,12 +115,8 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				httpTransport := &http.Transport{Dial: dialer.Dial}
 				client = &http.Client{Timeout: time.Second * 60, // Maximum of 60 secs
 					Transport: httpTransport}
-			} else {
+			case "http":
 				//http proxy
-				if e != nil {
-					log.Printf("failed to acquire rotate proxy: %+v", e)
-					return nil, errors.WithStack(e)
-				}
 				proxyURL, e := url.Parse(proxyAddr)
 				if e != nil {
 					log.Printf("invalid proxy: %s, %+v", proxyAddr, e)
@@ -123,18 +126,25 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				client = &http.Client{
 					Timeout:   time.Second * 60, // Maximum of 60 secs
 					Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
+			default:
+				return nil, errors.Errorf("unsupported proxy: %+v", prx)
 			}
 		}
 
 		res, err = client.Do(req)
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
+			proxyStr := ""
+			if proxyAddr != "" {
+				proxyStr = fmt.Sprintf(" [proxy=%s]", proxyAddr)
+				MarkProxyFailure(prx)
+			}
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", link, err)
+				log.Printf("http communication failed.%s url=%s\n%+v", proxyStr, link, err)
 				e = err
 				return
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+			log.Printf("http communication error.%s url=%s, retrying %d ...\n%+v", proxyStr, link, i+1, err)
 			if res != nil {
 				res.Body.Close()
 			}

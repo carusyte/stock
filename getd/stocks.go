@@ -361,10 +361,9 @@ func getFromExchanges() (allstk *model.Stocks) {
 //get Shenzhen A-share list
 func getSZSE() (list []*model.Stock) {
 	log.Println("Fetching Shenzhen A-Share list...")
-	url_sz := `http://www.szse.cn/szseWeb/ShowReport.szse?SHOWTYPE=xlsx&CATALOGID=1110&tab1PAGENO=1&ENCODE=1&TABKEY=tab1`
-	d, e := util.HttpGetBytesUsingHeaders(url_sz, map[string]string{
-		"Referer": `http://www.szse.cn/main/marketdata/jypz/colist/`,
-	})
+	url_sz := `http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1110x&TABKEY=tab1&random=%.16f`
+	url_sz = fmt.Sprintf(url_sz, rand.Float64())
+	d, e := util.HttpGetBytes(url_sz)
 	util.CheckErr(e, "failed to get Shenzhen A-share list")
 	x, e := zip.NewReader(bytes.NewReader(d), int64(len(d)))
 	util.CheckErr(e, "failed to parse Shenzhen A-share xlsx file")

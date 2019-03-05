@@ -1,4 +1,4 @@
-CREATE DATABASE `secu` /*!40100 DEFAULT CHARACTER SET utf8 */;
+CREATE DATABASE IF NOT EXISTS `secu` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */;
 
 CREATE TABLE `basics` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
@@ -52,14 +52,14 @@ CREATE TABLE `basics` (
   `udate` varchar(10) DEFAULT NULL COMMENT '最后更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '最后更新时间',
   PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `cmpool` (
   `seqno` int(11) NOT NULL AUTO_INCREMENT,
   `code` varchar(8) NOT NULL,
   `remarks` varchar(200) DEFAULT NULL,
   PRIMARY KEY (`seqno`,`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=1277 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1277 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `finance` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -89,7 +89,7 @@ CREATE TABLE `finance` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`year`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='财务信息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='财务信息';
 
 CREATE TABLE `fin_predict` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -111,7 +111,7 @@ CREATE TABLE `fin_predict` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`year`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='业绩预测简表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='业绩预测简表';
 
 CREATE TABLE `fs_stats` (
   `method` varchar(45) NOT NULL,
@@ -123,7 +123,7 @@ CREATE TABLE `fs_stats` (
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`method`,`fields`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Feature Scaling Statistics';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Feature Scaling Statistics';
 
 CREATE TABLE `grader_stats` (
   `grader` varchar(20) NOT NULL,
@@ -135,14 +135,14 @@ CREATE TABLE `grader_stats` (
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`grader`,`frame`,`score`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `idxlst` (
   `code` varchar(8) NOT NULL COMMENT '代码',
   `name` varchar(10) NOT NULL COMMENT '指数名称',
   `src` varchar(60) DEFAULT NULL COMMENT '来源',
   PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指数列表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指数列表';
 
 CREATE TABLE `indc_feat` (
   `indc` varchar(10) NOT NULL COMMENT '指标类型',
@@ -156,7 +156,7 @@ CREATE TABLE `indc_feat` (
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`indc`,`cytp`,`bysl`,`smp_num`,`fid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征数据总表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指标特征数据总表';
 
 CREATE TABLE `indc_feat_raw` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -174,7 +174,7 @@ CREATE TABLE `indc_feat_raw` (
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`fid`,`indc`),
   KEY `INDEX` (`smp_num`,`cytp`,`bysl`,`indc`,`smp_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='指标特征原始数据总表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指标特征原始数据总表';
 
 CREATE TABLE `indicator_d` (
   `Code` varchar(8) NOT NULL,
@@ -210,7 +210,7 @@ CREATE TABLE `indicator_d` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `indicator_m` (
   `Code` varchar(8) NOT NULL,
@@ -246,7 +246,7 @@ CREATE TABLE `indicator_m` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `indicator_w` (
   `Code` varchar(8) NOT NULL,
@@ -282,7 +282,7 @@ CREATE TABLE `indicator_w` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kdj_feat_dat` (
   `fid` varchar(50) NOT NULL COMMENT '特征ID',
@@ -293,7 +293,7 @@ CREATE TABLE `kdj_feat_dat` (
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`fid`,`seq`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征数据';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='KDJ指标特征数据';
 
 CREATE TABLE `kdj_feat_dat_raw` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -305,7 +305,7 @@ CREATE TABLE `kdj_feat_dat_raw` (
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
   `utime` varchar(8) NOT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`fid`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJ指标特征原始数据';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='KDJ指标特征原始数据';
 
 CREATE TABLE `kdjv_stats` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
@@ -325,7 +325,7 @@ CREATE TABLE `kdjv_stats` (
   `udate` varchar(10) DEFAULT NULL COMMENT 'Update Date',
   `utime` varchar(8) DEFAULT NULL COMMENT 'Update Time',
   PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='KDJV Scorer Performance Statistics';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='KDJV Scorer Performance Statistics';
 
 CREATE TABLE `kline_60m` (
   `code` varchar(8) NOT NULL,
@@ -347,7 +347,7 @@ CREATE TABLE `kline_60m` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60分钟K线（前复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='60分钟K线（前复权）';
 
 CREATE TABLE `kline_d` (
   `code` varchar(8) NOT NULL,
@@ -439,7 +439,7 @@ CREATE TABLE `kline_d` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`),
   KEY `idx_kline_d_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（前复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='日K线（前复权）';
 
 CREATE TABLE `kline_d_b` (
   `code` varchar(8) NOT NULL,
@@ -531,7 +531,7 @@ CREATE TABLE `kline_d_b` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_B_IDX1` (`code`,`date`),
   KEY `KLINE_D_B_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED COMMENT='日K线（后复权）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线（后复权）'
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
@@ -624,7 +624,7 @@ CREATE TABLE `kline_d_n` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_N_IDX1` (`code`,`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线（不复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='日K线（不复权）';
 
 CREATE TABLE `kline_d_v` (
   `code` varchar(8) NOT NULL,
@@ -689,7 +689,7 @@ CREATE TABLE `kline_d_v` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`),
   KEY `idx_kline_d_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='日K线校验数据（前复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='日K线校验数据（前复权）';
 
 CREATE TABLE `kline_m` (
   `Code` varchar(8) NOT NULL,
@@ -780,7 +780,7 @@ CREATE TABLE `kline_m` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
   UNIQUE KEY `KLINE_M_IDX1` (`Code`,`Date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kline_m_b` (
   `code` varchar(8) NOT NULL,
@@ -871,7 +871,7 @@ CREATE TABLE `kline_m_b` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_M_B_IDX1` (`code`,`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='月K线（后复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='月K线（后复权）';
 
 CREATE TABLE `kline_m_n` (
   `Code` varchar(8) NOT NULL,
@@ -962,7 +962,7 @@ CREATE TABLE `kline_m_n` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
   UNIQUE KEY `KLINE_M_N_IDX1` (`Code`,`Date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kline_m_v` (
   `code` varchar(8) NOT NULL,
@@ -1027,7 +1027,7 @@ CREATE TABLE `kline_m_v` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`),
   KEY `idx_kline_d_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='月K线校验数据（前复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='月K线校验数据（前复权）';
 
 CREATE TABLE `kline_w` (
   `Code` varchar(8) NOT NULL,
@@ -1118,7 +1118,7 @@ CREATE TABLE `kline_w` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
   UNIQUE KEY `KLINE_W_IDX1` (`Code`,`Date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kline_w_b` (
   `code` varchar(8) NOT NULL,
@@ -1209,7 +1209,7 @@ CREATE TABLE `kline_w_b` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_W_B_IDX1` (`code`,`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='周K线（后复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='周K线（后复权）';
 
 CREATE TABLE `kline_w_n` (
   `Code` varchar(8) NOT NULL,
@@ -1300,7 +1300,7 @@ CREATE TABLE `kline_w_n` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`Code`,`Klid`),
   UNIQUE KEY `KLINE_W_N_IDX1` (`Code`,`Date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `kline_w_v` (
   `code` varchar(8) NOT NULL,
@@ -1365,7 +1365,7 @@ CREATE TABLE `kline_w_v` (
   PRIMARY KEY (`code`,`klid`),
   UNIQUE KEY `KLINE_D_IDX1` (`code`,`date`),
   KEY `idx_kline_d_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='周K线校验数据（前复权）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='周K线校验数据（前复权）';
 
 CREATE TABLE `kpts10` (
   `uuid` varchar(50) NOT NULL,
@@ -1386,7 +1386,7 @@ CREATE TABLE `kpts10` (
   KEY `kpts10_idx2` (`flag`,`uuid`),
   KEY `kpts10_idx1` (`score`,`date`),
   KEY `kpts10_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='10-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='10-days key points';
 
 CREATE TABLE `kpts120` (
   `uuid` varchar(50) NOT NULL,
@@ -1407,7 +1407,7 @@ CREATE TABLE `kpts120` (
   KEY `kpts120_idx2` (`flag`,`uuid`),
   KEY `kpts120_idx1` (`score`,`date`),
   KEY `kpts120_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='120-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='120-days key points';
 
 CREATE TABLE `kpts20` (
   `uuid` varchar(50) NOT NULL,
@@ -1428,7 +1428,7 @@ CREATE TABLE `kpts20` (
   KEY `kpts20_idx2` (`flag`,`uuid`),
   KEY `kpts20_idx1` (`score`,`date`),
   KEY `kpts20_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='20-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='20-days key points';
 
 CREATE TABLE `kpts30` (
   `uuid` varchar(50) NOT NULL,
@@ -1449,7 +1449,7 @@ CREATE TABLE `kpts30` (
   KEY `kpts30_idx2` (`flag`,`uuid`),
   KEY `kpts30_idx1` (`score`,`date`),
   KEY `kpts30_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='30-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='30-days key points';
 
 CREATE TABLE `kpts5` (
   `uuid` varchar(50) NOT NULL,
@@ -1470,7 +1470,7 @@ CREATE TABLE `kpts5` (
   KEY `kpts5_idx2` (`flag`,`uuid`),
   KEY `kpts5_idx1` (`score`,`date`),
   KEY `kpts5_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='5-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='5-days key points';
 
 CREATE TABLE `kpts60` (
   `uuid` varchar(50) NOT NULL,
@@ -1491,7 +1491,7 @@ CREATE TABLE `kpts60` (
   KEY `kpts60_idx2` (`flag`,`uuid`),
   KEY `kpts60_idx1` (`score`,`date`),
   KEY `kpts60_lr_rema` (`rema_lr`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='60-days key points';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='60-days key points';
 
 CREATE TABLE `proxy_list` (
   `source` varchar(20) NOT NULL,
@@ -1506,7 +1506,7 @@ CREATE TABLE `proxy_list` (
   KEY `last_check` (`last_check`,`status`),
   KEY `source` (`source`,`last_scanned`),
   KEY `status` (`status`,`fail`,`host`,`port`,`type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `stats` (
   `code` varchar(6) NOT NULL,
@@ -1514,7 +1514,7 @@ CREATE TABLE `stats` (
   `end` varchar(20) DEFAULT NULL,
   `dur` decimal(10,5) DEFAULT NULL,
   PRIMARY KEY (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `stockrel` (
   `code` varchar(6) NOT NULL,
@@ -1533,7 +1533,7 @@ CREATE TABLE `stockrel` (
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`code`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED COMMENT='relationship between stocks'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='relationship between stocks'
 /*!50100 PARTITION BY LINEAR KEY (`code`,klid)
 PARTITIONS 512 */;
 
@@ -1544,7 +1544,7 @@ CREATE TABLE `tradecal` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   KEY `ix_tradecal_index` (`index`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `wcc_trn` (
   `uuid` int(11) NOT NULL AUTO_INCREMENT,
@@ -1563,7 +1563,7 @@ CREATE TABLE `wcc_trn` (
   PRIMARY KEY (`uuid`),
   KEY `wcc_trn_idx_02` (`code`,`klid`),
   KEY `wcc_trn_idx_01` (`flag`,`bno`)
-) ENGINE=InnoDB AUTO_INCREMENT=210140890 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED
+) ENGINE=InnoDB AUTO_INCREMENT=210140890 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED
 /*!50100 PARTITION BY LINEAR HASH (`uuid`)
 PARTITIONS 1024 */;
 
@@ -1577,7 +1577,7 @@ CREATE TABLE `worst_rec` (
   `predict` decimal(6,0) DEFAULT NULL,
   `truth` decimal(6,0) DEFAULT NULL,
   PRIMARY KEY (`model`,`start_time`,`step`,`phase`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `xcorl_trn` (
   `uuid` varchar(50) NOT NULL,
@@ -1593,7 +1593,7 @@ CREATE TABLE `xcorl_trn` (
   UNIQUE KEY `UNI_IDX_01` (`uuid`),
   KEY `IDX_FLAG` (`flag`,`uuid`),
   KEY `IDX_CORL` (`corl`,`uuid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `xdxr` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
@@ -1626,4 +1626,4 @@ CREATE TABLE `xdxr` (
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`code`,`idx`),
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

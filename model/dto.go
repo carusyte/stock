@@ -115,11 +115,7 @@ type Stock struct {
 }
 
 func (s *Stock) String() string {
-	j, e := json.Marshal(s)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(s)
 }
 
 type Stocks struct {
@@ -181,11 +177,7 @@ func (l *Stocks) Add(stks ...*Stock) {
 }
 
 func (l *Stocks) String() string {
-	j, e := json.Marshal(l)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(l)
 }
 
 func (l *Stocks) UnmarshalJSON(b []byte) error {
@@ -301,11 +293,7 @@ type Xdxr struct {
 }
 
 func (x *Xdxr) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 type Finance struct {
@@ -328,7 +316,7 @@ type Finance struct {
 	//Gross Revenue (1/10 Billion) 营业总收入（亿）
 	Gr sql.NullFloat64
 	//Gross Revenue Growth Rate Year-on-Year 营业总收入同比增长率
-	GrYoy sql.NullFloat64 `db:"gr_yoy""`
+	GrYoy sql.NullFloat64 `db:"gr_yoy"`
 	//Net Asset Value Per Share  每股净资产
 	Navps sql.NullFloat64
 	//Return on Equity 净资产收益率
@@ -362,10 +350,12 @@ type Finance struct {
 }
 
 type FinReport struct {
+	Code  string
 	Items []*Finance
 }
 
 func (fin *FinReport) SetCode(code string) {
+	fin.Code = code
 	for _, f := range fin.Items {
 		f.Code = code
 	}
@@ -380,10 +370,17 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		iGpm, iNpm, iItr := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	mNp, mNpAdn, mGr := .1, .1, .1
 	for i, t := range titles {
-		v := fmt.Sprintf("%s", t)
-		v = strings.Trim(v, "[]")
-		v = strings.TrimSpace(v)
+		var v string
+		if elems, ok := t.([]interface{}); ok {
+			v = fmt.Sprintf("%v %v", elems[0], elems[1])
+			v = strings.TrimSpace(v)
+		} else if str, ok := t.(string); ok {
+			v = str
+		} else {
+			return errors.Errorf(`unable to parse element in "title", unhandled type: %T`, t)
+		}
 		switch v {
+		case "基本每股收益":
 		case "基本每股收益 元":
 			iEps = i
 		case "净利润 万元":
@@ -392,7 +389,6 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "净利润 元":
 			iNp = i
 		case "净利润同比增长率 %":
-			fallthrough
 		case "净利润同比增长率":
 			iNpYoy = i
 		case "净利润环比增长率 %":
@@ -405,7 +401,6 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "扣非净利润 元":
 			iNpAdn = i
 		case "扣非净利润同比增长率 %":
-			fallthrough
 		case "扣非净利润同比增长率":
 			iNpAdnYoy = i
 		case "营业总收入 万元":
@@ -414,31 +409,30 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "营业总收入 元":
 			iGr = i
 		case "营业总收入同比增长率 %":
-			fallthrough
 		case "营业总收入同比增长率":
 			iGrYoy = i
+		case "每股净资产":
 		case "每股净资产 元":
 			iNavps = i
 		case "净资产收益率 %":
-			fallthrough
 		case "净资产收益率":
 			iRoe = i
 		case "净资产收益率-摊薄 %":
-			fallthrough
 		case "净资产收益率-摊薄":
 			iRoeDlt = i
 		case "资产负债比率 %":
-			fallthrough
 		case "资产负债比率":
 			iAlr = i
+		case "每股资本公积金":
 		case "每股资本公积金 元":
 			iCrps = i
+		case "每股未分配利润":
 		case "每股未分配利润 元":
 			iUdpps = i
+		case "每股经营现金流":
 		case "每股经营现金流 元":
 			iOcfps = i
 		case "销售毛利率 %":
-			fallthrough
 		case "销售毛利率":
 			iGpm = i
 		case "存货周转率":
@@ -450,7 +444,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case `科目\时间`:
 			//do nothing
 		default:
-			log.Printf("unidentified finance report item: %s", v)
+			log.Printf("%s unidentified finance report item: %s", fin.Code, v)
 		}
 	}
 	rpt := m["report"].([]interface{})
@@ -505,7 +499,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 					case iItr:
 						fi.Itr = util.Str2Fnull(s)
 					default:
-						log.Printf("unidentified row index %d, %+v", i, y)
+						log.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
 					}
 				}
 			}
@@ -606,11 +600,7 @@ type Quote struct {
 }
 
 func (q *Quote) String() string {
-	j, e := json.Marshal(q)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(q)
 }
 
 type K60MinList struct {
@@ -706,11 +696,7 @@ func (k *K60MinList) UnmarshalJSON(b []byte) error {
 }
 
 func (k *KlineW) String() string {
-	j, e := json.Marshal(k)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(k)
 }
 
 type KlAll struct {
@@ -1173,11 +1159,7 @@ type XCorlTrn struct {
 }
 
 func (x *XCorlTrn) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 //WccTrn represents Warping Correlation Coefficient training samples.
@@ -1198,11 +1180,7 @@ type WccTrn struct {
 }
 
 func (x *WccTrn) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 //StockRel represents stock relations regarding the correlation coefficients at different times.
@@ -1225,11 +1203,7 @@ type StockRel struct {
 }
 
 func (x *StockRel) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 //FsStats represents feature scaling statistics. A mapping of the fs_stats table
@@ -1245,11 +1219,7 @@ type FsStats struct {
 }
 
 func (x *FsStats) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 //WccInferRecord represents the wcc inference record in a WccInferResult.
@@ -1263,11 +1233,7 @@ type WccInferRecord struct {
 }
 
 func (x *WccInferRecord) String() string {
-	j, e := json.Marshal(x)
-	if e != nil {
-		fmt.Println(e)
-	}
-	return fmt.Sprintf("%v", string(j))
+	return toJSONString(x)
 }
 
 //WccInferResult represents the wcc inference result file, in json format.
@@ -1276,7 +1242,11 @@ type WccInferResult struct {
 }
 
 func (x *WccInferResult) String() string {
-	j, e := json.Marshal(x)
+	return toJSONString(x)
+}
+
+func toJSONString(i interface{}) string {
+	j, e := json.Marshal(i)
 	if e != nil {
 		fmt.Println(e)
 	}
