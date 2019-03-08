@@ -2,6 +2,7 @@ package getd
 
 import (
 	"log"
+	"math/rand"
 	"testing"
 
 	"github.com/carusyte/stock/model"
@@ -29,5 +30,13 @@ func TestThsShares(t *testing.T) {
 	for _, s := range allstk {
 		thsShares(s)
 	}
+	t.Fail()
+}
+
+func TestXQShares(t *testing.T) {
+	allstk := StocksDb()
+	s := allstk[rand.Intn(len(allstk))]
+	xqShares(s)
+	log.Printf("%+v", s)
 	t.Fail()
 }

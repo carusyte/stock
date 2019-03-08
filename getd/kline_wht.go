@@ -132,7 +132,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 		log.Printf("%s failed to parse json for %v from %s: %+v\return value:%+v", stk.Code, tab, url, e, string(body))
 		return nil, lklid, false, true
 	}
-	logrus.Debug("return from wht: %+v", string(body))
+	logrus.Debugf("return from wht: %+v", string(body))
 	//extract quotes
 	quotes = parseWhtJSONMaps(codeid, ldate, data)
 	return quotes, lklid, true, false

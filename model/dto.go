@@ -1245,6 +1245,65 @@ func (x *WccInferResult) String() string {
 	return toJSONString(x)
 }
 
+//XqSharesChg xueqiu shares change json payload.
+type XqSharesChg struct {
+	ErrorCode int    `json:"error_code"`
+	ErrorDesc string `json:"error_description"`
+	Data      struct {
+		Items []struct {
+			ChgDate                *float64  `json:"chg_date,omitempty"`
+			TotalShare            *float64  `json:"total_shares,omitempty"`
+			FloatShare            *float64  `json:"float_shares,omitempty"`
+			FloatAShare           *float64  `json:"float_shares_float_ashare,omitempty"`
+			FloatBShare           *float64  `json:"float_shares_float_bshare,omitempty"`
+			ChgReasonID            *string `json:"chg_reason_identifier,omitempty"`
+			RestrictedShare        *float64  `json:"restricted_share,omitempty"`
+			LimitAShare            *float64  `json:"limit_shares_limit_ashare,omitempty"`
+			NationalLimitAShare    *float64  `json:"national_held_limit_ashare,omitempty"`
+			SoapLimitAShare        *float64  `json:"soap_held_limit_ashare,omitempty"`
+			DomesticLimitAShare    *float64  `json:"domestic_held_limit_ashare,omitempty"`
+			DomesticCorpAShare     *float64  `json:"ashare_domestic_corp_held,omitempty"`
+			DomesticNpLimitAShare  *float64  `json:"domestic_np_held_limit_ashare,omitempty"`
+			ExecutiveLimitAShare   *float64  `json:"executive_held_limit_ashare,omitempty"`
+			OrgLimitAShare         *float64  `json:"org_place_limit_ashare,omitempty"`
+			FrgnLimitAShare        *float64  `json:"frgn_capital_held_limit_ashare,omitempty"`
+			FrgnCorpAShare         *float64  `json:"ashare_frgn_corp_held,omitempty"`
+			FrgnNpLimitAShare      *float64  `json:"frgn_np_held_limit_ashare,omitempty"`
+			LimitBShare            *float64  `json:"limit_shares_limit_bshare,omitempty"`
+			LimitHShare            *float64  `json:"limit_shares_limit_hshare,omitempty"`
+			FloatHShare            *float64  `json:"float_shares_float_hshare,omitempty"`
+			OthFloatShare          *float64  `json:"othr_float_shares,omitempty"`
+			OVListFloatShare       *float64  `json:"overseas_listed_float_share,omitempty"`
+			NeeqAShareFloat        *float64  `json:"neeq_ashare_float_shares,omitempty"`
+			NeeqBShareFloat        *float64  `json:"neeq_bshare_float_shares,omitempty"`
+			UnfloatShares          *float64  `json:"unfloat_shares,omitempty"`
+			DomesticSponsorShareUS *float64  `json:"domestic_sponsor_shares_us,omitempty"`
+			NationalHeld           *float64  `json:"national_held,omitempty"`
+			StateOwnedCorpHeldUS   *float64  `json:"state_owned_corp_held_us,omitempty"`
+			DomesticCorpHeldUS     *float64  `json:"domestic_corp_held_us,omitempty"`
+			NaturalPersonHeldUS    *float64  `json:"natural_personel_held_us,omitempty"`
+			RaiseCorpShareUS       *float64  `json:"raise_corp_share_us,omitempty"`
+			NormalCorpShareUS      *float64  `json:"normal_corp_share_us,omitempty"`
+			UnlistedFrgnCapitalUS  *float64  `json:"unlisted_frgn_capital_stock_us,omitempty"`
+			StaffShareUS           *float64  `json:"staff_share_us,omitempty"`
+			PreferredShareEtcUS    *float64  `json:"prefered_share_etc_us,omitempty"`
+			ConversionShareUS      *float64  `json:"conversion_share_us,omitempty"`
+			NaturalPersonShareUS   *float64  `json:"natual_person_share_us,omitempty"`
+			StrategicInvestorUS    *float64  `json:"stragetic_investor_place_us,omitempty"`
+			FundShareUS            *float64  `json:"fund_place_shares_us,omitempty"`
+			NormalCorpPlaceShareUS *float64  `json:"normal_corp_place_share_us,omitempty"`
+			OrigFloatShareUS       *float64  `json:"orig_staq_float_share_us,omitempty"`
+			OrigNetFLoatShareUS    *float64  `json:"orig_net_float_share_us,omitempty"`
+			OthUnfloatShareUS      *float64  `json:"other_unfloat_share_us,omitempty"`
+			ChgReason              *string `json:"chg_reason,omitempty"`
+		} `json:"items"`
+	} `json:"data"`
+}
+
+func (x *XqSharesChg) String() string{
+	return toJSONString(x)
+}
+
 func toJSONString(i interface{}) string {
 	j, e := json.Marshal(i)
 	if e != nil {

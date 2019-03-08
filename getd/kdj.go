@@ -1,6 +1,7 @@
 package getd
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math"
@@ -8,15 +9,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	rm "github.com/carusyte/rima/model"
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
-	rm "github.com/carusyte/rima/model"
+	"github.com/carusyte/stock/rpc"
 	"github.com/carusyte/stock/util"
 	"github.com/satori/go.uuid"
 	logr "github.com/sirupsen/logrus"
-	"github.com/carusyte/stock/rpc"
-	"bytes"
 )
 
 const (
@@ -54,11 +55,10 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 		}
 		if e != nil {
 			if "sql: no rows in result set" == e.Error() {
-				logr.Warnf("%s, %s, %s, %d: %s", code, tab, retro, e.Error())
+				logr.Warnf("%s, %s, %d: %+v", code, tab, retro, e.Error())
 				return
-			} else {
-				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 			}
+			log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 		}
 	} else {
 		if retro > 0 {
@@ -93,22 +93,20 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			_, e = dbmap.Select(&oqs, sql, code, toDate)
 			if e != nil {
 				if "sql: no rows in result set" == e.Error() {
-					logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, e.Error())
+					logr.Warnf("%s, %s, %s: %+v", code, tab, toDate, e.Error())
 					return
-				} else {
-					log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
 				}
+				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
 			}
 			qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
 			nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
 			nidcs := indc.DeftKDJ(append(oqs, nq))
 			return append(indcs, nidcs[len(nidcs)-1])
-		} else {
-			qsdy := GetKlBtwn(code, model.KLINE_DAY, "", toDate+"]", false)
-			nq := ToOne(qsdy[1:], qsdy[0].Close, -1)
-			nidcs := indc.DeftKDJ([]*model.Quote{nq})
-			return nidcs
 		}
+		qsdy := GetKlBtwn(code, model.KLINE_DAY, "", toDate+"]", false)
+		nq := ToOne(qsdy[1:], qsdy[0].Close, -1)
+		nidcs := indc.DeftKDJ([]*model.Quote{nq})
+		return nidcs
 	}
 	return
 }
@@ -693,7 +691,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, prun
 	for fdk := range chfdk {
 		st := time.Now()
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
-		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(fdk.SmpNum-2),
+		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(fdk.SmpNum-2),
 			1+1./(math.Sqrt2*math.Pi)))
 		logr.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)

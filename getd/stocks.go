@@ -155,8 +155,26 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
 	RETRIES := conf.Args.DefaultRetry
 	for stock := range chstk {
+		var ok, r bool
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
-			ok, r := thsShares(stock)
+			ok, r = thsShares(stock)
+			if ok {
+				chrstk <- stock
+			} else if r {
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
+				continue
+			} else {
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+			}
+			break
+		}
+		if ok {
+			continue
+		}
+		log.Printf("%s switching to secondary source xueqiu.com", stock.Code)
+		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
+			ok, r = xqShares(stock)
 			if ok {
 				chrstk <- stock
 			} else if r {
@@ -257,6 +275,86 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 			}
 		})
 	return
+}
+
+func xqShares(stock *model.Stock) (ok, retry bool) {
+	//TODO get share info from xueqiu.com
+	// https://xueqiu.com/snowman/S/SH601598/detail#/GBJG
+	// https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=SH601598&count=100&extend=true
+	url := fmt.Sprintf(`https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=%s%s&count=1000&extend=true`, stock.Market.String, stock.Code)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true)
+	if e != nil {
+		log.Printf("%s, http failed %s", stock.Code, url)
+		return false, true
+	}
+	defer res.Body.Close()
+	var xqshare model.XqSharesChg
+	if body, e := ioutil.ReadAll(res.Body); e != nil {
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+			stock.Name)
+		return false, true
+	} else if e = json.Unmarshal(body, &xqshare); e != nil {
+		log.Printf("[%s,%s] failed to parse json body, retrying...", stock.Code,
+			stock.Name)
+		return false, true
+	}
+	if xqshare.ErrorCode != 0 {
+		log.Printf("[%s,%s] failed from xueqiu.com:[%d, %s] retrying...", stock.Code,
+			stock.Name, xqshare.ErrorCode, xqshare.ErrorDesc)
+		return false, true
+	} else if len(xqshare.Data.Items) == 0{
+		log.Printf("[%s,%s] no share info from xueqiu.com", stock.Code, stock.Name)
+		return true, false
+	}
+	mod := 0.00000001
+	s := xqshare.Data.Items[0]
+	if s.TotalShare != nil{
+		stock.ShareSum.Valid = true
+		stock.ShareSum.Float64 = *s.TotalShare * mod
+	}
+	if s.FloatAShare != nil{
+		stock.AShareSum.Valid = true
+		stock.AShareSum.Float64 += *s.FloatAShare
+		stock.AShareExch.Valid = true
+		stock.AShareExch.Float64 = *s.FloatAShare * mod
+	}
+	if s.LimitAShare != nil{
+		stock.AShareSum.Valid = true
+		stock.AShareSum.Float64 += *s.LimitAShare
+		stock.AShareR.Valid = true
+		stock.AShareR.Float64 = *s.LimitAShare * mod
+	}
+	stock.AShareSum.Float64 *= mod
+
+	if s.FloatBShare != nil{
+		stock.BShareSum.Valid = true
+		stock.BShareSum.Float64 += *s.FloatBShare
+		stock.BShareExch.Valid = true
+		stock.BShareExch.Float64 = *s.FloatBShare * mod
+	}
+	if s.LimitBShare != nil{
+		stock.BShareSum.Valid = true
+		stock.BShareSum.Float64 += *s.LimitBShare
+		stock.BShareR.Valid = true
+		stock.BShareR.Float64 = *s.LimitBShare * mod
+	}
+	stock.BShareSum.Float64 *= mod
+
+	if s.FloatHShare != nil{
+		stock.HShareSum.Valid = true
+		stock.HShareSum.Float64 += *s.FloatHShare
+		stock.HShareExch.Valid = true
+		stock.HShareExch.Float64 = *s.FloatHShare * mod
+	}
+	if s.LimitHShare != nil{
+		stock.HShareSum.Valid = true
+		stock.HShareSum.Float64 += *s.LimitHShare
+		stock.HShareR.Valid = true
+		stock.HShareR.Float64 = *s.LimitHShare * mod
+	}
+	stock.HShareSum.Float64 *= mod
+
+	return true, false
 }
 
 func tcIndustry(stock *model.Stock) (ok, retry bool) {
