@@ -295,9 +295,52 @@ func StzWcc(codes ...string) (e error) {
 }
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
-func ExpInferFile(localPath, rbase string, upload, nocache, overwrite bool) {
-	log.Printf("localPath=%v, rbase=%v, upload=%v, nocache=%v, overwrite=%v",
-		localPath, rbase, upload, nocache, overwrite)
+func ExpInferFile(localPath, rbase string, upload, nocache, overwrite, chron bool) {
+	log.Printf("localPath=%v, rbase=%v, upload=%v, nocache=%v, overwrite=%v, chron=%v",
+		localPath, rbase, upload, nocache, overwrite, chron)
+	if chron {
+		expInferFileChron(localPath, rbase, upload, nocache, overwrite)
+	} else {
+		expInferFileByCode(localPath, rbase, upload, nocache, overwrite)
+	}
+}
+
+
+//expInferFileChron export infer file in chronological order.
+func expInferFileChron(localPath, rbase string, upload, nocache, overwrite bool) {
+	dates, e := getDatesForWccInfer()
+	if e != nil {
+		panic(e)
+	}
+	log.Printf("got %d dates to process. ", len(dates))
+	if len(dates) == 0 {
+		return
+	}
+	log.Printf("starting from %s", dates[0])
+
+	//TODO run in goroutine
+	for i, d := range dates {
+		log.Printf("[%d/%d] getting klines on date %s ...", i+1, len(dates), d)
+		klines, e := getKlinesOnDate(d)
+		if e != nil {
+			panic(e)
+		}
+		for j, k := range klines {
+			log.Printf("[%d/%d] querying rcodes for %s@%d, %s ...", j+1, len(klines), k.Code, k.Klid, d)
+			rcodes, e := getRcodes4WccInfer(k.Code, k.Klid)
+			if e != nil {
+				panic(e)
+			} else if len(rcodes) < 2 {
+				log.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", k.Code, k.Klid, d)
+				continue
+			}
+			log.Printf("%s@[%d,%s] got %d ref-codes.", k.Code, k.Klid, d, len(rcodes))
+			
+		}
+	}
+}
+
+func expInferFileByCode(localPath, rbase string, upload, nocache, overwrite bool) {
 	jobs, e := getWccInferExpJobs()
 	if e != nil {
 		panic(e)
@@ -517,6 +560,33 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 			return
 		}
 	}
+}
+
+func getKlinesOnDate(date string) (klines []*model.Quote, e error) {
+	op := func(c int) error {
+		_, e = dbmap.Select(&klines,
+			`select code, klid from kline_d_b where date = ? order by code`, date)
+		if e != nil {
+			log.Printf("#%d failed to query klines on date %s: %+v", c, date, e)
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+
+	e = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(5000*time.Millisecond).WithMaxDelay(30*time.Second).Set(),
+		),
+	)
+
+	if e != nil {
+		log.Printf("failed to query klines on date %s: %+v", date, e)
+	}
+
+	return
 }
 
 func updateTasklogStatus(tasklog string, idx int64, status string) (e error) {
@@ -1190,7 +1260,7 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 		feats := make([][][]float64, 0, len(rcodes))
 		seqlens := make([]int, 0, len(rcodes))
 		for _, rc := range rcodes {
-			batch, seqlen, e := getSeries(code, rc, s, klid, limit)
+			batch, seqlen, e := getSeriesForPair(code, rc, s, klid, limit)
 			if e != nil {
 				log.Panicf("failed to get series for %s and %s, exiting program", code, rc)
 			}
@@ -1292,7 +1362,86 @@ func syncVolDir(localPath string) (dir string, e error) {
 	return curVolPath, nil
 }
 
-func getSeries(code, rcode string, start, end, limit int) (series [][]float64, seqlen int, err error) {
+// getSeries queries and returns the time sequence data for specified code.
+// series - [shift + step, features]
+// seqlen - valid step
+func getSeries(code string, start, end, limit int) (series [][]float64, seqlen int, err error) {
+	qk, _ := getFeatQuery()
+	step := conf.Args.Sampler.CorlTimeSteps
+	shift := conf.Args.Sampler.CorlTimeShift
+	op := func(c int) (e error) {
+		defer func() {
+			if r := recover(); r != nil {
+				if er, hasError := r.(error); hasError {
+					log.Printf("caught runtime error:%+v, retrying...", er)
+					e = repeat.HintTemporary(er)
+				}
+			}
+		}()
+		if c > 0 {
+			series = make([][]float64, 0, shift+step)
+			log.Printf("retry #%d getting feature batch [%s, %d, %d]", c, code, start, end)
+		}
+		rows, e := dbmap.Query(qk, code, code, start, end, limit)
+		defer rows.Close()
+		if e != nil {
+			log.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
+			return repeat.HintTemporary(e)
+		}
+		cols, e := rows.Columns()
+		unitFeatLen := len(cols) - 1
+		count := 0
+		for ; rows.Next(); count++ {
+			row := make([]float64, unitFeatLen)
+			series = append(series, row)
+			vals := make([]interface{}, len(cols))
+			for i := range vals {
+				vals[i] = new(interface{})
+			}
+			if e := rows.Scan(vals...); e != nil {
+				log.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
+				return repeat.HintTemporary(e)
+			}
+			for i := 0; i < unitFeatLen; i++ {
+				if f, ok := vals[i+1].(*interface{}); ok {
+					row[i] = (*f).(float64)
+				} else {
+					return repeat.HintStop(
+						fmt.Errorf("[%s,%d,%d] column type conversion error, unable to parse float64", code, start, end),
+					)
+				}
+			}
+		}
+		if e := rows.Err(); e != nil {
+			log.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
+			return repeat.HintTemporary(e)
+		}
+		if count < limit {
+			e = errors.New(fmt.Sprintf("[%s,%d,%d] insufficient data. get %d, %d required",
+				code, start, end, count, limit))
+			return repeat.HintStop(e)
+		}
+		seqlen = count - shift
+		return nil
+	}
+
+	err = repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+		),
+	)
+
+	if err != nil {
+		log.Printf("failed to get series [%s, %d, %d]: %+v", code, start, end, err)
+	}
+
+	return
+}
+
+func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]float64, seqlen int, err error) {
 	qk, qd := getFeatQuery()
 	step := conf.Args.Sampler.CorlTimeSteps
 	shift := conf.Args.Sampler.CorlTimeShift
@@ -1545,6 +1694,39 @@ func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrit
 			log.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
 		}
 	}
+}
+
+func getDatesForWccInfer() (dates []string, e error) {
+	log.Println("querying dates for candidate...")
+	var sdate sql.NullString
+	if e = dbmap.SelectOne(&sdate, `select max(date) from stockrel`); e != nil {
+		log.Printf("failed to query max(date) from stockrel: %+v", e)
+		return dates, errors.WithStack(e)
+	} else if !sdate.Valid {
+		if e = dbmap.SelectOne(&sdate,
+			`select min(date) from kline_d_b where klid = ?`,
+			conf.Args.Sampler.CorlPrior-1); e != nil {
+			log.Printf("failed to query min(date) from kline_d_b: %+v", e)
+			return dates, errors.WithStack(e)
+		} else if !sdate.Valid {
+			log.Println("no data in kline_d_b.")
+			return dates, errors.New("no data in kline_d_b")
+		}
+	}
+	_, e = dbmap.Select(&dates, `
+		SELECT DISTINCT
+			date
+		FROM
+			kline_d_b
+		WHERE
+			date > ?
+		ORDER BY date
+	`, sdate.String)
+	if e != nil {
+		log.Printf("failed to query dates for wcc inference export: %+v", e)
+		return dates, errors.WithStack(e)
+	}
+	return
 }
 
 func getWccInferExpJobs() (jobs []*ExpJob, e error) {

@@ -8,43 +8,45 @@ import (
 )
 
 var (
-	expInferFile, upload, nocache, overwrite, del bool
-	localPath, rbase, tasklog, targetPath         string
+	expInferFile, upload, nocache, overwrite, del, chron bool
+	localPath, rbase, tasklog, targetPath                string
 )
 
 func init() {
 	pcalWccCmd.Flags().BoolVarP(&expInferFile, "exp", "e", true,
-		"specify whether to export inference file")
+		"Specify whether to export inference file")
 	pcalWccCmd.Flags().BoolVarP(&upload, "upload", "u", true,
-		"specify whether to upload inference file.")
+		"Specify whether to upload inference file.")
 	pcalWccCmd.Flags().BoolVarP(&nocache, "nocache", "n", true,
-		"specify whether to delete local exported file after successful upload")
+		"Specify whether to delete local exported file after successful upload")
 	pcalWccCmd.Flags().BoolVarP(&overwrite, "overwrite", "o", true,
-		"specify whether to overwrite existing files on cloud storage.")
+		"Specify whether to overwrite existing files on cloud storage.")
 	pcalWccCmd.Flags().StringVarP(&localPath, "path", "p", os.TempDir(),
-		"specify local directory for exported inference file")
+		"Specify local directory for exported inference file")
 	pcalWccCmd.Flags().StringVar(&rbase, "rbase", "",
-		"specify remote base directory to upload the exported file"+
+		"Specify remote base directory to upload the exported file"+
 			"(the relative path after the gs://[bucket_name] segment).")
 
 	expWccCmd.Flags().BoolVarP(&upload, "upload", "u", true,
-		"specify whether to upload inference file.")
+		"Specify whether to upload inference file.")
 	expWccCmd.Flags().BoolVarP(&nocache, "nocache", "n", true,
-		"specify whether to delete local exported file after successful upload")
+		"Specify whether to delete local exported file after successful upload")
 	expWccCmd.Flags().BoolVarP(&overwrite, "overwrite", "o", true,
-		"specify whether to overwrite existing files on cloud storage.")
+		"Specify whether to overwrite existing files on cloud storage.")
+	expWccCmd.Flags().BoolVarP(&chron, "chron", "c", false,
+		"Specify whether to export in chronological order. Default to export in ascending stock code order.")
 	expWccCmd.Flags().StringVarP(&localPath, "path", "p", os.TempDir(),
-		"specify local directory for exported inference file")
+		"Specify local directory for exported inference file")
 	expWccCmd.Flags().StringVar(&rbase, "rbase", "",
-		"specify remote base directory to upload the exported file"+
+		"Specify remote base directory to upload the exported file"+
 			"(the relative path after the gs://[bucket_name] segment).")
 
 	impWccCmd.Flags().StringVarP(&tasklog, "tasklog", "t", "wccir_tasklog",
-		"specify tasklog file for wcc inference result import.")
+		"Specify tasklog file for wcc inference result import.")
 	impWccCmd.Flags().StringVarP(&targetPath, "path", "p", "",
-		"specify local or google cloud storage path where the wcc inference result file resides.")
+		"Specify local or google cloud storage path where the wcc inference result file resides.")
 	impWccCmd.Flags().BoolVarP(&del, "del", "d", false,
-		"specify whether to delete remote inference result file after importing.")
+		"Specify whether to delete remote inference result file after importing.")
 
 	wccCmd.AddCommand(updateWccCmd)
 	wccCmd.AddCommand(stzWccCmd)
@@ -88,7 +90,7 @@ var expWccCmd = &cobra.Command{
 	Short:   "Export eligible wcc inference file and optionally upload it for cloud inference.",
 	Example: "stock sample wcc exp -p /Volumes/WD-1TB/wcc_infer --rbase wcc_infer",
 	Run: func(cmd *cobra.Command, args []string) {
-		sampler.ExpInferFile(localPath, rbase, upload, nocache, overwrite)
+		sampler.ExpInferFile(localPath, rbase, upload, nocache, overwrite, chron)
 	},
 }
 
