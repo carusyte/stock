@@ -974,7 +974,7 @@ func convert2Fdvs(key *fdKey, fdrvs []*model.KDJfdrView) []*model.KDJfdView {
 		copy(fdv.J, fdrv.J)
 		fdv.FdNum = 1
 		fdv.Indc = "KDJ"
-		fdv.Fid = fmt.Sprintf("%s", uuid.NewV1())
+		fdv.Fid = fmt.Sprintf("%s", uuid.Must(uuid.NewV1()))
 		fdv.Cytp = model.CYTP(key.Cytp)
 		fdv.Bysl = key.Bysl
 		fdvs[i] = fdv

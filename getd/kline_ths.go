@@ -8,28 +8,20 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
-	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"github.com/chromedp/chromedp/runner"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	pool  *chromedp.Pool
 	dt2mc = map[model.DBTab]string{
 		model.KLINE_DAY_NR:   "00",
 		model.KLINE_DAY:      "01",
@@ -356,19 +348,18 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
+		}
+		ttd, e := time.Parse("2006-01-02", ktoday.Date)
+		if e != nil {
+			log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+				code, ktoday.Date, e)
+			return quotes, false, true
 		} else {
-			ttd, e := time.Parse("2006-01-02", ktoday.Date)
-			if e != nil {
-				log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
-					code, ktoday.Date, e)
-				return quotes, false, true
-			} else {
-				y1, w1 := ttm.ISOWeek()
-				y2, w2 := ttd.ISOWeek()
-				if y1 == y2 && w1 == w2 {
-					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
-					return quotes, true, false
-				}
+			y1, w1 := ttm.ISOWeek()
+			y2, w2 := ttd.ISOWeek()
+			if y1 == y2 && w1 == w2 {
+				log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+				return quotes, true, false
 			}
 		}
 	}
@@ -447,29 +438,26 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 	tdmap = make(map[model.DBTab][]byte)
 	hismap = make(map[model.DBTab][]byte)
 	// create context
-	ctxt, cancel := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
+	ctxt, _ := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
+
+	opts := []chromedp.ExecAllocatorOption{
+		chromedp.NoFirstRun,
+		chromedp.NoDefaultBrowserCheck,
+		chromedp.ExecPath(conf.Args.ChromeDP.Path),
+	}
+
+	if conf.Args.ChromeDP.Headless {
+		opts = append(opts, chromedp.Headless)
+	}
+
+	ctxt, cancel := chromedp.NewExecAllocator(ctxt, opts...)
 	defer cancel()
 
-	ropts := []runner.CommandLineOption{
-		runner.ExecPath(conf.Args.ChromeDP.Path),
-		runner.Flag("no-default-browser-check", true),
-		runner.Flag("no-first-run", true),
-	}
-	if conf.Args.ChromeDP.Headless {
-		ropts = append(ropts, runner.Flag("headless", true))
-	}
-	// get chrome runner from the pool
-	pr, err := getCdpPool().Allocate(ctxt, ropts...)
-	if err != nil {
-		log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
-		return false, true, tdmap, hismap
-	}
-	defer pr.Release()
 	chr := make(chan bool)
 	go func(chr chan bool) {
-		err = pr.Run(ctxt, buildBatchActions(code, tabs, tdmap, hismap))
-		if err != nil {
-			log.Printf("chrome runner reported error: %+v\n", err)
+		e := chromedp.Run(ctxt, buildBatchActions(code, tabs, tdmap, hismap))
+		if e != nil {
+			log.Printf("chrome runner reported error: %+v\n", e)
 			chr <- false
 		} else {
 			chr <- true
@@ -488,42 +476,44 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 }
 
 func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
-	// create context
-	ctxt, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	return 
 
-	// get chrome runner from the pool
-	pr, err := getCdpPool().Allocate(ctxt,
-		runner.Flag("headless", true),
-		runner.Flag("no-default-browser-check", true),
-		runner.Flag("no-first-run", true),
-		runner.ExecPath(conf.Args.ChromeDP.Path),
-	)
-	if err != nil {
-		log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
-		return false, true, today, all
-	}
-	defer pr.Release()
-	chr := make(chan bool)
-	go func(chr chan bool) {
-		err = pr.Run(ctxt, buildActions(code, tab, &today, &all))
-		if err != nil {
-			log.Printf("chrome runner reported error: %+v\n", err)
-			chr <- false
-		} else {
-			chr <- true
-		}
-	}(chr)
-	select {
-	case ok = <-chr:
-		return ok, !ok, today, all
-	case <-ctxt.Done():
-		if ctxt.Err() != nil {
-			log.Printf("%s timeout waiting for chromedp response", code)
-			return false, true, today, all
-		}
-		return true, false, today, all
-	}
+	// // create context
+	// ctxt, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// defer cancel()
+
+	// // get chrome runner from the pool
+	// pr, err := getCdpPool().Allocate(ctxt,
+	// 	runner.Flag("headless", true),
+	// 	runner.Flag("no-default-browser-check", true),
+	// 	runner.Flag("no-first-run", true),
+	// 	runner.ExecPath(conf.Args.ChromeDP.Path),
+	// )
+	// if err != nil {
+	// 	log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
+	// 	return false, true, today, all
+	// }
+	// defer pr.Release()
+	// chr := make(chan bool)
+	// go func(chr chan bool) {
+	// 	err = pr.Run(ctxt, buildActions(code, tab, &today, &all))
+	// 	if err != nil {
+	// 		log.Printf("chrome runner reported error: %+v\n", err)
+	// 		chr <- false
+	// 	} else {
+	// 		chr <- true
+	// 	}
+	// }(chr)
+	// select {
+	// case ok = <-chr:
+	// 	return ok, !ok, today, all
+	// case <-ctxt.Done():
+	// 	if ctxt.Err() != nil {
+	// 		log.Printf("%s timeout waiting for chromedp response", code)
+	// 		return false, true, today, all
+	// 	}
+	// 	return true, false, today, all
+	// }
 }
 
 func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.DBTab][]byte) chromedp.Tasks {
@@ -632,186 +622,190 @@ func batchCaptureData(code string, tdmap, hismap map[model.DBTab][]byte, tabs []
 		mcodes[dt2mc[t]] = t
 	}
 	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
-		th, ok := h.(*chromedp.TargetHandler)
-		if !ok {
-			log.Fatal("invalid Executor type")
-		}
-		echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
-			cdproto.EventNetworkLoadingFailed)
-		go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
-			defer func() {
-				th.Release(echan)
-				close(fin)
-			}()
-			reqIDTd := make(map[network.RequestID]model.DBTab)
-			reqIDAll := make(map[network.RequestID]model.DBTab)
-			urlmap := make(map[network.RequestID]string)
-			for {
-				select {
-				case d := <-echan:
-					switch d.(type) {
-					case *network.EventLoadingFailed:
-						lfail := d.(*network.EventLoadingFailed)
-						if _, ok := reqIDTd[lfail.RequestID]; ok {
-							fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
-							return
-						}
-						if _, ok := reqIDAll[lfail.RequestID]; ok {
-							fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
-							return
-						}
-					case *network.EventRequestWillBeSent:
-						req := d.(*network.EventRequestWillBeSent)
-						for mcode, t := range mcodes {
-							tdsuf := fmt.Sprintf("/hs_%s/%s/today.js", code, mcode)
-							allsuf := fmt.Sprintf("/hs_%s/%s/all.js", code, mcode)
-							if strings.HasSuffix(req.Request.URL, tdsuf) {
-								urlmap[req.RequestID] = req.Request.URL
-								reqIDTd[req.RequestID] = t
-							} else if strings.HasSuffix(req.Request.URL, allsuf) {
-								urlmap[req.RequestID] = req.Request.URL
-								reqIDAll[req.RequestID] = t
-							}
-						}
-					case *network.EventLoadingFinished:
-						res := d.(*network.EventLoadingFinished)
-						if t, ok := reqIDTd[res.RequestID]; ok {
-							data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
-							if e != nil {
-								fin <- errors.Wrapf(e, "failed to get response body "+
-									"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
-								return
-							}
-							tdmap[t] = data
-						}
-						if t, ok := reqIDAll[res.RequestID]; ok {
-							data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
-							if e != nil {
-								fin <- errors.Wrapf(e, "failed to get response body "+
-									"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
-								return
-							}
-							hismap[t] = data
-						}
-					}
-					if len(tdmap) == len(tabs) && len(hismap) == len(tabs) {
-						fin <- nil
-						return
-					}
-				case <-ctxt.Done():
-					return
-				}
-			}
-		}(echan, ctxt, fin)
+		// ** The API of chromedp has been revamped **
+
+		// th, ok := h.(*chromedp.TargetHandler)
+		// if !ok {
+		// 	log.Fatal("invalid Executor type")
+		// }
+		// echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
+		// 	cdproto.EventNetworkLoadingFailed)
+		// go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
+		// 	defer func() {
+		// 		th.Release(echan)
+		// 		close(fin)
+		// 	}()
+		// 	reqIDTd := make(map[network.RequestID]model.DBTab)
+		// 	reqIDAll := make(map[network.RequestID]model.DBTab)
+		// 	urlmap := make(map[network.RequestID]string)
+		// 	for {
+		// 		select {
+		// 		case d := <-echan:
+		// 			switch d.(type) {
+		// 			case *network.EventLoadingFailed:
+		// 				lfail := d.(*network.EventLoadingFailed)
+		// 				if _, ok := reqIDTd[lfail.RequestID]; ok {
+		// 					fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
+		// 					return
+		// 				}
+		// 				if _, ok := reqIDAll[lfail.RequestID]; ok {
+		// 					fin <- errors.Errorf("network data loading failed: %s, %+v", urlmap[lfail.RequestID], lfail)
+		// 					return
+		// 				}
+		// 			case *network.EventRequestWillBeSent:
+		// 				req := d.(*network.EventRequestWillBeSent)
+		// 				for mcode, t := range mcodes {
+		// 					tdsuf := fmt.Sprintf("/hs_%s/%s/today.js", code, mcode)
+		// 					allsuf := fmt.Sprintf("/hs_%s/%s/all.js", code, mcode)
+		// 					if strings.HasSuffix(req.Request.URL, tdsuf) {
+		// 						urlmap[req.RequestID] = req.Request.URL
+		// 						reqIDTd[req.RequestID] = t
+		// 					} else if strings.HasSuffix(req.Request.URL, allsuf) {
+		// 						urlmap[req.RequestID] = req.Request.URL
+		// 						reqIDAll[req.RequestID] = t
+		// 					}
+		// 				}
+		// 			case *network.EventLoadingFinished:
+		// 				res := d.(*network.EventLoadingFinished)
+		// 				if t, ok := reqIDTd[res.RequestID]; ok {
+		// 					data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
+		// 					if e != nil {
+		// 						fin <- errors.Wrapf(e, "failed to get response body "+
+		// 							"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
+		// 						return
+		// 					}
+		// 					tdmap[t] = data
+		// 				}
+		// 				if t, ok := reqIDAll[res.RequestID]; ok {
+		// 					data, e := network.GetResponseBody(res.RequestID).Do(ctxt, h)
+		// 					if e != nil {
+		// 						fin <- errors.Wrapf(e, "failed to get response body "+
+		// 							"from chrome, requestId: %+v, url: %s", res.RequestID, urlmap[res.RequestID])
+		// 						return
+		// 					}
+		// 					hismap[t] = data
+		// 				}
+		// 			}
+		// 			if len(tdmap) == len(tabs) && len(hismap) == len(tabs) {
+		// 				fin <- nil
+		// 				return
+		// 			}
+		// 		case <-ctxt.Done():
+		// 			return
+		// 		}
+		// 	}
+		// }(echan, ctxt, fin)
 		return nil
 	})
 }
 
 func captureData(today, all *[]byte, mcode string, fin chan error) chromedp.Action {
 	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
-		th, ok := h.(*chromedp.TargetHandler)
-		if !ok {
-			log.Fatal("invalid Executor type")
-		}
-		echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
-			cdproto.EventNetworkLoadingFailed)
-		go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
-			defer func() {
-				th.Release(echan)
-				close(fin)
-			}()
-			var (
-				reqIdTd, reqIdAll network.RequestID
-				urlTd, urlAll     string
-				finTd, finAll     = false, false
-			)
-			for {
-				select {
-				case d := <-echan:
-					switch d.(type) {
-					case *network.EventLoadingFailed:
-						lfail := d.(*network.EventLoadingFailed)
-						if reqIdTd == lfail.RequestID {
-							fin <- errors.Errorf("network data loading failed: %s, %+v", urlTd, lfail)
-							return
-						} else if reqIdAll == lfail.RequestID {
-							fin <- errors.Errorf("network data loading failed: %s, %+v", urlAll, lfail)
-							return
-						}
-					case *network.EventRequestWillBeSent:
-						req := d.(*network.EventRequestWillBeSent)
-						if strings.HasSuffix(req.Request.URL, mcode+"/today.js") {
-							urlTd = req.Request.URL
-							reqIdTd = req.RequestID
-						} else if strings.HasSuffix(req.Request.URL, mcode+"/all.js") {
-							urlAll = req.Request.URL
-							reqIdAll = req.RequestID
-						}
-					case *network.EventLoadingFinished:
-						res := d.(*network.EventLoadingFinished)
-						if reqIdTd == res.RequestID {
-							data, e := network.GetResponseBody(reqIdTd).Do(ctxt, h)
-							if e != nil {
-								fin <- errors.Wrapf(e, "failed to get response body "+
-									"from chrome, requestId: %+v, url: %s", reqIdTd, urlTd)
-								return
-							}
-							*today = data
-							finTd = true
-						} else if reqIdAll == res.RequestID {
-							data, e := network.GetResponseBody(reqIdAll).Do(ctxt, h)
-							if e != nil {
-								fin <- errors.Wrapf(e, "failed to get response body "+
-									"from chrome, requestId: %+v, url: %s", reqIdAll, urlAll)
-							}
-							*all = data
-							finAll = true
-						}
-					}
-					if finTd && finAll {
-						fin <- nil
-						return
-					}
-				case <-ctxt.Done():
-					return
-				}
-			}
-		}(echan, ctxt, fin)
+		// ** The API of chromedp has been revamped **
+
+		// th, ok := h.(*chromedp.TargetHandler)
+		// if !ok {
+		// 	log.Fatal("invalid Executor type")
+		// }
+		// echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
+		// 	cdproto.EventNetworkLoadingFailed)
+		// go func(echan <-chan interface{}, ctxt context.Context, fin chan error) {
+		// 	defer func() {
+		// 		th.Release(echan)
+		// 		close(fin)
+		// 	}()
+		// 	var (
+		// 		reqIdTd, reqIdAll network.RequestID
+		// 		urlTd, urlAll     string
+		// 		finTd, finAll     = false, false
+		// 	)
+		// 	for {
+		// 		select {
+		// 		case d := <-echan:
+		// 			switch d.(type) {
+		// 			case *network.EventLoadingFailed:
+		// 				lfail := d.(*network.EventLoadingFailed)
+		// 				if reqIdTd == lfail.RequestID {
+		// 					fin <- errors.Errorf("network data loading failed: %s, %+v", urlTd, lfail)
+		// 					return
+		// 				} else if reqIdAll == lfail.RequestID {
+		// 					fin <- errors.Errorf("network data loading failed: %s, %+v", urlAll, lfail)
+		// 					return
+		// 				}
+		// 			case *network.EventRequestWillBeSent:
+		// 				req := d.(*network.EventRequestWillBeSent)
+		// 				if strings.HasSuffix(req.Request.URL, mcode+"/today.js") {
+		// 					urlTd = req.Request.URL
+		// 					reqIdTd = req.RequestID
+		// 				} else if strings.HasSuffix(req.Request.URL, mcode+"/all.js") {
+		// 					urlAll = req.Request.URL
+		// 					reqIdAll = req.RequestID
+		// 				}
+		// 			case *network.EventLoadingFinished:
+		// 				res := d.(*network.EventLoadingFinished)
+		// 				if reqIdTd == res.RequestID {
+		// 					data, e := network.GetResponseBody(reqIdTd).Do(ctxt, h)
+		// 					if e != nil {
+		// 						fin <- errors.Wrapf(e, "failed to get response body "+
+		// 							"from chrome, requestId: %+v, url: %s", reqIdTd, urlTd)
+		// 						return
+		// 					}
+		// 					*today = data
+		// 					finTd = true
+		// 				} else if reqIdAll == res.RequestID {
+		// 					data, e := network.GetResponseBody(reqIdAll).Do(ctxt, h)
+		// 					if e != nil {
+		// 						fin <- errors.Wrapf(e, "failed to get response body "+
+		// 							"from chrome, requestId: %+v, url: %s", reqIdAll, urlAll)
+		// 					}
+		// 					*all = data
+		// 					finAll = true
+		// 				}
+		// 			}
+		// 			if finTd && finAll {
+		// 				fin <- nil
+		// 				return
+		// 			}
+		// 		case <-ctxt.Done():
+		// 			return
+		// 		}
+		// 	}
+		// }(echan, ctxt, fin)
 		return nil
 	})
 }
 
-func getCdpPool() *chromedp.Pool {
-	if pool != nil {
-		return pool
-	}
-	c := make(chan os.Signal, 3)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-c
-		cleanupTHS()
-		os.Exit(1)
-	}()
-	var err error
-	opt := make([]chromedp.PoolOption, 0, 4)
-	if conf.Args.ChromeDP.Debug {
-		opt = append(opt, chromedp.PoolLog(logrus.Infof, logrus.Debugf, logrus.Errorf))
-	}
-	pool, err = chromedp.NewPool(opt...)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return pool
-}
+// func getCdpPool() *chromedp.Pool {
+// 	if pool != nil {
+// 		return pool
+// 	}
+// 	c := make(chan os.Signal, 3)
+// 	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+// 	go func() {
+// 		<-c
+// 		cleanupTHS()
+// 		os.Exit(1)
+// 	}()
+// 	var err error
+// 	opt := make([]chromedp.PoolOption, 0, 4)
+// 	if conf.Args.ChromeDP.Debug {
+// 		opt = append(opt, chromedp.PoolLog(logrus.Infof, logrus.Debugf, logrus.Errorf))
+// 	}
+// 	pool, err = chromedp.NewPool(opt...)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	return pool
+// }
 
 func cleanupTHS() {
-	if pool != nil {
-		err := pool.Shutdown()
-		pool = nil
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	// if pool != nil {
+	// 	err := pool.Shutdown()
+	// 	pool = nil
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
 }
 
 func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {

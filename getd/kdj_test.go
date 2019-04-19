@@ -202,7 +202,7 @@ func (s *FloatSlice) Remove(i int) {
 
 func TestUUID(t *testing.T) {
 	for i := 0; i < 50; i++ {
-		uuid := fmt.Sprintf("%s", uuid.NewV1())
+		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1()))
 		log.Printf("%s,   len:%d", uuid, len(uuid))
 	}
 }

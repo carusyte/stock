@@ -260,7 +260,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		}
 		dt, tm := util.TimeStr()
 		x := &model.XCorlTrn{
-			UUID:  fmt.Sprintf("%s", uuid.NewV1()),
+			UUID:  fmt.Sprintf("%s", uuid.Must(uuid.NewV1())),
 			Code:  code,
 			Klid:  skl.Klid,
 			Date:  skl.Date,
