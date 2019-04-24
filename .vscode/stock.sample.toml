@@ -1,0 +1,128 @@
+# debug, info, warning, error, fatal, panic
+log_level = "info"
+
+default_retry = 10
+
+sql_file_location = "/Users/jx/ProgramData/go/bin/sql"
+
+concurrency = 16
+cpu_usage_threshold = 60
+
+deadlock_retry = 50
+db_queue_capacity = 128
+
+# run_mode includes: local, remote, distributed, auto
+run_mode = "local"
+#rpc_servers = ["115.159.237.46:45321", "118.89.250.88:45321"]
+#rpc_servers = ["118.89.250.88:45321"]
+#rpc_servers = ["115.159.237.46:45321"]
+rpc_servers = []
+
+# mem / cpu / none
+profiling = "none"
+
+[Network]
+master_proxy_addr = "127.0.0.1:1086"
+master_http_proxy = "http://localhost:1087"
+rotate_proxy_bypass_ratio = 0.05
+rotate_proxy_refresh_interval = 1
+rotate_proxy_freshness_min = 12
+
+[GCS]
+connection = 8
+use_proxy = true
+bucket = "foo_bucket"
+upload_queue = 200000
+timeout = 600
+
+[ChromeDP]
+debug = false
+#path = "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
+path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+pool_size = 20
+headless = true
+timeout = 30
+
+[Kdjv]
+sample_size_min = 5
+stats_retro_span = 1000
+
+[DataSource]
+#kline = "tencent"
+#kline = "ths"
+kline = "wht"
+kline_alt = "tencent"
+kline_validate_source = "tencent"
+drop_inconsistent = true
+kline_failure_retry = 25
+
+ths_concurrency = 50
+ths_failure_keyword = "401 Authorization Required"
+
+index = "tencent"
+#industry = "tencent.tc"
+industry = "ths"
+#ths_cookie = "v=AbR5gxDbUQD9FsXTqlWUlH0xg3kjjdh5GrFsu04VQD_CuVotdp2oB2rBPE-e"
+wht_url = ""
+skip_stocks = false
+skip_finance = false
+skip_kline_vld = true
+skip_kline_pre = false
+skip_finance_prediction = false
+skip_xdxr = false
+skip_klines = false
+skip_indices = false
+skip_basics_update = false
+skip_index_calculation = false
+skip_fs_stats = false
+skip_fin_mark = false
+
+sample_kdj_feature = false
+indicator_source = "backward"
+
+limit_price_day_lr = [-0.15, 0.15]
+feature_scaling = "standardization"
+
+
+[Scorer]
+fetch_data = false
+run_scorer = false
+highlight = ["601238","300040", "600326", "000881", "000766", "600828", "600737"]
+blue_weight = 0.7
+kdjst_weight = 0.7
+hid_blue_base_ratio = 0.25
+hid_blue_star_ratio = 0.15
+hid_blue_rear_warn_ratio = 0.33
+
+[Sampler]
+sample = false
+prior_length = 300
+grader = "RemaLr"
+#grader_time_frames = [5,10,20,30,60,120]
+grader_time_frames = [30]
+grader_score_class = 5
+# set to -1 to resample all key points
+#resample = -1
+resample = 5
+refresh_grader_stats = true
+test_set_batch_size = 3000
+test_set_groups = 10
+train_set_batch_size = 1000
+#train_set_groups = 94315
+#train_set_groups = ????
+
+vol_size = 2048
+num_exporter = 8
+exporter_max_rest_time = 500
+
+corl_start_year = "1995"
+corl_prior = 100
+corl_portion = 0.035
+corl_span = 20
+corl_time_steps = 35
+corl_time_shift = 4
+
+feature_cols = ["lr", "lr_vol"]
+
+xcorl_shift = 1
+wcc_max_shift = 3
