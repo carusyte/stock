@@ -22,11 +22,6 @@ const (
 	KDJ_PRUNE_RATE    = 0.1
 )
 
-var (
-	dbmap = global.Dbmap
-	dot   = global.Dot
-)
-
 //CalcIndics calculates various indicators for given stocks.
 func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("calculating indices...")

@@ -1231,6 +1231,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
 	if nrqs == nil || len(nrqs) < len(tgqs) {
 		//load non-reinstated quotes from db
+		//TODO refactor to use GetTrDataBtwn
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) == 0 {

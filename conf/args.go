@@ -45,7 +45,14 @@ type Arguments struct {
 	SQLFileLocation   string   `mapstructure:"sql_file_location"`
 	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
 	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
-	Network           struct {
+	Database          struct {
+		Host     string `mapstructure:"host"`
+		Port     int    `mapstructure:"port"`
+		Schema   string `mapstructure:"schema"`
+		UserName string `mapstructure:"user_name"`
+		Password string `mapstructure:"password"`
+	}
+	Network struct {
 		MasterProxyAddr            string  `mapstructure:"master_proxy_addr"`
 		MasterHttpProxy            string  `mapstructure:"master_http_proxy"`
 		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`

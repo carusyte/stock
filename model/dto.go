@@ -16,6 +16,8 @@ import (
 )
 
 type DBTab string
+
+//CYTP represents cycle type.
 type CYTP string
 
 //Rtype represents reinstatement type
@@ -508,8 +510,159 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+//TradeDataBase models the basic trading data such as OHLCV etc.
+type TradeDataBase struct {
+	Code          string
+	Date          string
+	Klid          int
+	Open          float64
+	High          float64
+	Close         float64
+	Low           float64
+	Volume        sql.NullFloat64
+	Amount        sql.NullFloat64
+	Xrate         sql.NullFloat64
+	Varate        sql.NullFloat64
+	VarateHigh    sql.NullFloat64 `db:"varate_h"`
+	VarateOpen    sql.NullFloat64 `db:"varate_o"`
+	VarateLow     sql.NullFloat64 `db:"varate_l"`
+	VarateRgl     sql.NullFloat64 `db:"varate_rgl"`
+	VarateRglHigh sql.NullFloat64 `db:"varate_rgl_h"`
+	VarateRglOpen sql.NullFloat64 `db:"varate_rgl_o"`
+	VarateRglLow  sql.NullFloat64 `db:"varate_rgl_l"`
+	Udate         sql.NullString
+	Utime         sql.NullString
+}
+
+func (d *TradeDataBase) String() string {
+	return toJSONString(d)
+}
+
+//TradeDataLogRtn models Log Returns for the trading data.
+type TradeDataLogRtn struct {
+	Code      string
+	Date      string
+	Klid      int
+	Amount    sql.NullFloat64
+	Xrate     sql.NullFloat64
+	Lr        sql.NullFloat64 //Log Returns
+	Open      sql.NullFloat64
+	High      sql.NullFloat64
+	Low       sql.NullFloat64
+	Volume    sql.NullFloat64
+	HighClose sql.NullFloat64 `db:"high_close"`
+	OpenClose sql.NullFloat64 `db:"open_close"`
+	LowClose  sql.NullFloat64 `db:"low_close"`
+	Udate     sql.NullString
+	Utime     sql.NullString
+}
+
+func (d *TradeDataLogRtn) String() string {
+	return toJSONString(d)
+}
+
+//TradeDataMovAvg models Moving Average for the trading data.
+type TradeDataMovAvg struct {
+	Code   string
+	Date   string
+	Klid   int
+	Ma5    sql.NullFloat64
+	Ma10   sql.NullFloat64
+	Ma20   sql.NullFloat64
+	Ma30   sql.NullFloat64
+	Ma60   sql.NullFloat64
+	Ma120  sql.NullFloat64
+	Ma200  sql.NullFloat64
+	Ma250  sql.NullFloat64
+	Vol5   sql.NullFloat64
+	Vol10  sql.NullFloat64
+	Vol20  sql.NullFloat64
+	Vol30  sql.NullFloat64
+	Vol60  sql.NullFloat64
+	Vol120 sql.NullFloat64
+	Vol200 sql.NullFloat64
+	Vol250 sql.NullFloat64
+	Udate  sql.NullString
+	Utime  sql.NullString
+}
+
+func (d *TradeDataMovAvg) String() string {
+	return toJSONString(d)
+}
+
+//TradeDataMovAvgLogRtn models Moving Average Log Return for the trading data.
+type TradeDataMovAvgLogRtn struct {
+	Code      string
+	Date      string
+	Klid      int
+	Ma5       sql.NullFloat64
+	Ma5Open   sql.NullFloat64
+	Ma5High   sql.NullFloat64
+	Ma5Low    sql.NullFloat64
+	Ma10      sql.NullFloat64
+	Ma10Open  sql.NullFloat64
+	Ma10High  sql.NullFloat64
+	Ma10Low   sql.NullFloat64
+	Ma20      sql.NullFloat64
+	Ma20Open  sql.NullFloat64
+	Ma20High  sql.NullFloat64
+	Ma20Low   sql.NullFloat64
+	Ma30      sql.NullFloat64
+	Ma30Open  sql.NullFloat64
+	Ma30High  sql.NullFloat64
+	Ma30Low   sql.NullFloat64
+	Ma60      sql.NullFloat64
+	Ma60Open  sql.NullFloat64
+	Ma60High  sql.NullFloat64
+	Ma60Low   sql.NullFloat64
+	Ma120     sql.NullFloat64
+	Ma120Open sql.NullFloat64
+	Ma120High sql.NullFloat64
+	Ma120Low  sql.NullFloat64
+	Ma200     sql.NullFloat64
+	Ma200Open sql.NullFloat64
+	Ma200High sql.NullFloat64
+	Ma200Low  sql.NullFloat64
+	Ma250     sql.NullFloat64
+	Ma250Open sql.NullFloat64
+	Ma250High sql.NullFloat64
+	Ma250Low  sql.NullFloat64
+	Vol5      sql.NullFloat64
+	Vol10     sql.NullFloat64
+	Vol20     sql.NullFloat64
+	Vol30     sql.NullFloat64
+	Vol60     sql.NullFloat64
+	Vol120    sql.NullFloat64
+	Vol200    sql.NullFloat64
+	Vol250    sql.NullFloat64
+	Udate     sql.NullString
+	Utime     sql.NullString
+}
+
+func (d *TradeDataMovAvgLogRtn) String() string {
+	return toJSONString(d)
+}
+
+//TradeData models various aspects of the trading data.
+type TradeData struct {
+	Code          string
+	Date          string
+	Klid          int
+	Cycle         CYTP
+	Reinstatement Rtype
+	Base          *TradeDataBase
+	LogRtn        *TradeDataLogRtn
+	MovAvg        *TradeDataMovAvg
+	MovAvgLogRtn  *TradeDataMovAvgLogRtn
+}
+
+func (d *TradeData) String() string {
+	return toJSONString(d)
+}
+
 //Quote represents various kline data
 type Quote struct {
+	//TODO restructure the type, maybe using embedded structs?
 	Type          DBTab
 	Code          string `db:",size:6"`
 	Date          string `db:",size:10"`
@@ -1251,56 +1404,56 @@ type XqSharesChg struct {
 	ErrorDesc string `json:"error_description"`
 	Data      struct {
 		Items []struct {
-			ChgDate                *float64  `json:"chg_date,omitempty"`
-			TotalShare            *float64  `json:"total_shares,omitempty"`
-			FloatShare            *float64  `json:"float_shares,omitempty"`
-			FloatAShare           *float64  `json:"float_shares_float_ashare,omitempty"`
-			FloatBShare           *float64  `json:"float_shares_float_bshare,omitempty"`
-			ChgReasonID            *string `json:"chg_reason_identifier,omitempty"`
-			RestrictedShare        *float64  `json:"restricted_share,omitempty"`
-			LimitAShare            *float64  `json:"limit_shares_limit_ashare,omitempty"`
-			NationalLimitAShare    *float64  `json:"national_held_limit_ashare,omitempty"`
-			SoapLimitAShare        *float64  `json:"soap_held_limit_ashare,omitempty"`
-			DomesticLimitAShare    *float64  `json:"domestic_held_limit_ashare,omitempty"`
-			DomesticCorpAShare     *float64  `json:"ashare_domestic_corp_held,omitempty"`
-			DomesticNpLimitAShare  *float64  `json:"domestic_np_held_limit_ashare,omitempty"`
-			ExecutiveLimitAShare   *float64  `json:"executive_held_limit_ashare,omitempty"`
-			OrgLimitAShare         *float64  `json:"org_place_limit_ashare,omitempty"`
-			FrgnLimitAShare        *float64  `json:"frgn_capital_held_limit_ashare,omitempty"`
-			FrgnCorpAShare         *float64  `json:"ashare_frgn_corp_held,omitempty"`
-			FrgnNpLimitAShare      *float64  `json:"frgn_np_held_limit_ashare,omitempty"`
-			LimitBShare            *float64  `json:"limit_shares_limit_bshare,omitempty"`
-			LimitHShare            *float64  `json:"limit_shares_limit_hshare,omitempty"`
-			FloatHShare            *float64  `json:"float_shares_float_hshare,omitempty"`
-			OthFloatShare          *float64  `json:"othr_float_shares,omitempty"`
-			OVListFloatShare       *float64  `json:"overseas_listed_float_share,omitempty"`
-			NeeqAShareFloat        *float64  `json:"neeq_ashare_float_shares,omitempty"`
-			NeeqBShareFloat        *float64  `json:"neeq_bshare_float_shares,omitempty"`
-			UnfloatShares          *float64  `json:"unfloat_shares,omitempty"`
-			DomesticSponsorShareUS *float64  `json:"domestic_sponsor_shares_us,omitempty"`
-			NationalHeld           *float64  `json:"national_held,omitempty"`
-			StateOwnedCorpHeldUS   *float64  `json:"state_owned_corp_held_us,omitempty"`
-			DomesticCorpHeldUS     *float64  `json:"domestic_corp_held_us,omitempty"`
-			NaturalPersonHeldUS    *float64  `json:"natural_personel_held_us,omitempty"`
-			RaiseCorpShareUS       *float64  `json:"raise_corp_share_us,omitempty"`
-			NormalCorpShareUS      *float64  `json:"normal_corp_share_us,omitempty"`
-			UnlistedFrgnCapitalUS  *float64  `json:"unlisted_frgn_capital_stock_us,omitempty"`
-			StaffShareUS           *float64  `json:"staff_share_us,omitempty"`
-			PreferredShareEtcUS    *float64  `json:"prefered_share_etc_us,omitempty"`
-			ConversionShareUS      *float64  `json:"conversion_share_us,omitempty"`
-			NaturalPersonShareUS   *float64  `json:"natual_person_share_us,omitempty"`
-			StrategicInvestorUS    *float64  `json:"stragetic_investor_place_us,omitempty"`
-			FundShareUS            *float64  `json:"fund_place_shares_us,omitempty"`
-			NormalCorpPlaceShareUS *float64  `json:"normal_corp_place_share_us,omitempty"`
-			OrigFloatShareUS       *float64  `json:"orig_staq_float_share_us,omitempty"`
-			OrigNetFLoatShareUS    *float64  `json:"orig_net_float_share_us,omitempty"`
-			OthUnfloatShareUS      *float64  `json:"other_unfloat_share_us,omitempty"`
-			ChgReason              *string `json:"chg_reason,omitempty"`
+			ChgDate                *float64 `json:"chg_date,omitempty"`
+			TotalShare             *float64 `json:"total_shares,omitempty"`
+			FloatShare             *float64 `json:"float_shares,omitempty"`
+			FloatAShare            *float64 `json:"float_shares_float_ashare,omitempty"`
+			FloatBShare            *float64 `json:"float_shares_float_bshare,omitempty"`
+			ChgReasonID            *string  `json:"chg_reason_identifier,omitempty"`
+			RestrictedShare        *float64 `json:"restricted_share,omitempty"`
+			LimitAShare            *float64 `json:"limit_shares_limit_ashare,omitempty"`
+			NationalLimitAShare    *float64 `json:"national_held_limit_ashare,omitempty"`
+			SoapLimitAShare        *float64 `json:"soap_held_limit_ashare,omitempty"`
+			DomesticLimitAShare    *float64 `json:"domestic_held_limit_ashare,omitempty"`
+			DomesticCorpAShare     *float64 `json:"ashare_domestic_corp_held,omitempty"`
+			DomesticNpLimitAShare  *float64 `json:"domestic_np_held_limit_ashare,omitempty"`
+			ExecutiveLimitAShare   *float64 `json:"executive_held_limit_ashare,omitempty"`
+			OrgLimitAShare         *float64 `json:"org_place_limit_ashare,omitempty"`
+			FrgnLimitAShare        *float64 `json:"frgn_capital_held_limit_ashare,omitempty"`
+			FrgnCorpAShare         *float64 `json:"ashare_frgn_corp_held,omitempty"`
+			FrgnNpLimitAShare      *float64 `json:"frgn_np_held_limit_ashare,omitempty"`
+			LimitBShare            *float64 `json:"limit_shares_limit_bshare,omitempty"`
+			LimitHShare            *float64 `json:"limit_shares_limit_hshare,omitempty"`
+			FloatHShare            *float64 `json:"float_shares_float_hshare,omitempty"`
+			OthFloatShare          *float64 `json:"othr_float_shares,omitempty"`
+			OVListFloatShare       *float64 `json:"overseas_listed_float_share,omitempty"`
+			NeeqAShareFloat        *float64 `json:"neeq_ashare_float_shares,omitempty"`
+			NeeqBShareFloat        *float64 `json:"neeq_bshare_float_shares,omitempty"`
+			UnfloatShares          *float64 `json:"unfloat_shares,omitempty"`
+			DomesticSponsorShareUS *float64 `json:"domestic_sponsor_shares_us,omitempty"`
+			NationalHeld           *float64 `json:"national_held,omitempty"`
+			StateOwnedCorpHeldUS   *float64 `json:"state_owned_corp_held_us,omitempty"`
+			DomesticCorpHeldUS     *float64 `json:"domestic_corp_held_us,omitempty"`
+			NaturalPersonHeldUS    *float64 `json:"natural_personel_held_us,omitempty"`
+			RaiseCorpShareUS       *float64 `json:"raise_corp_share_us,omitempty"`
+			NormalCorpShareUS      *float64 `json:"normal_corp_share_us,omitempty"`
+			UnlistedFrgnCapitalUS  *float64 `json:"unlisted_frgn_capital_stock_us,omitempty"`
+			StaffShareUS           *float64 `json:"staff_share_us,omitempty"`
+			PreferredShareEtcUS    *float64 `json:"prefered_share_etc_us,omitempty"`
+			ConversionShareUS      *float64 `json:"conversion_share_us,omitempty"`
+			NaturalPersonShareUS   *float64 `json:"natual_person_share_us,omitempty"`
+			StrategicInvestorUS    *float64 `json:"stragetic_investor_place_us,omitempty"`
+			FundShareUS            *float64 `json:"fund_place_shares_us,omitempty"`
+			NormalCorpPlaceShareUS *float64 `json:"normal_corp_place_share_us,omitempty"`
+			OrigFloatShareUS       *float64 `json:"orig_staq_float_share_us,omitempty"`
+			OrigNetFLoatShareUS    *float64 `json:"orig_net_float_share_us,omitempty"`
+			OthUnfloatShareUS      *float64 `json:"other_unfloat_share_us,omitempty"`
+			ChgReason              *string  `json:"chg_reason,omitempty"`
 		} `json:"items"`
 	} `json:"data"`
 }
 
-func (x *XqSharesChg) String() string{
+func (x *XqSharesChg) String() string {
 	return toJSONString(x)
 }
 

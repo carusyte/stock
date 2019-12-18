@@ -21,6 +21,13 @@ rpc_servers = []
 # mem / cpu / none
 profiling = "none"
 
+[Database]
+host = "localhost"
+port = 3306
+schema = "secu"
+user_name = "mysql"
+password = "123456"
+
 [Network]
 master_proxy_addr = "127.0.0.1:1086"
 master_http_proxy = "http://localhost:1087"

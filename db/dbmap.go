@@ -2,10 +2,12 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
-	"github.com/DejaMi/mymysql-pool"
+	pool "github.com/DejaMi/mymysql-pool"
+	"github.com/carusyte/stock/conf"
 
 	//mysql driver
 	_ "github.com/go-sql-driver/mysql"
@@ -21,7 +23,12 @@ func Get(create, truncate bool) *gorp.DbMap {
 	// connect to db using standard Go database/sql API
 	// use whatever database/sql driver you wish
 	// db, err := sql.Open("mysql", "tcp:localhost:3306*secu/mysql/123456")
-	db, err := sql.Open("mysql", "mysql:123456@/secu?readTimeout=12h&writeTimeout=12h")
+	usr := conf.Args.Database.UserName
+	pwd := conf.Args.Database.Password
+	host := conf.Args.Database.Host
+	port := conf.Args.Database.Port
+	sch := conf.Args.Database.Schema
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?readTimeout=12h&writeTimeout=12h", usr, pwd, host, port, sch))
 	if err != nil {
 		log.Panic("sql.Open failed", err)
 	}
