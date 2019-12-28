@@ -103,23 +103,28 @@ func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
 	var (
 		ldate, per string
 		sklid      = -1
+		cycle      model.CYTP
 	)
+	switch tab {
+	case model.KLINE_MONTH:
+		per = "month"
+		cycle = model.MONTH
+	case model.KLINE_WEEK:
+		per = "week"
+		cycle = model.WEEK
+	case model.KLINE_DAY:
+		per = "day"
+		cycle = model.DAY
+	default:
+		panic("Unsupported period: " + tab)
+	}
 	// check history from db
-	lq := getLatestKl(code, tab, 5+1) // plus one for varate calculation
+	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5+1) // plus one for varate calculation
 	if lq != nil {
 		sklid = lq.Klid
 		ldate = lq.Date
 	}
-	switch tab {
-	case model.KLINE_MONTH:
-		per = "month"
-	case model.KLINE_WEEK:
-		per = "week"
-	case model.KLINE_DAY:
-		per = "day"
-	default:
-		panic("Unsupported period: " + tab)
-	}
+
 	url := fmt.Sprintf(`http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?`+
 		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
 	d, e := util.HttpGetBytes(url)
@@ -153,24 +158,28 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 	var (
 		bg, per string
 		sklid   int
+		cycle   model.CYTP
 	)
+	switch tab {
+	case model.KLINE_MONTH:
+		per = "1month"
+		cycle = model.MONTH
+	case model.KLINE_WEEK:
+		per = "1week"
+		cycle = model.WEEK
+	case model.KLINE_DAY:
+		per = "1day"
+		cycle = model.DAY
+	default:
+		panic("Unsupported period: " + tab)
+	}
 	// check history from db
-	lq := getLatestKl(code, tab, 5)
+	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5)
 	if lq != nil {
 		tm, e := time.Parse("2006-01-02", lq.Date)
 		util.CheckErr(e, fmt.Sprintf("%s[%s] failed to parse date", code, tab))
 		bg = fmt.Sprintf("&begin=%d", tm.UnixNano()/int64(time.Millisecond))
 		sklid = lq.Klid
-	}
-	switch tab {
-	case model.KLINE_MONTH:
-		per = "1month"
-	case model.KLINE_WEEK:
-		per = "1week"
-	case model.KLINE_DAY:
-		per = "1day"
-	default:
-		panic("Unsupported period: " + tab)
 	}
 	url := fmt.Sprintf(`https://xueqiu.com/stock/forchartk/stocklist.json?`+
 		`symbol=%s&period=%s&type=normal%s`, code, per, bg)

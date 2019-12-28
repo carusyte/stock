@@ -19,10 +19,10 @@ var (
 )
 
 func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
-	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc bool) {
-
+	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
+	//TODO refactor me
 	RETRIES := 20
-	qmap = make(map[model.DBTab][]*model.Quote)
+	tdmap = make(map[model.DBTab]*model.TradeData)
 	lkmap = make(map[model.DBTab]int)
 	code := stk.Code
 	xdxr := latestUFRXdxr(stk.Code)
@@ -34,10 +34,10 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 			alts = append(alts, klt)
 		}
 		for rt := 0; rt < RETRIES; rt++ {
-			quotes, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)
+			trdat, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)
 			if suc {
-				logrus.Infof("%s %v fetched: %d", code, klt, len(quotes))
-				qmap[klt] = quotes
+				logrus.Infof("%s %v fetched: %d", code, klt, trdat.MaxLen())
+				tdmap[klt] = trdat
 				lkmap[klt] = lklid
 				break
 			} else {
@@ -47,7 +47,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 					continue
 				} else {
 					log.Printf("%s failed", code)
-					return qmap, lkmap, false
+					return tdmap, lkmap, false
 				}
 			}
 		}
@@ -56,7 +56,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 		altmap, altklid, suc := getKlineTc(stk, alts)
 		if suc {
 			for klt, qs := range altmap {
-				qmap[klt] = qs
+				tdmap[klt] = qs
 				lkmap[klt] = altklid[klt]
 			}
 		}
@@ -65,21 +65,27 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 }
 
 func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool) (
-	quotes []*model.Quote, lklid int, suc, retry bool) {
+	trdat *model.TradeData, lklid int, suc, retry bool) {
 	url := conf.Args.DataSource.WhtURL + "/hq/hiskline"
 	klt := ""
 	xdrType := "none"
+	rtype := model.None
+	var cycle model.CYTP
 	switch tab {
 	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B:
 		klt = "day"
+		cycle = model.DAY
 	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		klt = "week"
+		cycle = model.WEEK
 	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
 		klt = "month"
+		cycle = model.MONTH
 	}
 	switch tab {
 	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
 		xdrType = "pre"
+		rtype = model.Forward
 	}
 	mkt := strings.ToLower(stk.Market.String)
 	stkCode := mkt + stk.Code
@@ -95,7 +101,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	lklid = -1
 	ldate := ""
 	if incr {
-		ldy := getLatestKl(codeid, tab, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBase(codeid, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
@@ -133,57 +139,58 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 		return nil, lklid, false, true
 	}
 	logrus.Debugf("return from wht: %+v", string(body))
-	//extract quotes
-	quotes = parseWhtJSONMaps(codeid, ldate, data)
-	return quotes, lklid, true, false
+	//extract trade data
+	trdat = parseWhtJSONMaps(codeid, ldate, data)
+	return trdat, lklid, true, false
 }
 
-func parseWhtJSONMaps(codeid, ldate string, data []map[string]interface{}) (quotes []*model.Quote) {
-	quotes = make([]*model.Quote, 0, 16)
+func parseWhtJSONMaps(codeid, ldate string, data []map[string]interface{}) (trdat *model.TradeData) {
 	for _, m := range data {
 		date := m["date"].(string)[:8]
 		date = date[:4] + "-" + date[4:6] + "-" + date[6:]
 		if date <= ldate {
 			continue
 		}
-		q := new(model.Quote)
-		q.Code = codeid
-		q.Date = date
-		q.Open = m["open"].(float64)
-		q.Close = m["close"].(float64)
-		q.High = m["high"].(float64)
-		q.Low = m["low"].(float64)
-		q.Volume = sql.NullFloat64{Float64: m["vol"].(float64), Valid: true}
-		q.Amount = sql.NullFloat64{Float64: m["amt"].(float64), Valid: true}
-		q.Ma5 = sql.NullFloat64{Float64: m["avg5"].(float64), Valid: true}
-		q.Ma10 = sql.NullFloat64{Float64: m["avg10"].(float64), Valid: true}
-		q.Ma20 = sql.NullFloat64{Float64: m["avg20"].(float64), Valid: true}
-		q.Ma30 = sql.NullFloat64{Float64: m["avg30"].(float64), Valid: true}
-		q.Ma60 = sql.NullFloat64{Float64: m["avg60"].(float64), Valid: true}
-		q.Ma120 = sql.NullFloat64{Float64: m["avg120"].(float64), Valid: true}
-		q.Ma250 = sql.NullFloat64{Float64: m["avg250"].(float64), Valid: true}
-		q.Vol5 = sql.NullFloat64{Float64: m["vol5"].(float64), Valid: true}
-		q.Vol10 = sql.NullFloat64{Float64: m["vol10"].(float64), Valid: true}
-		q.Vol20 = sql.NullFloat64{Float64: m["vol20"].(float64), Valid: true}
-		q.Vol30 = sql.NullFloat64{Float64: m["vol30"].(float64), Valid: true}
-		q.Vol60 = sql.NullFloat64{Float64: m["vol60"].(float64), Valid: true}
-		q.Vol120 = sql.NullFloat64{Float64: m["vol120"].(float64), Valid: true}
-		q.Vol250 = sql.NullFloat64{Float64: m["vol250"].(float64), Valid: true}
+		a := new(model.TradeDataMovAvg)
+		b := new(model.TradeDataBase)
+		a.Code, b.Code = codeid, codeid
+		a.Date, b.Date = date, date
+		b.Open = m["open"].(float64)
+		b.Close = m["close"].(float64)
+		b.High = m["high"].(float64)
+		b.Low = m["low"].(float64)
+		b.Volume = sql.NullFloat64{Float64: m["vol"].(float64), Valid: true}
+		b.Amount = sql.NullFloat64{Float64: m["amt"].(float64), Valid: true}
+		a.Ma5 = sql.NullFloat64{Float64: m["avg5"].(float64), Valid: true}
+		a.Ma10 = sql.NullFloat64{Float64: m["avg10"].(float64), Valid: true}
+		a.Ma20 = sql.NullFloat64{Float64: m["avg20"].(float64), Valid: true}
+		a.Ma30 = sql.NullFloat64{Float64: m["avg30"].(float64), Valid: true}
+		a.Ma60 = sql.NullFloat64{Float64: m["avg60"].(float64), Valid: true}
+		a.Ma120 = sql.NullFloat64{Float64: m["avg120"].(float64), Valid: true}
+		a.Ma250 = sql.NullFloat64{Float64: m["avg250"].(float64), Valid: true}
+		a.Vol5 = sql.NullFloat64{Float64: m["vol5"].(float64), Valid: true}
+		a.Vol10 = sql.NullFloat64{Float64: m["vol10"].(float64), Valid: true}
+		a.Vol20 = sql.NullFloat64{Float64: m["vol20"].(float64), Valid: true}
+		a.Vol30 = sql.NullFloat64{Float64: m["vol30"].(float64), Valid: true}
+		a.Vol60 = sql.NullFloat64{Float64: m["vol60"].(float64), Valid: true}
+		a.Vol120 = sql.NullFloat64{Float64: m["vol120"].(float64), Valid: true}
+		a.Vol250 = sql.NullFloat64{Float64: m["vol250"].(float64), Valid: true}
 		if turnover, ok := m["turnover"].(float64); ok {
-			q.Xrate = sql.NullFloat64{Float64: turnover, Valid: true}
+			b.Xrate = sql.NullFloat64{Float64: turnover, Valid: true}
 		}
 		// special case treated as non-trading date and should be skipped
 		preClose := m["preClose"].(float64)
-		if preClose == q.Close &&
-			q.Close == q.Open &&
-			q.Close == q.High &&
-			q.Close == q.Low &&
-			q.Volume.Float64 == 0 &&
-			q.Amount.Float64 == 0 {
-			logrus.Debugf("%s skipping dummy data:%+v", q.Code, m)
+		if preClose == b.Close &&
+			b.Close == b.Open &&
+			b.Close == b.High &&
+			b.Close == b.Low &&
+			b.Volume.Float64 == 0 &&
+			b.Amount.Float64 == 0 {
+			logrus.Debugf("%s skipping dummy data:%+v", b.Code, m)
 			continue
 		}
-		quotes = append(quotes, q)
+		trdat.Base = append(trdat.Base, b)
+		trdat.MovAvg = append(trdat.MovAvg, a)
 	}
 	return
 }

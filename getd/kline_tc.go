@@ -15,16 +15,16 @@ import (
 )
 
 func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
-	qmap map[model.DBTab][]*model.Quote, lkmap map[model.DBTab]int, suc bool) {
-
+	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
+	//TODO refactor me
 	RETRIES := 20
-	qmap = make(map[model.DBTab][]*model.Quote)
+	tdmap = make(map[model.DBTab]*model.TradeData)
 	lkmap = make(map[model.DBTab]int)
 	code := stk.Code
 	incr := latestUFRXdxr(stk.Code) == nil
 	for _, klt := range tabs {
 		for rt := 0; rt < RETRIES; rt++ {
-			quotes, lklid, ok, retry := tryKlineTc(stk, klt, incr)
+			trdat, lklid, ok, retry := tryKlineTc(stk, klt, incr)
 			if ok {
 				logrus.Infof("%s %v fetched: %d", code, klt, len(quotes))
 				qmap[klt] = quotes
@@ -46,9 +46,11 @@ func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 	return qmap, lkmap, true
 }
 
-func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model.Quote, sklid int, ok, retry bool) {
+func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.TradeData, sklid int, ok, retry bool) {
 	var (
 		code  = stock.Code
+		cycle model.CYTP
+		rtype model.Rtype
 		body  []byte
 		e     error
 		url   string
@@ -57,9 +59,36 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 		nrec  = 800 // for non-index, reinstated data, at most 800 records at a time
 	)
 
+	qj := &model.QQJson{}
+	switch tab {
+	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
+		qj.Period = "day"
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
+		qj.Period = "week"
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
+		qj.Period = "month"
+		cycle = model.MONTH
+	default:
+		logrus.Errorf("unhandled kline type: %v", tab)
+		return
+	}
+	switch tab {
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		qj.Reinstate = "hfq"
+		rtype = model.Backward
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		qj.Reinstate = ""
+		rtype = model.None
+	default:
+		qj.Reinstate = "qfq"
+		rtype = model.Forward
+	}
+
 	sklid = -1
 	if incr {
-		ldy := getLatestKl(code, tab, 5+1) // plus one for varate calculation
+		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) // plus one for varate calculation
 		if ldy != nil {
 			sDate = ldy.Date
 			sklid = ldy.Klid
@@ -79,7 +108,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 	if tab == model.KLINE_DAY_NR || tab == model.KLINE_WEEK_NR || tab == model.KLINE_MONTH_NR || isIndex(stock.Code) {
 		nrec = 7000 + rand.Intn(2000)
 	}
-	qj := &model.QQJson{}
+
 	qj.Code = code
 	qj.Fcode = strings.ToLower(stock.Market.String) + stock.Code
 	// [1]: reinstatement-fqkline/get, no reinstatement-kline/kline
@@ -94,31 +123,11 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (quotes []*model
 	action := ""
 	for {
 		switch tab {
-		case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
-			qj.Period = "day"
-		case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
-			qj.Period = "week"
-		case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
-			qj.Period = "month"
-		default:
-			logrus.Errorf("unhandled kline type: %v", tab)
-			return
-		}
-		switch tab {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
 			action = "kline/kline"
 		default:
 			action = "fqkline/get"
 		}
-		switch tab {
-		case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
-			qj.Reinstate = "hfq"
-		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			qj.Reinstate = ""
-		default:
-			qj.Reinstate = "qfq"
-		}
-
 		url = fmt.Sprintf(urlt, action, qj.Fcode, qj.Period, "", eDate, nrec, qj.Reinstate)
 		//get kline data
 		body, e = util.HttpGetBytes(url)

@@ -482,6 +482,139 @@ CREATE TABLE `kline_d_b_ma_lr` (
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
+CREATE TABLE `kline_d_f` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL COMMENT '换手率',
+  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
+  `varate_h` double DEFAULT NULL COMMENT '最高价涨跌幅(%)',
+  `varate_o` double DEFAULT NULL COMMENT '开盘价涨跌幅(%)',
+  `varate_l` double DEFAULT NULL COMMENT '最低价涨跌幅(%)',
+  `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `varate_rgl_h` double DEFAULT NULL COMMENT '最高价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `varate_rgl_o` double DEFAULT NULL COMMENT '开盘价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `varate_rgl_l` double DEFAULT NULL COMMENT '最低价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_F_IDX1` (`code`,`date`),
+  KEY `idx_kline_d_f_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线(前复权)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_d_f_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_F_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_d_f_lr_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线Log Return (前复权)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_d_f_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_F_MA_IDX1` (`code`,`date`),
+  KEY `idx_kline_d_f_ma_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线 MA (前复权)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_d_f_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
+  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_D_F_MA_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_d_f_ma_lr_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线 MA Log Return(前复权)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
 CREATE TABLE `kline_d_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
@@ -612,139 +745,6 @@ CREATE TABLE `kline_d_n_ma_lr` (
   UNIQUE KEY `KLINE_D_N_MA_LR_IDX1` (`code`,`date`),
   KEY `KLINE_D_N_MA_LR_DATE` (`date`,`klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Daily Kline Moving Average Log Return (Non-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_d_p` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `open` double DEFAULT NULL,
-  `high` double DEFAULT NULL,
-  `close` double DEFAULT NULL,
-  `low` double DEFAULT NULL,
-  `volume` double DEFAULT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL COMMENT '换手率',
-  `varate` double DEFAULT NULL COMMENT '涨跌幅(%)',
-  `varate_h` double DEFAULT NULL COMMENT '最高价涨跌幅(%)',
-  `varate_o` double DEFAULT NULL COMMENT '开盘价涨跌幅(%)',
-  `varate_l` double DEFAULT NULL COMMENT '最低价涨跌幅(%)',
-  `varate_rgl` double DEFAULT NULL COMMENT '除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
-  `varate_rgl_h` double DEFAULT NULL COMMENT '最高价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
-  `varate_rgl_o` double DEFAULT NULL COMMENT '开盘价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
-  `varate_rgl_l` double DEFAULT NULL COMMENT '最低价除权除息之前的涨跌幅(%)，除权除息日当天为前复权涨跌幅',
-  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
-  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_P_IDX1` (`code`,`date`),
-  KEY `idx_kline_d_p_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线(前复权)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_d_p_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL,
-  `lr` double DEFAULT NULL COMMENT 'Log Return',
-  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
-  `high_close` double DEFAULT NULL,
-  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
-  `open_close` double DEFAULT NULL,
-  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
-  `low_close` double DEFAULT NULL,
-  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
-  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
-  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_P_LR_IDX1` (`code`,`date`),
-  KEY `idx_kline_d_p_lr_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线Log Return (前复权)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_d_p_ma` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
-  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_P_MA_IDX1` (`code`,`date`),
-  KEY `idx_kline_d_p_ma_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线 MA (前复权)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_d_p_ma_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma5_o` double DEFAULT NULL,
-  `ma5_h` double DEFAULT NULL,
-  `ma5_l` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma10_o` double DEFAULT NULL,
-  `ma10_h` double DEFAULT NULL,
-  `ma10_l` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma20_o` double DEFAULT NULL,
-  `ma20_h` double DEFAULT NULL,
-  `ma20_l` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma30_o` double DEFAULT NULL,
-  `ma30_h` double DEFAULT NULL,
-  `ma30_l` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma60_o` double DEFAULT NULL,
-  `ma60_h` double DEFAULT NULL,
-  `ma60_l` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma120_o` double DEFAULT NULL,
-  `ma120_h` double DEFAULT NULL,
-  `ma120_l` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma200_o` double DEFAULT NULL,
-  `ma200_h` double DEFAULT NULL,
-  `ma200_l` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `ma250_o` double DEFAULT NULL,
-  `ma250_h` double DEFAULT NULL,
-  `ma250_l` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
-  `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_D_P_MA_LR_IDX1` (`code`,`date`),
-  KEY `idx_kline_d_p_ma_lr_date` (`date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='日K线 MA Log Return(前复权)'
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
@@ -946,6 +946,139 @@ CREATE TABLE `kline_m_b_ma_lr` (
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
+CREATE TABLE `kline_m_f` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
+  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
+  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
+  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `varate_rgl_h` double DEFAULT NULL COMMENT 'Highest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `varate_rgl_o` double DEFAULT NULL COMMENT 'Opening price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `varate_rgl_l` double DEFAULT NULL COMMENT 'Lowest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_M_F_IDX1` (`code`,`date`),
+  KEY `idx_kline_m_f_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_m_f_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_M_F_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_m_f_lr_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Log Return (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_m_f_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_M_F_MA_IDX1` (`code`,`date`),
+  KEY `idx_kline_m_f_ma_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Moving Average (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_m_f_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_M_F_MA_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_m_f_ma_lr_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Moving Average Log Return (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
 CREATE TABLE `kline_m_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
@@ -1076,139 +1209,6 @@ CREATE TABLE `kline_m_n_ma_lr` (
   UNIQUE KEY `KLINE_M_N_MA_LR_IDX1` (`code`,`date`),
   KEY `KLINE_M_N_MA_LR_DATE` (`date`,`klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Moving Average Log Return (Non-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_m_p` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `open` double DEFAULT NULL,
-  `high` double DEFAULT NULL,
-  `close` double DEFAULT NULL,
-  `low` double DEFAULT NULL,
-  `volume` double DEFAULT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL,
-  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
-  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
-  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
-  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
-  `varate_rgl` double DEFAULT NULL,
-  `varate_rgl_h` double DEFAULT NULL COMMENT 'Highest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `varate_rgl_o` double DEFAULT NULL COMMENT 'Opening price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `varate_rgl_l` double DEFAULT NULL COMMENT 'Lowest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_M_P_IDX1` (`code`,`date`),
-  KEY `KLINE_M_P_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_m_p_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL,
-  `lr` double DEFAULT NULL COMMENT 'Log Return',
-  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
-  `high_close` double DEFAULT NULL,
-  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
-  `open_close` double DEFAULT NULL,
-  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
-  `low_close` double DEFAULT NULL,
-  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_M_P_LR_IDX1` (`code`,`date`),
-  KEY `KLINE_M_P_LR_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Log Return (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_m_p_ma` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_M_P_MA_IDX1` (`code`,`date`),
-  KEY `KLINE_M_P_MA_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Moving Average (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_m_p_ma_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma5_o` double DEFAULT NULL,
-  `ma5_h` double DEFAULT NULL,
-  `ma5_l` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma10_o` double DEFAULT NULL,
-  `ma10_h` double DEFAULT NULL,
-  `ma10_l` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma20_o` double DEFAULT NULL,
-  `ma20_h` double DEFAULT NULL,
-  `ma20_l` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma30_o` double DEFAULT NULL,
-  `ma30_h` double DEFAULT NULL,
-  `ma30_l` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma60_o` double DEFAULT NULL,
-  `ma60_h` double DEFAULT NULL,
-  `ma60_l` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma120_o` double DEFAULT NULL,
-  `ma120_h` double DEFAULT NULL,
-  `ma120_l` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma200_o` double DEFAULT NULL,
-  `ma200_h` double DEFAULT NULL,
-  `ma200_l` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `ma250_o` double DEFAULT NULL,
-  `ma250_h` double DEFAULT NULL,
-  `ma250_l` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_M_P_MA_LR_IDX1` (`code`,`date`),
-  KEY `KLINE_M_P_MA_LR_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Kline Moving Average Log Return (Forward-Reinstated)'
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
@@ -1410,6 +1410,139 @@ CREATE TABLE `kline_w_b_ma_lr` (
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 
+CREATE TABLE `kline_w_f` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
+  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
+  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
+  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
+  `varate_rgl` double DEFAULT NULL,
+  `varate_rgl_h` double DEFAULT NULL COMMENT 'Highest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `varate_rgl_o` double DEFAULT NULL COMMENT 'Opening price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `varate_rgl_l` double DEFAULT NULL COMMENT 'Lowest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_W_F_IDX1` (`code`,`date`),
+  KEY `IDX_KLINE_W_F_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_w_f_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `lr` double DEFAULT NULL COMMENT 'Log Return',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_W_F_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_w_f_lr_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Log Return (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_w_f_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_W_F_MA_IDX1` (`code`,`date`),
+  KEY `idx_kline_w_f_ma_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Moving Average (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
+CREATE TABLE `kline_w_f_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int(11) NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `KLINE_W_F_MA_LR_IDX1` (`code`,`date`),
+  KEY `idx_kline_w_f_ma_lr_date` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Moving Average Log Return (Forward-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 1024 */;
+
 CREATE TABLE `kline_w_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
@@ -1540,139 +1673,6 @@ CREATE TABLE `kline_w_n_ma_lr` (
   UNIQUE KEY `KLINE_W_N_MA_LR_IDX1` (`code`,`date`),
   KEY `KLINE_W_N_MA_LR_DATE` (`date`,`klid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Moving Average Log Return (Non-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_w_p` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `open` double DEFAULT NULL,
-  `high` double DEFAULT NULL,
-  `close` double DEFAULT NULL,
-  `low` double DEFAULT NULL,
-  `volume` double DEFAULT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL,
-  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
-  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
-  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
-  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
-  `varate_rgl` double DEFAULT NULL,
-  `varate_rgl_h` double DEFAULT NULL COMMENT 'Highest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `varate_rgl_o` double DEFAULT NULL COMMENT 'Opening price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `varate_rgl_l` double DEFAULT NULL COMMENT 'Lowest price variation (%) before reinstatement is effective. Taking the forward-reinstated price on the date of dividend',
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_W_P_IDX1` (`code`,`date`),
-  KEY `KLINE_W_P_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_w_p_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `amount` double DEFAULT NULL,
-  `xrate` double DEFAULT NULL,
-  `lr` double DEFAULT NULL COMMENT 'Log Return',
-  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
-  `high_close` double DEFAULT NULL,
-  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
-  `open_close` double DEFAULT NULL,
-  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
-  `low_close` double DEFAULT NULL,
-  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_W_P_LR_IDX1` (`code`,`date`),
-  KEY `KLINE_W_P_LR_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Log Return (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_w_p_ma` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_W_P_MA_IDX1` (`code`,`date`),
-  KEY `KLINE_W_P_MA_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Moving Average (Forward-Reinstated)'
-/*!50100 PARTITION BY KEY (`code`)
-PARTITIONS 1024 */;
-
-CREATE TABLE `kline_w_p_ma_lr` (
-  `code` varchar(8) NOT NULL,
-  `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
-  `ma5` double DEFAULT NULL,
-  `ma5_o` double DEFAULT NULL,
-  `ma5_h` double DEFAULT NULL,
-  `ma5_l` double DEFAULT NULL,
-  `ma10` double DEFAULT NULL,
-  `ma10_o` double DEFAULT NULL,
-  `ma10_h` double DEFAULT NULL,
-  `ma10_l` double DEFAULT NULL,
-  `ma20` double DEFAULT NULL,
-  `ma20_o` double DEFAULT NULL,
-  `ma20_h` double DEFAULT NULL,
-  `ma20_l` double DEFAULT NULL,
-  `ma30` double DEFAULT NULL,
-  `ma30_o` double DEFAULT NULL,
-  `ma30_h` double DEFAULT NULL,
-  `ma30_l` double DEFAULT NULL,
-  `ma60` double DEFAULT NULL,
-  `ma60_o` double DEFAULT NULL,
-  `ma60_h` double DEFAULT NULL,
-  `ma60_l` double DEFAULT NULL,
-  `ma120` double DEFAULT NULL,
-  `ma120_o` double DEFAULT NULL,
-  `ma120_h` double DEFAULT NULL,
-  `ma120_l` double DEFAULT NULL,
-  `ma200` double DEFAULT NULL,
-  `ma200_o` double DEFAULT NULL,
-  `ma200_h` double DEFAULT NULL,
-  `ma200_l` double DEFAULT NULL,
-  `ma250` double DEFAULT NULL,
-  `ma250_o` double DEFAULT NULL,
-  `ma250_h` double DEFAULT NULL,
-  `ma250_l` double DEFAULT NULL,
-  `vol5` double DEFAULT NULL,
-  `vol10` double DEFAULT NULL,
-  `vol20` double DEFAULT NULL,
-  `vol30` double DEFAULT NULL,
-  `vol60` double DEFAULT NULL,
-  `vol120` double DEFAULT NULL,
-  `vol200` double DEFAULT NULL,
-  `vol250` double DEFAULT NULL,
-  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
-  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
-  PRIMARY KEY (`code`,`klid`),
-  UNIQUE KEY `KLINE_W_P_MA_LR_IDX1` (`code`,`date`),
-  KEY `KLINE_W_P_MA_LR_DATE` (`date`,`klid`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Kline Moving Average Log Return (Forward-Reinstated)'
 /*!50100 PARTITION BY KEY (`code`)
 PARTITIONS 1024 */;
 

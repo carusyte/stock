@@ -189,6 +189,8 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 		code   = stk.Code
 		ktoday = model.Ktoday{}
 		kall   = model.KlAll{}
+		rtype  = model.Forward
+		cycle  model.CYTP
 		e      error
 	)
 	e = json.Unmarshal(strip(today), &ktoday)
@@ -247,9 +249,23 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
 		incr = xdxr == nil
 	}
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
+		cycle = model.MONTH
+	}
+	switch klt {
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		rtype = model.None
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		rtype = model.Backward
+	}
 	ldate := ""
 	if incr {
-		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
@@ -310,6 +326,8 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		today, all []byte
 		kall       model.KlAll
 		ktoday     model.Ktoday
+		cycle      model.CYTP
+		rtype      = model.Forward
 		e          error
 	)
 	*ldate = ""
@@ -354,13 +372,12 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 				code, ktoday.Date, e)
 			return quotes, false, true
-		} else {
-			y1, w1 := ttm.ISOWeek()
-			y2, w2 := ttd.ISOWeek()
-			if y1 == y2 && w1 == w2 {
-				log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
-				return quotes, true, false
-			}
+		}
+		y1, w1 := ttm.ISOWeek()
+		y2, w2 := ttd.ISOWeek()
+		if y1 == y2 && w1 == w2 {
+			log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+			return quotes, true, false
 		}
 	}
 
@@ -375,8 +392,23 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		return quotes, false, true
 	}
 
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
+		cycle = model.MONTH
+	}
+	switch klt {
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		rtype = model.None
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		rtype = model.Backward
+	}
+
 	if incr {
-		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -476,7 +508,7 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 }
 
 func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
-	return 
+	return
 
 	// // create context
 	// ctxt, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -810,15 +842,17 @@ func cleanupTHS() {
 
 func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (kldy []*model.Quote, suc, retry bool) {
 	var (
-		code   string = stk.Code
+		code   = stk.Code
 		klast  model.Klast
 		ktoday model.Ktoday
 		body   []byte
 		e      error
-		dkeys  []string                = make([]string, 0, 16)         // date as keys to sort
-		klmap  map[string]*model.Quote = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
-		oldest string                                                  // stores the oldest date
+		dkeys  = make([]string, 0, 16)         // date as keys to sort
+		klmap  = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
+		oldest string                          // stores the oldest date
 		mode   string
+		cycle  model.CYTP
+		rtype  = model.Forward
 	)
 	//mode:
 	// 00-no reinstatement
@@ -888,10 +922,25 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		return kldy, false, true
 	}
 
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
+		cycle = model.MONTH
+	}
+	switch klt {
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		rtype = model.None
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		rtype = model.Backward
+	}
+
 	*ldate = ""
 	*lklid = -1
 	if incr {
-		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -987,12 +1036,14 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lklid *int) (
 	quotes []*model.Quote, suc, retry bool) {
 	var (
-		code   string = stk.Code
+		code   = stk.Code
 		kall   model.KlAll
 		ktoday model.Ktoday
 		body   []byte
 		e      error
 		mode   string
+		cycle  model.CYTP
+		rtype  = model.Forward
 	)
 	*ldate = ""
 	*lklid = -1
@@ -1090,8 +1141,23 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		return quotes, false, true
 	}
 
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
+		cycle = model.MONTH
+	}
+	switch klt {
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		rtype = model.None
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		rtype = model.Backward
+	}
+
 	if incr {
-		ldy := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -1275,6 +1341,8 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		typ   string
 		dkeys = make([]string, 0, 16)         // date as keys to sort
 		klmap = make(map[string]*model.Quote) // date - quote map to eliminate duplicates
+		cycle model.CYTP
+		rtype = model.Forward
 	)
 	switch klt {
 	case model.KLINE_WEEK:
@@ -1284,10 +1352,26 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 	default:
 		log.Panicf("unhandled kltype: %s", klt)
 	}
+
+	switch klt {
+	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
+		cycle = model.DAY
+	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+		cycle = model.WEEK
+	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
+		cycle = model.MONTH
+	}
+	switch klt {
+	case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
+		rtype = model.None
+	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+		rtype = model.Backward
+	}
+
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestKl(code, klt, 5+1) //plus one offset for pre-close, varate calculation
+		latest := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid

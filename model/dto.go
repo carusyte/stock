@@ -39,15 +39,21 @@ const (
 	INDICATOR_DAY   DBTab = "indicator_d"
 	INDICATOR_WEEK  DBTab = "indicator_w"
 	INDICATOR_MONTH DBTab = "indicator_m"
-	KLINE_DAY       DBTab = "kline_d"
-	KLINE_DAY_VLD   DBTab = "kline_d_v"
-	KLINE_DAY_NR    DBTab = "kline_d_n"
-	KLINE_DAY_B     DBTab = "kline_d_b"
-	KLINE_WEEK      DBTab = "kline_w"
-	KLINE_WEEK_VLD  DBTab = "kline_w_v"
-	KLINE_WEEK_NR   DBTab = "kline_w_n"
-	KLINE_WEEK_B    DBTab = "kline_w_b"
+	//KLINE_DAY obsolete, use KLINE_DAY_F instead
+	KLINE_DAY     DBTab = "kline_d"
+	KLINE_DAY_F   DBTab = "kline_d_f"
+	KLINE_DAY_VLD DBTab = "kline_d_v"
+	KLINE_DAY_NR  DBTab = "kline_d_n"
+	KLINE_DAY_B   DBTab = "kline_d_b"
+	//KLINE_WEEK obsolete, use KLINE_WEEK_F instead
+	KLINE_WEEK     DBTab = "kline_w"
+	KLINE_WEEK_F   DBTab = "kline_w_f"
+	KLINE_WEEK_VLD DBTab = "kline_w_v"
+	KLINE_WEEK_NR  DBTab = "kline_w_n"
+	KLINE_WEEK_B   DBTab = "kline_w_b"
+	//KLINE_MONTH obsolete, use KLINE_MONTH_F instead
 	KLINE_MONTH     DBTab = "kline_m"
+	KLINE_MONTH_F   DBTab = "kline_m_f"
 	KLINE_MONTH_VLD DBTab = "kline_m_v"
 	KLINE_MONTH_NR  DBTab = "kline_m_n"
 	KLINE_MONTH_B   DBTab = "kline_m_b"
@@ -650,19 +656,40 @@ type TradeData struct {
 	Klid          int
 	Cycle         CYTP
 	Reinstatement Rtype
-	Base          *TradeDataBase
-	LogRtn        *TradeDataLogRtn
-	MovAvg        *TradeDataMovAvg
-	MovAvgLogRtn  *TradeDataMovAvgLogRtn
+	Base          []*TradeDataBase
+	LogRtn        []*TradeDataLogRtn
+	MovAvg        []*TradeDataMovAvg
+	MovAvgLogRtn  []*TradeDataMovAvgLogRtn
 }
 
 func (d *TradeData) String() string {
 	return toJSONString(d)
 }
 
+//Empty returns whether there is no valid data within this instance
+func (d *TradeData) Empty() bool {
+	return len(d.Base) == 0 && len(d.LogRtn) == 0 && len(d.MovAvg) == 0 && len(d.MovAvgLogRtn) == 0
+}
+
+//MaxLen returns the maximum length of slice in all types of trade data within the instance.
+func (d *TradeData) MaxLen() (maxlen int) {
+	if maxlen = 0; len(d.Base) > maxlen{
+		maxlen = len(d.Base)
+	}
+	if len(d.LogRtn) > maxlen{
+		maxlen = len(d.LogRtn)
+	}
+	if len(d.MovAvg) > maxlen{
+		maxlen = len(d.MovAvg)
+	}
+	if len(d.MovAvgLogRtn) > maxlen{
+		maxlen = len(d.MovAvgLogRtn)
+	}
+	return
+}
+
 //Quote represents various kline data
 type Quote struct {
-	//TODO restructure the type, maybe using embedded structs?
 	Type          DBTab
 	Code          string `db:",size:6"`
 	Date          string `db:",size:10"`
