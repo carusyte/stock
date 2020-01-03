@@ -20,7 +20,6 @@ var (
 
 func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
-	//TODO refactor me
 	RETRIES := 20
 	tdmap = make(map[model.DBTab]*model.TradeData)
 	lkmap = make(map[model.DBTab]int)
@@ -61,7 +60,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 			}
 		}
 	}
-	return qmap, lkmap, true
+	return tdmap, lkmap, true
 }
 
 func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool) (

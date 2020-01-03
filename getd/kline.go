@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +20,7 @@ import (
 
 type dbJob struct {
 	stock     *model.Stock
-	tradeData []*model.TradeData
+	tradeData *model.TradeData
 	table     model.DBTab
 	klid      int
 }
@@ -100,8 +99,8 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 			snmap *sync.Map, lock *sync.RWMutex, tab model.DBTab) {
 			defer wg.Done()
 			for j := range ch {
-				c := binsert(j.tradeData, string(j.table), j.klid)
-				if c == len(j.tradeData) {
+				c := binsertV2(j.tradeData, j.klid)
+				if c == j.tradeData.MaxLen() {
 					lock.Lock()
 					var cnt interface{}
 					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
@@ -618,7 +617,6 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
 	fail := false
-	//TODO refactor me
 	var kltnv []model.DBTab
 	var tdmap map[model.DBTab]*model.TradeData
 	var lkmap map[model.DBTab]int
@@ -652,58 +650,64 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		case conf.WHT:
 			tdmap, lkmap, suc = getKlineWht(stk, kltnv, true)
 		case conf.THS:
-			qmap, lkmap, suc = getKlineThs(stk, kltnv)
+			// qmap, lkmap, suc = getKlineThs(stk, kltnv)
+			log.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
-			qmap, lkmap, suc = getKlineTc(stk, kltnv)
+			tdmap, lkmap, suc = getKlineTc(stk, kltnv)
 		}
 	}
 	if !suc {
 		return false
 	}
-	for klt, quotes := range qmap {
-		supplementMisc(quotes, klt, lkmap[klt])
+	for klt, trdat := range tdmap {
+		supplementMiscV2(trdat, lkmap[klt])
 	}
 	// insert non-reinstated quotes first for regulated varate calculation
-	for klt, quotes := range qmap {
+	for klt, trdat := range tdmap {
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
-			CalLogReturns(quotes)
+			CalLogReturnsV2(trdat)
 			if lkmap[klt] != -1 {
 				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
+				trdat.Base = trdat.Base[1:]
+				trdat.LogRtn = trdat.LogRtn[1:]
+				trdat.MovAvg = trdat.MovAvg[1:]
+				trdat.MovAvgLogRtn = trdat.MovAvgLogRtn[1:]
 			}
-			binsert(quotes, string(klt), lkmap[klt])
+			binsertV2(trdat, lkmap[klt])
 		}
 	}
 	if !isIndex(stk.Code) {
-		e := calcVarateRgl(stk, qmap)
+		e := calcVarateRglV2(stk, tdmap)
 		if e != nil {
 			logrus.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
 			return false
 		}
 	}
-	for klt, quotes := range qmap {
+	for klt, trdat := range tdmap {
 		switch klt {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
 			//already inserted, publish empty quote to db job channel
 			chDbjob[klt] <- &dbJob{
-				stock:  stk,
-				quotes: nil,
-				table:  klt,
-				klid:   lkmap[klt],
+				stock:     stk,
+				tradeData: nil,
+				table:     klt,
+				klid:      lkmap[klt],
 			}
 		default:
-			CalLogReturns(quotes)
+			CalLogReturnsV2(trdat)
 			if lkmap[klt] != -1 {
 				//skip the first record which is for varate calculation
-				quotes = quotes[1:]
-				qmap[klt] = quotes
+				trdat.Base = trdat.Base[1:]
+				trdat.LogRtn = trdat.LogRtn[1:]
+				trdat.MovAvg = trdat.MovAvg[1:]
+				trdat.MovAvgLogRtn = trdat.MovAvgLogRtn[1:]
 			}
 			chDbjob[klt] <- &dbJob{
-				stock:  stk,
-				quotes: quotes,
-				table:  klt,
-				klid:   lkmap[klt],
+				stock:     stk,
+				tradeData: trdat,
+				table:     klt,
+				klid:      lkmap[klt],
 			}
 		}
 	}
@@ -734,124 +738,183 @@ func tryMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc, r
 	panic("implement me ")
 }
 
-func binsert(trdat *model.TradeData, table string, lklid int) (c int) {
-	if trdat.Empty() {
+func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
+	if len(quotes) == 0 {
 		return 0
-	}
-	c = 0
-	if len(trdat.Base) != 0 {
-		if c == 0 {
-			c = len(trdat.Base)
-		} else if c != 0 && len(trdat.Base) != c {
-			logrus.Panicf("mismatched basic trade data length: %d, vs. %d", len(trdat.Base), c)
-		}
-	}
-	if len(trdat.LogRtn) != 0 {
-		if c == 0 {
-			c = len(trdat.LogRtn)
-		} else if c != 0 && len(trdat.LogRtn) != c {
-			logrus.Panicf("mismatched log return trade data length: %d, vs. %d", len(trdat.LogRtn), c)
-		}
-	}
-	if len(trdat.MovAvg) != 0 {
-		if c == 0 {
-			c = len(trdat.MovAvg)
-		} else if c != 0 && len(trdat.MovAvg) != c {
-			logrus.Panicf("mismatched moving average trade data length: %d, vs. %d", len(trdat.MovAvg), c)
-		}
-	}
-	if len(trdat.MovAvgLogRtn) != 0 {
-		if c == 0 {
-			c = len(trdat.MovAvgLogRtn)
-		} else if c != 0 && len(trdat.MovAvgLogRtn) != c {
-			logrus.Panicf("mismatched moving average log return trade data length: %d, vs. %d", len(trdat.MovAvgLogRtn), c)
-		}
 	}
 	retry := conf.Args.DeadlockRetry
 	rt := 0
 	lklid++
-	code := trdat.Code
-	tables, data := resolveTradeDataTables(trdat)
+	code := quotes[0].Code
 	var e error
 	// delete stale records first
-	for table := range tables {
-		for ; rt < retry; rt++ {
-			_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
-			if e != nil {
-				fmt.Println(e)
-				if strings.Contains(e.Error(), "Deadlock") {
-					continue
-				} else {
-					log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
-				}
+	for ; rt < retry; rt++ {
+		_, e = dbmap.Exec(fmt.Sprintf("delete from %s where code = ? and klid > ?", table), code, lklid)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
-			break
 		}
-		if rt >= retry {
-			log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
-		}
+		break
 	}
-
-	var wg sync.WaitGroup
-	for table, cols := range tables {
-		wg.Add(1)
-		go insertTradeData(table, cols, data[table], &wg)
+	if rt >= retry {
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
 	}
-	wg.Wait()
+	batchSize := 200
+	for idx := 0; idx < len(quotes); idx += batchSize {
+		end := int(math.Min(float64(len(quotes)), float64(idx+batchSize)))
+		c += insertMinibatch(quotes[idx:end], table)
+	}
 	return
 }
 
-func insertTradeData(table string, cols []string, rows interface{}, wg *sync.WaitGroup) {
-	defer wg.Done()
-	t := reflect.TypeOf(rows)
-	v := reflect.ValueOf(rows)
-	len := t.Len()
-	batchSize := 1000
-	c := 0
-	for idx := 0; idx < len; idx += batchSize {
-		end := int(math.Min(float64(len), float64(idx+batchSize)))
-		c += insertMinibatch(table, cols, v.Slice(idx, end))
-	}
-	if len != c {
-		logrus.Panicf("unmatched given records and actual inserted records: %d vs. %d", len, c)
-	}
-}
-
-func insertMinibatch(table string, cols []string, v reflect.Value) (c int) {
-	//v is a slice of trade data of some kind
-	rowSize := v.Len()
-	elem := v.Slice(0, 1)
-	numFields := len(cols)
+func insertMinibatch(quotes []*model.Quote, table string) (c int) {
+	numFields := 86
 	retry := conf.Args.DeadlockRetry
 	rt := 0
-	code := elem.FieldByName("Code").String()
+	code := quotes[0].Code
 	holders := make([]string, numFields)
 	for i := range holders {
 		holders[i] = "?"
 	}
 	holderString := fmt.Sprintf("(%s)", strings.Join(holders, ","))
 	var e error
-	valueStrings := make([]string, 0, rowSize)
-	updateStr := make([]string, 0, numFields)
-	valueArgs := make([]interface{}, 0, rowSize*numFields)
-
-	for _, col := range cols {
-		if !strings.EqualFold("code", col) && !strings.EqualFold("klid", col) {
-			updateStr = append(updateStr, fmt.Sprintf("%[1]s=values(%[1]s)", col))
-		}
-	}
-
-	for i := 0; i < rowSize; i++ {
-		elem := v.Index(i)
+	valueStrings := make([]string, 0, len(quotes))
+	valueArgs := make([]interface{}, 0, len(quotes)*numFields)
+	for _, q := range quotes {
 		valueStrings = append(valueStrings, holderString)
-		for j := 0; j < numFields; j++ {
-			valueArgs = append(valueArgs, elem.Field(j).Interface())
-		}
+		valueArgs = append(valueArgs, q.Code)
+		valueArgs = append(valueArgs, q.Date)
+		valueArgs = append(valueArgs, q.Klid)
+		valueArgs = append(valueArgs, q.Open)
+		valueArgs = append(valueArgs, q.High)
+		valueArgs = append(valueArgs, q.Close)
+		valueArgs = append(valueArgs, q.Low)
+		valueArgs = append(valueArgs, q.Volume)
+		valueArgs = append(valueArgs, q.Amount)
+		valueArgs = append(valueArgs, q.LrAmt)
+		valueArgs = append(valueArgs, q.Xrate)
+		valueArgs = append(valueArgs, q.LrXr)
+		valueArgs = append(valueArgs, q.Varate)
+		valueArgs = append(valueArgs, q.VarateHigh)
+		valueArgs = append(valueArgs, q.VarateOpen)
+		valueArgs = append(valueArgs, q.VarateLow)
+		valueArgs = append(valueArgs, q.VarateRgl)
+		valueArgs = append(valueArgs, q.VarateRglHigh)
+		valueArgs = append(valueArgs, q.VarateRglOpen)
+		valueArgs = append(valueArgs, q.VarateRglLow)
+		valueArgs = append(valueArgs, q.Lr)
+		valueArgs = append(valueArgs, q.LrHigh)
+		valueArgs = append(valueArgs, q.LrHighClose)
+		valueArgs = append(valueArgs, q.LrOpen)
+		valueArgs = append(valueArgs, q.LrOpenClose)
+		valueArgs = append(valueArgs, q.LrLow)
+		valueArgs = append(valueArgs, q.LrLowClose)
+		valueArgs = append(valueArgs, q.LrVol)
+		valueArgs = append(valueArgs, q.Ma5)
+		valueArgs = append(valueArgs, q.Ma10)
+		valueArgs = append(valueArgs, q.Ma20)
+		valueArgs = append(valueArgs, q.Ma30)
+		valueArgs = append(valueArgs, q.Ma60)
+		valueArgs = append(valueArgs, q.Ma120)
+		valueArgs = append(valueArgs, q.Ma200)
+		valueArgs = append(valueArgs, q.Ma250)
+		valueArgs = append(valueArgs, q.LrMa5)
+		valueArgs = append(valueArgs, q.LrMa5Open)
+		valueArgs = append(valueArgs, q.LrMa5High)
+		valueArgs = append(valueArgs, q.LrMa5Low)
+		valueArgs = append(valueArgs, q.LrMa10)
+		valueArgs = append(valueArgs, q.LrMa10Open)
+		valueArgs = append(valueArgs, q.LrMa10High)
+		valueArgs = append(valueArgs, q.LrMa10Low)
+		valueArgs = append(valueArgs, q.LrMa20)
+		valueArgs = append(valueArgs, q.LrMa20Open)
+		valueArgs = append(valueArgs, q.LrMa20High)
+		valueArgs = append(valueArgs, q.LrMa20Low)
+		valueArgs = append(valueArgs, q.LrMa30)
+		valueArgs = append(valueArgs, q.LrMa30Open)
+		valueArgs = append(valueArgs, q.LrMa30High)
+		valueArgs = append(valueArgs, q.LrMa30Low)
+		valueArgs = append(valueArgs, q.LrMa60)
+		valueArgs = append(valueArgs, q.LrMa60Open)
+		valueArgs = append(valueArgs, q.LrMa60High)
+		valueArgs = append(valueArgs, q.LrMa60Low)
+		valueArgs = append(valueArgs, q.LrMa120)
+		valueArgs = append(valueArgs, q.LrMa120Open)
+		valueArgs = append(valueArgs, q.LrMa120High)
+		valueArgs = append(valueArgs, q.LrMa120Low)
+		valueArgs = append(valueArgs, q.LrMa200)
+		valueArgs = append(valueArgs, q.LrMa200Open)
+		valueArgs = append(valueArgs, q.LrMa200High)
+		valueArgs = append(valueArgs, q.LrMa200Low)
+		valueArgs = append(valueArgs, q.LrMa250)
+		valueArgs = append(valueArgs, q.LrMa250Open)
+		valueArgs = append(valueArgs, q.LrMa250High)
+		valueArgs = append(valueArgs, q.LrMa250Low)
+		valueArgs = append(valueArgs, q.Vol5)
+		valueArgs = append(valueArgs, q.Vol10)
+		valueArgs = append(valueArgs, q.Vol20)
+		valueArgs = append(valueArgs, q.Vol30)
+		valueArgs = append(valueArgs, q.Vol60)
+		valueArgs = append(valueArgs, q.Vol120)
+		valueArgs = append(valueArgs, q.Vol200)
+		valueArgs = append(valueArgs, q.Vol250)
+		valueArgs = append(valueArgs, q.LrVol5)
+		valueArgs = append(valueArgs, q.LrVol10)
+		valueArgs = append(valueArgs, q.LrVol20)
+		valueArgs = append(valueArgs, q.LrVol30)
+		valueArgs = append(valueArgs, q.LrVol60)
+		valueArgs = append(valueArgs, q.LrVol120)
+		valueArgs = append(valueArgs, q.LrVol200)
+		valueArgs = append(valueArgs, q.LrVol250)
+		valueArgs = append(valueArgs, q.Udate)
+		valueArgs = append(valueArgs, q.Utime)
 	}
-
 	rt = 0
-	stmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s on duplicate key update %s",
-		table, strings.Join(cols, ","), strings.Join(valueStrings, ","), strings.Join(updateStr, ","))
+	stmt := fmt.Sprintf("INSERT INTO %s (code,date,klid,open,high,close,low,"+
+		"volume,amount,lr_amt,xrate,lr_xr,varate,varate_h,varate_o,varate_l,varate_rgl,varate_rgl_h,varate_rgl_o,"+
+		"varate_rgl_l,lr,lr_h,lr_h_c,lr_o,lr_o_c,lr_l,lr_l_c,lr_vol,ma5,ma10,ma20,ma30,ma60,ma120,ma200,ma250,"+
+		"lr_ma5,lr_ma5_o,lr_ma5_h,lr_ma5_l,"+
+		"lr_ma10,lr_ma10_o,lr_ma10_h,lr_ma10_l,"+
+		"lr_ma20,lr_ma20_o,lr_ma20_h,lr_ma20_l,"+
+		"lr_ma30,lr_ma30_o,lr_ma30_h,lr_ma30_l,"+
+		"lr_ma60,lr_ma60_o,lr_ma60_h,lr_ma60_l,"+
+		"lr_ma120,lr_ma120_o,lr_ma120_h,lr_ma120_l,"+
+		"lr_ma200,lr_ma200_o,lr_ma200_h,lr_ma200_l,"+
+		"lr_ma250,lr_ma250_o,lr_ma250_h,lr_ma250_l,"+
+		"vol5,vol10,vol20,vol30,vol60,vol120,vol200,vol250,"+
+		"lr_vol5,lr_vol10,lr_vol20,lr_vol30,lr_vol60,lr_vol120,lr_vol200,lr_vol250,"+
+		"udate,utime) "+
+		"VALUES %s on duplicate key update date=values(date),"+
+		"open=values(open),high=values(high),close=values(close),low=values(low),"+
+		"volume=values(volume),amount=values(amount),lr_amt=values(lr_amt),xrate=values(xrate),"+
+		"lr_xr=values(lr_xr),varate=values(varate),"+
+		"varate_h=values(varate_h),varate_o=values(varate_o),varate_l=values(varate_l),"+
+		"varate_rgl=values(varate_rgl),varate_rgl_h=values(varate_rgl_h),"+
+		"varate_rgl_o=values(varate_rgl_o),varate_rgl_l=values(varate_rgl_l),"+
+		"lr=values(lr),lr_h=values(lr_h),lr_h_c=values(lr_h_c),lr_o=values(lr_o),"+
+		"lr_o_c=values(lr_o_c),lr_l=values(lr_l),lr_l_c=values(lr_l_c),"+
+		"lr_vol=values(lr_vol),ma5=values(ma5),ma10=values(ma10),ma20=values(ma20),"+
+		"ma30=values(ma30),ma60=values(ma60),ma120=values(ma120),ma200=values(ma200),"+
+		"ma250=values(ma250),"+
+		"lr_ma5=values(lr_ma5),lr_ma5_o=values(lr_ma5_o),lr_ma5_h=values(lr_ma5_h),lr_ma5_l=values(lr_ma5_l),"+
+		"lr_ma10=values(lr_ma10),lr_ma10_o=values(lr_ma10_o),lr_ma10_h=values(lr_ma10_h),lr_ma10_l=values(lr_ma10_l),"+
+		"lr_ma20=values(lr_ma20),lr_ma20_o=values(lr_ma20_o),lr_ma20_h=values(lr_ma20_h),lr_ma20_l=values(lr_ma20_l),"+
+		"lr_ma30=values(lr_ma30),lr_ma30_o=values(lr_ma30_o),lr_ma30_h=values(lr_ma30_h),lr_ma30_l=values(lr_ma30_l),"+
+		"lr_ma60=values(lr_ma60),lr_ma60_o=values(lr_ma60_o),lr_ma60_h=values(lr_ma60_h),lr_ma60_l=values(lr_ma60_l),"+
+		"lr_ma120=values(lr_ma120),lr_ma120_o=values(lr_ma120_o),lr_ma120_h=values(lr_ma120_h),lr_ma120_l=values(lr_ma120_l),"+
+		"lr_ma200=values(lr_ma200),lr_ma200_o=values(lr_ma200_o),lr_ma200_h=values(lr_ma200_h),lr_ma200_l=values(lr_ma200_l),"+
+		"lr_ma250=values(lr_ma250),lr_ma250_o=values(lr_ma250_o),lr_ma250_h=values(lr_ma250_h),lr_ma250_l=values(lr_ma250_l),"+
+		"vol5=values(vol5),vol10=values(vol10),vol20=values(vol20),"+
+		"vol30=values(vol30),vol60=values(vol60),vol120=values(vol120),vol200=values(vol200),"+
+		"vol250=values(vol250),lr_vol5=values(lr_vol5),lr_vol10=values(lr_vol10),lr_vol20=values(lr_vol20),"+
+		"lr_vol30=values(lr_vol30),lr_vol60=values(lr_vol60),lr_vol120=values(lr_vol120),"+
+		"lr_vol200=values(lr_vol200),lr_vol250=values(lr_vol250),"+
+		"udate=values(udate),utime=values(utime)",
+		table, strings.Join(valueStrings, ","))
 	for ; rt < retry; rt++ {
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
@@ -862,7 +925,7 @@ func insertMinibatch(table string, cols []string, v reflect.Value) (c int) {
 				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
-		return rowSize
+		return len(quotes)
 	}
 	log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	return

@@ -652,8 +652,6 @@ func (d *TradeDataMovAvgLogRtn) String() string {
 //TradeData models various aspects of the trading data.
 type TradeData struct {
 	Code          string
-	Date          string
-	Klid          int
 	Cycle         CYTP
 	Reinstatement Rtype
 	Base          []*TradeDataBase
@@ -662,30 +660,135 @@ type TradeData struct {
 	MovAvgLogRtn  []*TradeDataMovAvgLogRtn
 }
 
-func (d *TradeData) String() string {
-	return toJSONString(d)
+func (td *TradeData) String() string {
+	return toJSONString(td)
 }
 
 //Empty returns whether there is no valid data within this instance
-func (d *TradeData) Empty() bool {
-	return len(d.Base) == 0 && len(d.LogRtn) == 0 && len(d.MovAvg) == 0 && len(d.MovAvgLogRtn) == 0
+func (td *TradeData) Empty() bool {
+	return len(td.Base) == 0 && len(td.LogRtn) == 0 && len(td.MovAvg) == 0 && len(td.MovAvgLogRtn) == 0
 }
 
 //MaxLen returns the maximum length of slice in all types of trade data within the instance.
-func (d *TradeData) MaxLen() (maxlen int) {
-	if maxlen = 0; len(d.Base) > maxlen{
-		maxlen = len(d.Base)
+func (td *TradeData) MaxLen() (maxlen int) {
+	if maxlen = 0; len(td.Base) > maxlen {
+		maxlen = len(td.Base)
 	}
-	if len(d.LogRtn) > maxlen{
-		maxlen = len(d.LogRtn)
+	if len(td.LogRtn) > maxlen {
+		maxlen = len(td.LogRtn)
 	}
-	if len(d.MovAvg) > maxlen{
-		maxlen = len(d.MovAvg)
+	if len(td.MovAvg) > maxlen {
+		maxlen = len(td.MovAvg)
 	}
-	if len(d.MovAvgLogRtn) > maxlen{
-		maxlen = len(d.MovAvgLogRtn)
+	if len(td.MovAvgLogRtn) > maxlen {
+		maxlen = len(td.MovAvgLogRtn)
 	}
 	return
+}
+
+//Remove the elements in the specified positions.
+func (td *TradeData) Remove(positions ...int) {
+	if len(positions) == 0 {
+		return
+	}
+	maxLen := td.MaxLen()
+	set := make(map[int]bool)
+	for i := range positions {
+		if i < maxLen {
+			set[i] = true
+		}
+	}
+	if len(td.Base) > 0 {
+		var newArray []*TradeDataBase
+		for i, d := range td.Base {
+			if _, ok := set[i]; !ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.Base = newArray
+	}
+	if len(td.LogRtn) > 0 {
+		var newArray []*TradeDataLogRtn
+		for i, d := range td.LogRtn {
+			if _, ok := set[i]; !ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.LogRtn = newArray
+	}
+	if len(td.MovAvgLogRtn) > 0 {
+		var newArray []*TradeDataMovAvgLogRtn
+		for i, d := range td.MovAvgLogRtn {
+			if _, ok := set[i]; !ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.MovAvgLogRtn = newArray
+	}
+	if len(td.MovAvg) > 0 {
+		var newArray []*TradeDataMovAvg
+		for i, d := range td.MovAvg {
+			if _, ok := set[i]; !ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.MovAvg = newArray
+	}
+}
+
+//Keep the specified elements in the trade data arrays.
+//***Warning***: Calling Keep with empty array will remove all elements.
+func (td *TradeData) Keep(positions ...int) {
+	if len(positions) == 0 {
+		td.Base = make([]*TradeDataBase, 0, 16)
+		td.MovAvg = make([]*TradeDataMovAvg, 0, 16)
+		td.MovAvgLogRtn = make([]*TradeDataMovAvgLogRtn, 0, 16)
+		td.LogRtn = make([]*TradeDataLogRtn, 0, 16)
+		return
+	}
+	maxLen := td.MaxLen()
+	set := make(map[int]bool)
+	for i := range positions {
+		if 0 <= i && i < maxLen {
+			set[i] = true
+		}
+	}
+	if len(td.Base) > 0 {
+		var newArray []*TradeDataBase
+		for i, d := range td.Base {
+			if _, ok := set[i]; ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.Base = newArray
+	}
+	if len(td.LogRtn) > 0 {
+		var newArray []*TradeDataLogRtn
+		for i, d := range td.LogRtn {
+			if _, ok := set[i]; ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.LogRtn = newArray
+	}
+	if len(td.MovAvgLogRtn) > 0 {
+		var newArray []*TradeDataMovAvgLogRtn
+		for i, d := range td.MovAvgLogRtn {
+			if _, ok := set[i]; ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.MovAvgLogRtn = newArray
+	}
+	if len(td.MovAvg) > 0 {
+		var newArray []*TradeDataMovAvg
+		for i, d := range td.MovAvg {
+			if _, ok := set[i]; ok {
+				newArray = append(newArray, d)
+			}
+		}
+		td.MovAvg = newArray
+	}
 }
 
 //Quote represents various kline data
@@ -1192,12 +1295,13 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 	}
 }
 
-// Set Code and Period before unmarshalling json data
+//QQJson represents data structure fetched from QQ fincance. Must set Code and Period before unmarshalling json data
 type QQJson struct {
 	Fcode, Code, Period, Reinstate string
-	Quotes                         []*Quote
+	TradeData                      *TradeData
 }
 
+//UnmarshalJSON unmarshals JSON payload to the struct
 func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	var (
 		f      interface{}
@@ -1235,10 +1339,10 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 		}
 	}
 	ps := pdat.([]interface{})
-	qj.Quotes = make([]*Quote, len(ps))
+	qj.TradeData = new(TradeData)
 	for i, pd := range ps {
 		pa := pd.([]interface{})
-		q := new(Quote)
+		q := new(TradeDataBase)
 		q.Code = qj.Code
 		q.Date = pa[0].(string)
 		q.Open, e = strconv.ParseFloat(pa[1].(string), 64)
@@ -1263,7 +1367,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 			return errors.Wrapf(e, "failed to parse Volume value at index %d", i)
 		}
 		q.Volume.Float64 *= 100.
-		qj.Quotes[i] = q
+		qj.TradeData.Base = append(qj.TradeData.Base, q)
 	}
 	return nil
 }

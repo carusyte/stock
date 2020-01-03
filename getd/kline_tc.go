@@ -16,7 +16,6 @@ import (
 
 func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
-	//TODO refactor me
 	RETRIES := 20
 	tdmap = make(map[model.DBTab]*model.TradeData)
 	lkmap = make(map[model.DBTab]int)
@@ -26,8 +25,8 @@ func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 		for rt := 0; rt < RETRIES; rt++ {
 			trdat, lklid, ok, retry := tryKlineTc(stk, klt, incr)
 			if ok {
-				logrus.Infof("%s %v fetched: %d", code, klt, len(quotes))
-				qmap[klt] = quotes
+				logrus.Infof("%s %v fetched: %d", code, klt, len(trdat.Base))
+				tdmap[klt] = trdat
 				lkmap[klt] = lklid
 				break
 			} else {
@@ -37,13 +36,13 @@ func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 					continue
 				} else {
 					log.Printf("%s failed", code)
-					return qmap, lkmap, false
+					return tdmap, lkmap, false
 				}
 			}
 		}
 	}
 
-	return qmap, lkmap, true
+	return tdmap, lkmap, true
 }
 
 func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.TradeData, sklid int, ok, retry bool) {
@@ -58,16 +57,16 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		eDate = ""
 		nrec  = 800 // for non-index, reinstated data, at most 800 records at a time
 	)
-
+	trdat = new(model.TradeData)
 	qj := &model.QQJson{}
 	switch tab {
-	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
+	case model.KLINE_DAY, model.KLINE_DAY_F, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
 		qj.Period = "day"
 		cycle = model.DAY
-	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
+	case model.KLINE_WEEK, model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
 		qj.Period = "week"
 		cycle = model.WEEK
-	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
+	case model.KLINE_MONTH, model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
 		qj.Period = "month"
 		cycle = model.MONTH
 	default:
@@ -121,6 +120,11 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 	urlt := `http://web.ifzq.gtimg.cn/appstock/app/%[1]s?param=%[2]s,%[3]s,%[4]s,%[5]s,%[6]d,%[7]s`
 	eDate = time.Now().Format("2006-01-02")
 	action := ""
+
+	trdat.Code = code
+	trdat.Cycle = cycle
+	trdat.Reinstatement = rtype
+
 	for {
 		switch tab {
 		case model.KLINE_DAY_NR, model.KLINE_WEEK_NR, model.KLINE_MONTH_NR:
@@ -133,32 +137,32 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		body, e = util.HttpGetBytes(url)
 		if e != nil {
 			log.Printf("%s error visiting %s: \n%+v", code, url, e)
-			return quotes, sklid, false, true
+			return trdat, sklid, false, true
 		}
 		e = json.Unmarshal(body, qj)
 		if e != nil {
 			log.Printf("failed to parse json from %s\n%+v", url, e)
-			return quotes, sklid, false, true
+			return trdat, sklid, false, true
 		}
 		fin := false
-		if len(qj.Quotes) > 0 {
+		if len(qj.TradeData.Base) > 0 {
 			//extract data backward till sDate (excluded)
-			for i := len(qj.Quotes) - 1; i >= 0; i-- {
-				q := qj.Quotes[i]
+			for i := len(qj.TradeData.Base) - 1; i >= 0; i-- {
+				q := qj.TradeData.Base[i]
 				if q.Date == sDate {
 					fin = true
 					break
 				}
-				quotes = append(quotes, q)
+				trdat.Base = append(trdat.Base, q)
 			}
 		} else {
 			break
 		}
-		if fin || len(qj.Quotes) < nrec {
+		if fin || len(trdat.Base) < nrec {
 			break
 		}
 		// need to fetch more
-		first := qj.Quotes[0]
+		first := qj.TradeData.Base[0]
 		iDate, e := time.Parse("2006-01-02", first.Date)
 		if e != nil {
 			log.Printf("invalid date format in %+v", first)
@@ -166,8 +170,8 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		eDate = iDate.AddDate(0, 0, -1).Format("2006-01-02")
 	}
 	//reverse, into ascending order
-	for i, j := 0, len(quotes)-1; i < j; i, j = i+1, j-1 {
-		quotes[i], quotes[j] = quotes[j], quotes[i]
+	for i, j := 0, len(trdat.Base)-1; i < j; i, j = i+1, j-1 {
+		trdat.Base[i], trdat.Base[j] = trdat.Base[j], trdat.Base[i]
 	}
-	return quotes, sklid, true, false
+	return trdat, sklid, true, false
 }

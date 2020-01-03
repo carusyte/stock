@@ -17,7 +17,7 @@ func TestGetTrDataBtwn(t *testing.T) {
 	}
 	dt1, dt2 := "[2019-11-30", "2019-12-10]"
 	desc := true
-	r := GetTrDataBtwn(code, qry, dt1, dt2, desc)
+	r := GetTrDataBtwn(code, qry, Date, dt1, dt2, desc)
 	fmt.Println(r)
 	t.Fail()
 }
