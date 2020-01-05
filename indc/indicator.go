@@ -62,7 +62,7 @@ func EMA(x, pre, n float64) float64 {
 }
 
 //LLV returns lowest value of given field
-func LLV(src []*model.Quote, field string) float64 {
+func LLV(src []*model.TradeDataBase, field string) float64 {
 	var t reflect.Value
 	for i, s := range src {
 		r := reflect.ValueOf(s)
@@ -93,7 +93,7 @@ func LLV(src []*model.Quote, field string) float64 {
 }
 
 //HHV returns highest value of given field
-func HHV(src []*model.Quote, field string) float64 {
+func HHV(src []*model.TradeDataBase, field string) float64 {
 	var t reflect.Value
 	for i, s := range src {
 		r := reflect.ValueOf(s)

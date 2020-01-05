@@ -7,7 +7,7 @@ import (
 )
 
 //KDJ calculates KDJ indicator for the given parameters
-func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
+func KDJ(src []*model.TradeDataBase, n, m1, m2 int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	rsv := make([]float64, len(src))
 	for i, s := range src {
@@ -35,7 +35,7 @@ func KDJ(src []*model.Quote, n, m1, m2 int) []*model.Indicator {
 }
 
 //DeftKDJ calculates KDJ indicator using default parameters (9,3,3)
-func DeftKDJ(src []*model.Quote) []*model.Indicator {
+func DeftKDJ(src []*model.TradeDataBase) []*model.Indicator {
 	return KDJ(src, 9, 3, 3)
 }
 

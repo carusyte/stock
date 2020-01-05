@@ -6,7 +6,7 @@ import (
 )
 
 //BOLL calculates Bollinger Bandwidth indicator for the given parameters
-func BOLL(src []*model.Quote, n, p int) []*model.Indicator {
+func BOLL(src []*model.TradeDataBase, n, p int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	close := make([]float64, len(src))
 	for i, s := range src {
@@ -43,6 +43,6 @@ func BOLL(src []*model.Quote, n, p int) []*model.Indicator {
 }
 
 //DeftBOLL calculates BOLL indicator using default parameters (20,2)
-func DeftBOLL(src []*model.Quote) []*model.Indicator {
+func DeftBOLL(src []*model.TradeDataBase) []*model.Indicator {
 	return BOLL(src, 20, 2)
 }

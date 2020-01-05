@@ -554,18 +554,19 @@ FROM
         flag = ?) a USING (code)
 
 -- name: COLLECT_STANDARDIZATION_STATS
-INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
+INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime) 
 SELECT 
-    'standardization', null, field, @col_avg := AVG(t1.col) col_avg, @col_std := STD(t1.col) col_std, DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
+    'standardization', '%[2]s', field, @col_avg := AVG(t1.col) col_avg, @col_std := STD(t1.col) col_std, 
+    DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
 FROM
     (SELECT 
         '%[1]s' field, %[1]s col
     FROM
-        kline_d_b 
+        %[3]s 
         UNION ALL SELECT 
             '%[1]s' field, %[1]s col
         FROM
-            kline_d
+            %[4]s
         WHERE
             code IN ('sz399001' , 'sh000001')) t1
 ON DUPLICATE KEY UPDATE mean=@col_avg, std=@col_std, udate=DATE_FORMAT(now(), '%%Y-%%m-%%d'), utime=DATE_FORMAT(now(), '%%H:%%i:%%S')

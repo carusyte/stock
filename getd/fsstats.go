@@ -12,26 +12,18 @@ func CollectFsStats() {
 	// 	log.Printf("failed to clean up fs_stats %+v", e)
 	// 	return
 	// }
-	// klines
+
+	// basic log returns
 	sqlt, e := dot.Raw("COLLECT_STANDARDIZATION_STATS")
 	if e != nil {
 		log.Printf("failed to get fs_stats sql %+v", e)
 		return
 	}
 	fields := []string{
-		"lr", "lr_l", "lr_l_c", "lr_h", "lr_h_c", "lr_o", "lr_o_c", "lr_vol",
-		"lr_ma5", "lr_ma5_l", "lr_ma5_h", "lr_ma5_o",
-		"lr_ma10", "lr_ma10_l", "lr_ma10_h", "lr_ma10_o",
-		"lr_ma20", "lr_ma20_l", "lr_ma20_h", "lr_ma20_o",
-		"lr_ma30", "lr_ma30_l", "lr_ma30_h", "lr_ma30_o",
-		"lr_ma60", "lr_ma60_l", "lr_ma60_h", "lr_ma60_o",
-		"lr_ma120", "lr_ma120_l", "lr_ma120_h", "lr_ma120_o",
-		"lr_ma200", "lr_ma200_l", "lr_ma200_h", "lr_ma200_o",
-		"lr_ma250", "lr_ma250_l", "lr_ma250_h", "lr_ma250_o",
-		"lr_vol5", "lr_vol10", "lr_vol20", "lr_vol30", "lr_vol60", "lr_vol120", "lr_vol200", "lr_vol250",
+		"close", "low", "low_close", "high", "high_close", "open", "open_close", "volume",
 	}
 	for _, f := range fields {
-		usql := fmt.Sprintf(sqlt, f)
+		usql := fmt.Sprintf(sqlt, f, "lr", "kline_d_b_lr", "kline_d_f_lr")
 		_, e = dbmap.Exec(usql)
 		if e != nil {
 			log.Printf("failed to update fs_stats for field %s: %+v", f, e)
@@ -39,6 +31,28 @@ func CollectFsStats() {
 		}
 		log.Printf("fs_stats for field %s updated.", f)
 	}
+	// moving average log returns
+	fields = []string{
+		"ma5", "ma5_l", "ma5_h", "ma5_o",
+		"ma10", "ma10_l", "ma10_h", "ma10_o",
+		"ma20", "ma20_l", "ma20_h", "ma20_o",
+		"ma30", "ma30_l", "ma30_h", "ma30_o",
+		"ma60", "ma60_l", "ma60_h", "ma60_o",
+		"ma120", "ma120_l", "ma120_h", "ma120_o",
+		"ma200", "ma200_l", "ma200_h", "ma200_o",
+		"ma250", "ma250_l", "ma250_h", "ma250_o",
+		"vol5", "vol10", "vol20", "vol30", "vol60", "vol120", "vol200", "vol250",
+	}
+	for _, f := range fields {
+		usql := fmt.Sprintf(sqlt, f, "ma_lr", "kline_d_b_ma_lr", "kline_d_f_ma_lr")
+		_, e = dbmap.Exec(usql)
+		if e != nil {
+			log.Printf("failed to update fs_stats for field %s: %+v", f, e)
+			continue
+		}
+		log.Printf("fs_stats for field %s updated.", f)
+	}
+	
 	// indicators
 	sqlt, e = dot.Raw("COLLECT_INDICATOR_STANDARDIZATION_STATS")
 	if e != nil {

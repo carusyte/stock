@@ -116,13 +116,13 @@ CREATE TABLE `fin_predict` (
 CREATE TABLE `fs_stats` (
   `method` varchar(45) NOT NULL,
   `fields` varchar(20) NOT NULL,
-  `tab` varchar(45) DEFAULT NULL,
+  `tab` varchar(45) NOT NULL,
   `mean` double DEFAULT NULL,
   `std` double DEFAULT NULL,
   `vmax` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`method`,`fields`)
+  PRIMARY KEY (`method`, `fields`, `tab`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Feature Scaling Statistics';
 
 CREATE TABLE `grader_stats` (

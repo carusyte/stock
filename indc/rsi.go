@@ -7,7 +7,7 @@ import (
 )
 
 //RSI calculates Relative Strength Indicator for the given parameters
-func RSI(src []*model.Quote, n1, n2, n3 int) []*model.Indicator {
+func RSI(src []*model.TradeDataBase, n1, n2, n3 int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	nums := make([]float64, len(src))
 	dens := make([]float64, len(src))
@@ -47,6 +47,6 @@ func RSI(src []*model.Quote, n1, n2, n3 int) []*model.Indicator {
 }
 
 //DeftRSI calculates RSI indicator using default parameters (6,12,24)
-func DeftRSI(src []*model.Quote) []*model.Indicator {
+func DeftRSI(src []*model.TradeDataBase) []*model.Indicator {
 	return RSI(src, 6, 12, 24)
 }

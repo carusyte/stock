@@ -5,7 +5,7 @@ import (
 )
 
 //MACD calculates MACD indicator for the given parameters
-func MACD(src []*model.Quote, nshort, nlong, m float64) []*model.Indicator {
+func MACD(src []*model.TradeDataBase, nshort, nlong, m float64) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	close, diff := .0, .0
 	for i, s := range src {
@@ -26,6 +26,6 @@ func MACD(src []*model.Quote, nshort, nlong, m float64) []*model.Indicator {
 }
 
 //DeftMACD calculates MACD indicator using default parameters (12,26,9)
-func DeftMACD(src []*model.Quote) []*model.Indicator {
+func DeftMACD(src []*model.TradeDataBase) []*model.Indicator {
 	return MACD(src, 12, 26, 9)
 }

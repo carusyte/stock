@@ -75,7 +75,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 		err  error
 		code = stk.Code
 	)
-	tab := "kline_w"
+	tab := "kline_w_f"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
 		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
@@ -87,8 +87,9 @@ func calcWeek(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qw []*model.Quote
-	_, err = dbmap.Select(&qw, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+	var qw []*model.TradeDataBase
+	_, err = dbmap.Select(&qw, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate "+
+		"from %s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 
 	indicators := indc.DeftKDJ(qw)
@@ -142,7 +143,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 		code = stk.Code
 	)
 
-	tab := "kline_m"
+	tab := "kline_m_f"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
 		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
@@ -154,8 +155,9 @@ func calcMonth(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qm []*model.Quote
-	_, err = dbmap.Select(&qm, fmt.Sprintf("select * from %s where code = ? order by klid", tab), code)
+	var qm []*model.TradeDataBase
+	_, err = dbmap.Select(&qm, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate "+
+		"from %s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
 
 	indicators := indc.DeftKDJ(qm)
@@ -209,7 +211,7 @@ func calcDay(stk *model.Stock, offset int64) {
 		code = stk.Code
 	)
 
-	tab := "kline_d"
+	tab := "kline_d_f"
 	if len(stk.Code) < 8 { // indices can only fetch from forward table
 		switch model.Rtype(conf.Args.DataSource.IndicatorSource) {
 		case model.Backward:
@@ -221,7 +223,7 @@ func calcDay(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qd []*model.Quote
+	var qd []*model.TradeDataBase
 	_, err = dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
 		"%s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))

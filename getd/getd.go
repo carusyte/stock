@@ -69,8 +69,8 @@ func Get() {
 
 	if !conf.Args.DataSource.SkipKlines {
 		stgkl := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY,
-			model.KLINE_WEEK, model.KLINE_MONTH,
+		stks = GetKlines(stks, model.KLINE_DAY_F,
+			model.KLINE_WEEK_F, model.KLINE_MONTH_F,
 			model.KLINE_MONTH_B, model.KLINE_DAY_B,
 			model.KLINE_WEEK_B)
 		stks = KlinePostProcess(stks)

@@ -132,6 +132,7 @@ func KlinePostProcess(stks *model.Stocks) (rstks *model.Stocks) {
 
 //GetKlineDb get specified type of kline data from database.
 func GetKlineDb(code string, tab model.DBTab, limit int, desc bool) (hist []*model.Quote) {
+	//TODO refactor me
 	if limit <= 0 {
 		sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
 		if desc {

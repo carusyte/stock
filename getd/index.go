@@ -67,9 +67,9 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 		}
 	}()
 	chDbjob = createDbJobQueues(
-		model.KLINE_DAY,
-		model.KLINE_WEEK,
-		model.KLINE_MONTH,
+		model.KLINE_DAY_F,
+		model.KLINE_WEEK_F,
+		model.KLINE_MONTH_F,
 	)
 	wgdb := saveQuotes(rchs)
 	for _, idx := range idxlst {
@@ -92,67 +92,67 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 	}()
 	stk := &model.Stock{Code: idx.Code, Source: idx.Src}
 	ts := []model.DBTab{
-		model.KLINE_DAY,
-		model.KLINE_WEEK,
-		model.KLINE_MONTH,
+		model.KLINE_DAY_F,
+		model.KLINE_WEEK_F,
+		model.KLINE_MONTH_F,
 	}
 	fetchRemoteKline(stk, ts)
 }
 
-func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
-	var (
-		ldate, per string
-		sklid      = -1
-		cycle      model.CYTP
-	)
-	switch tab {
-	case model.KLINE_MONTH:
-		per = "month"
-		cycle = model.MONTH
-	case model.KLINE_WEEK:
-		per = "week"
-		cycle = model.WEEK
-	case model.KLINE_DAY:
-		per = "day"
-		cycle = model.DAY
-	default:
-		panic("Unsupported period: " + tab)
-	}
-	// check history from db
-	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5+1) // plus one for varate calculation
-	if lq != nil {
-		sklid = lq.Klid
-		ldate = lq.Date
-	}
+// func idxFromQQ(code string, tab model.DBTab) (suc, rt bool) {
+// 	var (
+// 		ldate, per string
+// 		sklid      = -1
+// 		cycle      model.CYTP
+// 	)
+// 	switch tab {
+// 	case model.KLINE_MONTH:
+// 		per = "month"
+// 		cycle = model.MONTH
+// 	case model.KLINE_WEEK:
+// 		per = "week"
+// 		cycle = model.WEEK
+// 	case model.KLINE_DAY:
+// 		per = "day"
+// 		cycle = model.DAY
+// 	default:
+// 		panic("Unsupported period: " + tab)
+// 	}
+// 	// check history from db
+// 	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5+1) // plus one for varate calculation
+// 	if lq != nil {
+// 		sklid = lq.Klid
+// 		ldate = lq.Date
+// 	}
 
-	url := fmt.Sprintf(`http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?`+
-		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
-	d, e := util.HttpGetBytes(url)
-	if e != nil {
-		log.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
-		return false, true
-	}
-	qj := &model.QQJson{}
-	qj.Code = code
-	qj.Fcode = code
-	qj.Period = per
-	e = json.Unmarshal(d, qj)
-	if e != nil {
-		log.Printf("failed to parse json from %s\n%+v", url, e)
-		return false, true
-	}
-	if len(qj.Quotes) > 0 && ldate != "" && qj.Quotes[0].Date != ldate {
-		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
-		return false, true
-	}
-	supplementMisc(qj.Quotes, tab, sklid)
-	CalLogReturns(qj.Quotes)
-	if sklid != -1 {
-		qj.Quotes = qj.Quotes[1:]
-	}
-	binsert(qj.Quotes, string(tab), sklid)
-	return true, false
-}
+// 	url := fmt.Sprintf(`http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?`+
+// 		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
+// 	d, e := util.HttpGetBytes(url)
+// 	if e != nil {
+// 		log.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
+// 		return false, true
+// 	}
+// 	qj := &model.QQJson{}
+// 	qj.Code = code
+// 	qj.Fcode = code
+// 	qj.Period = per
+// 	e = json.Unmarshal(d, qj)
+// 	if e != nil {
+// 		log.Printf("failed to parse json from %s\n%+v", url, e)
+// 		return false, true
+// 	}
+// 	if len(qj.Quotes) > 0 && ldate != "" && qj.Quotes[0].Date != ldate {
+// 		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
+// 		return false, true
+// 	}
+// 	supplementMisc(qj.Quotes, tab, sklid)
+// 	CalLogReturns(qj.Quotes)
+// 	if sklid != -1 {
+// 		qj.Quotes = qj.Quotes[1:]
+// 	}
+// 	binsert(qj.Quotes, string(tab), sklid)
+// 	return true, false
+// }
 
 func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 	var (
