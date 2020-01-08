@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/db"
-	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/gchaincl/dotsql"
@@ -207,12 +206,14 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 		klw.Close, klm.Close = k.Close, k.Close
 	}
 
-	mxid, mxiw, mxim := getMaxIdcDates(s.Code)
+	//TODO refactor due to model structure update
+	// mxid, mxiw, mxim := getMaxIdcDates(s.Code)
 
-	kdj := subidc(indc.DeftKDJ(q), mxid)
-	kdjw := subidcw(indc.DeftKDJ_W(qw), mxiw)
-	kdjm := subidcm(indc.DeftKDJ_M(qm), mxim)
-	batchInsert(s.Code, klinesw, klinesm, kdj, kdjw, kdjm)
+	// kdj := subidc(indc.DeftKDJ(q), mxid)
+	// kdjw := subidcw(indc.DeftKDJ_W(qw), mxiw)
+	// kdjm := subidcm(indc.DeftKDJ_M(qm), mxim)
+
+	// batchInsert(s.Code, klinesw, klinesm, kdj, kdjw, kdjm)
 
 	log.Printf("%s complete in %f s: dy: %d, wk: %d, mo: %d\n", s.Code, time.Since(start).Seconds(),
 		len(klines), len(klinesw), len(klinesm))

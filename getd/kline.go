@@ -539,8 +539,8 @@ func Reinstate(p float64, x *model.Xdxr) float64 {
 }
 
 // ToOne merges qs into one quote, such as merging daily quotes into weekly quote or month quote
-func ToOne(qs []*model.Quote, preClose float64, preKlid int) *model.Quote {
-	oq := new(model.Quote)
+func ToOne(qs []*model.TradeDataBase, preClose float64, preKlid int) *model.TradeDataBase {
+	oq := new(model.TradeDataBase)
 	if len(qs) == 0 {
 		return nil
 	} else if len(qs) == 1 {

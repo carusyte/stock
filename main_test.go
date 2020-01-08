@@ -44,9 +44,9 @@ func TestChannel(t *testing.T) {
 	fmt.Printf("size: %d", len(rl))
 }
 
-func TestBlue(t *testing.T) {
-	blue()
-}
+// func TestBlue(t *testing.T) {
+// 	blue()
+// }
 
 func TestDTW(t *testing.T) {
 	// prepare arrays

@@ -85,27 +85,47 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			case model.INDICATOR_DAY:
 				return
 			case model.INDICATOR_WEEK:
-				sql = "select * from kline_w where code = ? and date < ? order by klid"
+				sql = "select * from kline_w_f where code = ? and date < ? order by klid"
 			case model.INDICATOR_MONTH:
-				sql = "select * from kline_m where code = ? and date < ? order by klid"
+				sql = "select * from kline_m_f where code = ? and date < ? order by klid"
 			}
-			var oqs []*model.Quote
+			var oqs []*model.TradeDataBase
 			_, e = dbmap.Select(&oqs, sql, code, toDate)
 			if e != nil {
 				if "sql: no rows in result set" == e.Error() {
-					logr.Warnf("%s, %s, %s: %+v", code, tab, toDate, e.Error())
+					logr.Warnf("%s, %s, sql: %s, %s: %+v, ", code, tab, toDate, sql, e.Error())
 					return
 				}
 				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
 			}
-			qsdy := GetKlBtwn(code, model.KLINE_DAY, "["+indcs[len(indcs)-1].Date, toDate+"]", false)
-			nq := ToOne(qsdy[1:], qsdy[0].Close, oqs[len(oqs)-1].Klid)
+			qsdy := GetTrDataBtwn(
+				code,
+				TrDataQry{
+					Cycle:     model.DAY,
+					Reinstate: model.Forward,
+					Basic:     true,
+				},
+				Date,
+				"["+indcs[len(indcs)-1].Date,
+				toDate+"]",
+				false)
+			nq := ToOne(qsdy.Base[1:], qsdy.Base[0].Close, oqs[len(oqs)-1].Klid)
 			nidcs := indc.DeftKDJ(append(oqs, nq))
 			return append(indcs, nidcs[len(nidcs)-1])
 		}
-		qsdy := GetKlBtwn(code, model.KLINE_DAY, "", toDate+"]", false)
-		nq := ToOne(qsdy[1:], qsdy[0].Close, -1)
-		nidcs := indc.DeftKDJ([]*model.Quote{nq})
+		qsdy := GetTrDataBtwn(
+			code,
+			TrDataQry{
+				Cycle:     model.DAY,
+				Reinstate: model.Forward,
+				Basic:     true,
+			},
+			Date,
+			"",
+			toDate+"]",
+			false)
+		nq := ToOne(qsdy.Base[1:], qsdy.Base[0].Close, -1)
+		nidcs := indc.DeftKDJ([]*model.TradeDataBase{nq})
 		return nidcs
 	}
 	return
