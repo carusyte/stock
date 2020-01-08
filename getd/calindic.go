@@ -133,6 +133,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 	binsIndc(indicators, "indicator_w")
 
 	if conf.Args.DataSource.SampleKdjFeature {
+		panic("function not refactored yet")
 		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
 	}
 }
@@ -201,6 +202,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 	binsIndc(indicators, "indicator_m")
 
 	if conf.Args.DataSource.SampleKdjFeature {
+		panic("function not refactored yet")
 		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
 	}
 }
@@ -269,6 +271,7 @@ func calcDay(stk *model.Stock, offset int64) {
 	binsIndc(indicators, "indicator_d")
 
 	if conf.Args.DataSource.SampleKdjFeature {
+		panic("function not refactored yet")
 		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
 	}
 }

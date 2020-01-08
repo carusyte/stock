@@ -16,7 +16,7 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/rpc"
 	"github.com/carusyte/stock/util"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	logr "github.com/sirupsen/logrus"
 )
 
@@ -135,6 +135,7 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 		log.Panicf("not supported cycle type: %+v", cytp)
 	}
 	hist := GetKdjHist(code, itab, 0, "")
+	//TODO refactor: use GetTrDataDB instead
 	klhist := GetKlineDb(code, ktab, 0, false)
 	if len(hist) != len(klhist) {
 		log.Panicf("%s %s and %s does not match: %d:%d", code, itab, ktab, len(hist),

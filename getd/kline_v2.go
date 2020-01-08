@@ -37,6 +37,69 @@ const (
 	Date = "date"
 )
 
+//GetTrDataDB get specified type of kline data from database.
+func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model.TradeData) {
+	//TODO refactor me
+	tables := resolveTables(qry)
+	var wg, wgr sync.WaitGroup
+	//A slice of trading data of arbitrary kind
+	ochan := make(chan interface{}, 4)
+
+	//Collect and merge query results
+	wgr.Add(1)
+	go func() {
+		defer wgr.Done()
+		for i := range ochan {
+			//merge into model.TradeData slice
+			switch i.(type) {
+			case *[]*model.TradeDataBase:
+				trdat.Base = *i.(*[]*model.TradeDataBase)
+			case *[]*model.TradeDataLogRtn:
+				trdat.LogRtn = *i.(*[]*model.TradeDataLogRtn)
+			case *[]*model.TradeDataMovAvg:
+				trdat.MovAvg = *i.(*[]*model.TradeDataMovAvg)
+			case *[]*model.TradeDataMovAvgLogRtn:
+				trdat.MovAvgLogRtn = *i.(*[]*model.TradeDataMovAvgLogRtn)
+			default:
+				logrus.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
+			}
+		}
+	}()
+
+	for table, typ := range tables {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			intf := reflect.New(reflect.SliceOf(typ)).Interface()
+			// sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
+			// 	table, cond1, cond2, d)
+			if limit <= 0 {
+				sql := fmt.Sprintf("select * from %s where code = ? order by klid", table)
+				if desc {
+					sql += " desc"
+				}
+				_, e := dbmap.Select(&intf, sql, code)
+				util.CheckErr(e, "failed to query "+table+" for "+code)
+			} else {
+				d := ""
+				if desc {
+					d = "desc"
+				}
+				sql := fmt.Sprintf("select * from (select * from %s where code = ? order by klid desc limit ?) t "+
+					"order by t.klid %s", table, d)
+				_, e := dbmap.Select(&intf, sql, code, limit)
+				util.CheckErr(e, "failed to query "+table+" for "+code)
+			}
+			ochan <- intf
+		}()
+	}
+	wg.Wait()
+	close(ochan)
+	wgr.Wait()
+
+	return
+}
+
 //GetTrDataBtwn fetches trading data between dates/klids.
 func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond2 string, desc bool) (trdat *model.TradeData) {
 	var (
