@@ -17,7 +17,6 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/gchaincl/dotsql"
-	"github.com/ziutek/mymysql/mysql"
 	"gopkg.in/gorp.v2"
 )
 
@@ -91,31 +90,21 @@ func cal() {
 }
 
 func supplementKlid(code string) {
+	panic("this operation is not supported anymore.")
+
 	supKlid, err := dot.Raw("supKlid")
 	supKlid = strings.Replace(supKlid, "?", fmt.Sprintf("'%s'", code), 1)
 	checkErr(err, "failed to get supKlid query")
-	mysql := db.GetMySql()
+	mysql := db.Get(false, false)
+	// defer func() {
+	// 	e := mysql.Release()
+	// 	util.CheckErrNop(e, code+" failed to release mysql connection")
+	// }()
+	res, err := mysql.Query(supKlid)
 	defer func() {
-		e := mysql.Release()
-		util.CheckErrNop(e, code+" failed to release mysql connection")
+		res.Close()
 	}()
-	res, err := mysql.Start(supKlid)
 	checkErr(err, code+" failed to supplement klid")
-	readResults(res)
-}
-func readResults(result mysql.Result) {
-	result, err := result.NextResult()
-	checkErr(err, "failed to get result")
-	if result != nil {
-		for {
-			row, err := result.GetRow()
-			util.CheckErr(err, "failed to get row")
-			if row == nil {
-				break
-			}
-		}
-		readResults(result)
-	}
 }
 
 func caljob(wg *sync.WaitGroup, s model.Stock) {
@@ -128,7 +117,7 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
 			" on duplicate key update start=?, end=?, dur=?", s.Code, ss, end, dur, ss, end, dur)
 	}()
-	supplementKlid(s.Code)
+	// supplementKlid(s.Code)
 	klines, mxw, mxm := getKlines(s)
 	q := make([]*model.Quote, len(klines))
 	var qw []*model.Quote

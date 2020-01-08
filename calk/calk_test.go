@@ -91,25 +91,25 @@ func TestGorpSupplementKlid(t *testing.T) {
 	supplementKlid("600105")
 }
 
-func TestMySqlMultiStatement(t *testing.T) {
-	mdb := db.GetMySql()
-	res, err := mdb.Start("set @i:=123;select @i")
-	util.CheckErr(err, "failed to query using multi statements")
-	res, err = res.NextResult()
-	util.CheckErr(err, "failed to get result")
-	if res == nil {
-		panic("Hmm, there is no second result. Why?!")
-	}
-	for {
-		row, err := res.GetRow()
-		util.CheckErr(err, "failed to get row")
-		if row == nil {
-			log.Fatalln("no rows?")
-		} else {
-			log.Printf("%+v", row.Str(0))
-		}
-	}
-}
+// func TestMySqlMultiStatement(t *testing.T) {
+// 	// mdb := db.GetMySql()
+// 	res, err := mdb.Start("set @i:=123;select @i")
+// 	util.CheckErr(err, "failed to query using multi statements")
+// 	res, err = res.NextResult()
+// 	util.CheckErr(err, "failed to get result")
+// 	if res == nil {
+// 		panic("Hmm, there is no second result. Why?!")
+// 	}
+// 	for {
+// 		row, err := res.GetRow()
+// 		util.CheckErr(err, "failed to get row")
+// 		if row == nil {
+// 			log.Fatalln("no rows?")
+// 		} else {
+// 			log.Printf("%+v", row.Str(0))
+// 		}
+// 	}
+// }
 
 func TestGetKlines(t *testing.T) {
 	s := &model.Stock{}

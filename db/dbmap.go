@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	pool "github.com/DejaMi/mymysql-pool"
 	"github.com/carusyte/stock/conf"
 
 	//mysql driver
@@ -14,9 +13,9 @@ import (
 	"gopkg.in/gorp.v2"
 )
 
-var p, e = pool.New(pool.Config{Address: "127.0.0.1:3306", Protocol: "tcp", Username: "mysql", Password: "123456",
-	Database: "secu", MaxConnections: 100, MaxConnectionAge: 60, ConnectTimeout: 60, RequestTimeout: 60,
-	KeepConnectionsAlive: true})
+// var p, e = pool.New(pool.Config{Address: "127.0.0.1:3306", Protocol: "tcp", Username: "mysql", Password: "123456",
+// 	Database: "secu", MaxConnections: 100, MaxConnectionAge: 60, ConnectTimeout: 60, RequestTimeout: 60,
+// 	KeepConnectionsAlive: true})
 
 //Get dbmap
 func Get(create, truncate bool) *gorp.DbMap {
@@ -67,10 +66,10 @@ func Get(create, truncate bool) *gorp.DbMap {
 	return dbmap
 }
 
-func GetMySql() (c *pool.Conn) {
-	c, e := p.Get()
-	if e != nil {
-		log.Println("failed to get connection from pool", e)
-	}
-	return
-}
+// func GetMySql() (c *pool.Conn) {
+// 	c, e := p.Get()
+// 	if e != nil {
+// 		log.Println("failed to get connection from pool", e)
+// 	}
+// 	return
+// }
