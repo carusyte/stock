@@ -10,8 +10,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/chromedp"
+	"gopkg.in/chromedp/chromedp.v0"
 )
 
 func TestCollectFsStats(t *testing.T) {
@@ -168,7 +167,7 @@ func TestFinMark(t *testing.T) {
 // }
 
 func wait4test(fin chan bool) chromedp.Action {
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+	return chromedp.ActionFunc(func(ctxt context.Context) error {
 		select {
 		case <-time.After(100 * time.Second):
 			return nil

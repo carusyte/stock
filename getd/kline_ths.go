@@ -16,9 +16,9 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/chromedp"
+
 	"github.com/pkg/errors"
+	"gopkg.in/chromedp/chromedp.v0"
 )
 
 var (
@@ -638,7 +638,7 @@ func buildActions(code string, tab model.DBTab, today, all *[]byte) chromedp.Tas
 }
 
 func wait(fin chan error) chromedp.Action {
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+	return chromedp.ActionFunc(func(ctxt context.Context) error {
 		select {
 		case <-ctxt.Done():
 			return nil
@@ -653,7 +653,7 @@ func batchCaptureData(code string, tdmap, hismap map[model.DBTab][]byte, tabs []
 	for _, t := range tabs {
 		mcodes[dt2mc[t]] = t
 	}
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+	return chromedp.ActionFunc(func(ctxt context.Context) error {
 		// ** The API of chromedp has been revamped **
 
 		// th, ok := h.(*chromedp.TargetHandler)
@@ -732,7 +732,7 @@ func batchCaptureData(code string, tdmap, hismap map[model.DBTab][]byte, tabs []
 }
 
 func captureData(today, all *[]byte, mcode string, fin chan error) chromedp.Action {
-	return chromedp.ActionFunc(func(ctxt context.Context, h cdp.Executor) error {
+	return chromedp.ActionFunc(func(ctxt context.Context) error {
 		// ** The API of chromedp has been revamped **
 
 		// th, ok := h.(*chromedp.TargetHandler)
