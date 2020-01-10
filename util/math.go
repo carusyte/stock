@@ -1,8 +1,9 @@
 package util
 
 import (
-	"log"
 	"math"
+
+	"github.com/sirupsen/logrus"
 )
 
 // calculates standard score
@@ -12,7 +13,7 @@ import (
 // bias is only used either previous or current value is not greater than 0.
 func LogReturn(prev, cur, bias float64) float64 {
 	if bias <= 0 {
-		log.Panicf("bias %f must be greater than 0.", bias)
+		logrus.Panicf("bias %f must be greater than 0.", bias)
 	}
 	if prev == 0 {
 		return 0

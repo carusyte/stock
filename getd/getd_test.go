@@ -2,16 +2,20 @@ package getd
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/carusyte/stock/model"
+	"github.com/sirupsen/logrus"
 
 	"reflect"
 	"time"
 
 	"gopkg.in/chromedp/chromedp.v0"
 )
+
+func TestGet(t *testing.T) {
+	Get()
+}
 
 func TestCollectFsStats(t *testing.T) {
 	t.Fail()
@@ -22,11 +26,11 @@ func TestTimeoutContext(t *testing.T) {
 	defer cancel()
 	select {
 	case d := <-ctxt.Done():
-		log.Printf("Done() returns: %+v\n", d)
+		logrus.Printf("Done() returns: %+v\n", d)
 		e := ctxt.Err()
-		log.Printf("%+v\n%+v\n", reflect.TypeOf(e), e)
+		logrus.Printf("%+v\n%+v\n", reflect.TypeOf(e), e)
 	}
-	log.Printf("end")
+	logrus.Printf("end")
 }
 
 func TestFinMark(t *testing.T) {
@@ -48,15 +52,15 @@ func TestFinMark(t *testing.T) {
 // 	ctxt, cancel := context.WithCancel(context.Background())
 // 	defer cancel()
 
-// 	//cdp.PoolLog(nil, nil, log.Printf)
+// 	//cdp.PoolLog(nil, nil, logrus.Printf)
 // 	pool, err = chromedp.NewPool()
 // 	if err != nil {
-// 		log.Fatal(err)
+// 		logrus.Fatal(err)
 // 	}
 // 	defer func() {
 // 		err = pool.Shutdown()
 // 		if err != nil {
-// 			log.Fatal(err)
+// 			logrus.Fatal(err)
 // 		}
 // 	}()
 
@@ -78,7 +82,7 @@ func TestFinMark(t *testing.T) {
 // 		if ok || !retry {
 // 			break
 // 		} else {
-// 			log.Printf("=============== %s retry %d", code, t+1)
+// 			logrus.Printf("=============== %s retry %d", code, t+1)
 // 		}
 // 	}
 // }
@@ -92,7 +96,7 @@ func TestFinMark(t *testing.T) {
 // 		runner.ExecPath(`/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary`),
 // 	)
 // 	if err != nil {
-// 		log.Fatal(err)
+// 		logrus.Fatal(err)
 // 	}
 // 	defer pr.Release()
 // 	var today, all string
@@ -114,14 +118,14 @@ func TestFinMark(t *testing.T) {
 // 			if len(today) > 0 && len(all) > 0 {
 // 				return true, false
 // 			} else {
-// 				log.Printf("====== %s empty data returned", code)
+// 				logrus.Printf("====== %s empty data returned", code)
 // 				return false, true
 // 			}
 // 		} else {
 // 			return false, true
 // 		}
 // 	case <-time.After(30 * time.Second):
-// 		log.Printf("%s timeout waiting for network response", code)
+// 		logrus.Printf("%s timeout waiting for network response", code)
 // 		return false, true
 // 	}
 // }
@@ -198,10 +202,10 @@ func wait4test(fin chan bool) chromedp.Action {
 // 					case *network.EventLoadingFailed:
 // 						lfail := d.(*network.EventLoadingFailed)
 // 						if reqIdTd == lfail.RequestID {
-// 							log.Printf("===== loading failed: %s, %+v", urlTd, lfail)
+// 							logrus.Printf("===== loading failed: %s, %+v", urlTd, lfail)
 // 							return
 // 						} else if reqIdAll == lfail.RequestID {
-// 							log.Printf("===== loading failed: %s, %+v", urlAll, lfail)
+// 							logrus.Printf("===== loading failed: %s, %+v", urlAll, lfail)
 // 							return
 // 						}
 // 					case *network.EventRequestWillBeSent:

@@ -3,7 +3,6 @@ package sampler
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/carusyte/stock/getd"
@@ -24,7 +23,7 @@ type dwGrader struct{}
 
 func (g *dwGrader) sample(code string, frame int, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
 	if len(klhist) < frame {
-		log.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
+		logrus.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
 			code, len(klhist), frame)
 		return
 	}
@@ -81,7 +80,7 @@ func zeta(af float64) float64 {
 		// return math.Min(3, math.Log(3.876*(af+5.28)))
 		return math.Min(3, 0.15*math.Pow(af+5., math.Log(20.)/math.Log(5.)))
 	}
-	log.Printf("error, invalid parameter af: %f, returning 0", af)
+	logrus.Printf("error, invalid parameter af: %f, returning 0", af)
 	return 0
 }
 

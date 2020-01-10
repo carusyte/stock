@@ -2,7 +2,6 @@ package sampler
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"runtime"
@@ -11,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 )
@@ -34,7 +34,7 @@ const (
 //TagCorlTrn tags the sampled correlation training table (such as xcorl_trn or wcc_trn) data
 //with specified flag as prefix by randomly and evenly selecting untagged samples.
 func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
-	log.Printf("tagging %v for dataset %s...", table, flag)
+	logrus.Printf("tagging %v for dataset %s...", table, flag)
 	startno := 0
 	vflag := ""
 	switch flag {
@@ -45,7 +45,7 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	}
 	if erase {
 		// clear already tagged data
-		log.Printf("cleansing existing %s tag...", vflag)
+		logrus.Printf("cleansing existing %s tag...", vflag)
 		usql := fmt.Sprintf(`update %v set flag = null, bno=null where flag = ?`, table)
 		_, e = dbmap.Exec(usql, vflag)
 		if e != nil {
@@ -65,19 +65,19 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 		}
 		if sno.Valid {
 			startno = int(sno.Int64)
-			log.Printf("continue with batch number: %d", startno+1)
+			logrus.Printf("continue with batch number: %d", startno+1)
 		} else {
-			log.Printf("no existing data for %s set. batch no will be starting from %d", vflag, startno+1)
+			logrus.Printf("no existing data for %s set. batch no will be starting from %d", vflag, startno+1)
 		}
 	}
 	// tag group * batch_size of target data from untagged records randomly and evenly
-	log.Println("loading untagged records...")
+	logrus.Println("loading untagged records...")
 	untagged, e := getUntaggedCorls(table)
 	if e != nil {
 		return e
 	}
 	total := len(untagged)
-	log.Printf("total of untagged records: %d", total)
+	logrus.Printf("total of untagged records: %d", total)
 	bsize := conf.Args.Sampler.TestSetBatchSize
 	if flag == TrainFlag {
 		bsize = conf.Args.Sampler.TrainSetBatchSize
@@ -111,9 +111,9 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 		} else {
 			uuids = untagged[offset:]
 		}
-		log.Printf("%d/%d size: %d", i+1, bsize, len(uuids))
+		logrus.Printf("%d/%d size: %d", i+1, bsize, len(uuids))
 		offset += limit
-		log.Printf("generating permutations of size %d...", len(uuids))
+		logrus.Printf("generating permutations of size %d...", len(uuids))
 		perm := rand.Perm(len(uuids))
 		n := int(math.Min(float64(len(perm)), float64(batches)))
 		for j := 0; j < n; j++ {
@@ -146,7 +146,7 @@ func TagCorlTrn(table CorlTab, flag string, erase bool) (e error) {
 	close(chr)
 	wgr.Wait()
 
-	log.Printf("%v %s set tagged: %d", table, flag, ngrps)
+	logrus.Printf("%v %s set tagged: %d", table, flag, ngrps)
 	return nil
 }
 
@@ -163,7 +163,7 @@ func collectTagJob(ngrps int, wgr *sync.WaitGroup, chr chan *tagJob) {
 			status = "failed"
 		}
 		prog := float64(float64(i)/float64(ngrps)) * 100.
-		log.Printf("job %s_%d %s, progress: %d/%d(%.3f%%), failed:%d", j.flag, j.bno, status, i, ngrps, prog, f)
+		logrus.Printf("job %s_%d %s, progress: %d/%d(%.3f%%), failed:%d", j.flag, j.bno, status, i, ngrps, prog, f)
 	}
 }
 
@@ -177,12 +177,12 @@ func procTagJob(table CorlTab, wg *sync.WaitGroup, chjob chan *tagJob, chr chan 
 		}
 		uuids := strings.Join(strg, ",")
 		flag, bno := j.flag, j.bno
-		log.Printf("tagging %s,%d size: %d", flag, bno, len(strg))
+		logrus.Printf("tagging %s,%d size: %d", flag, bno, len(strg))
 		rt := 0
 		for ; rt < 3; rt++ {
 			_, e = dbmap.Exec(fmt.Sprintf(`update %v set flag = ?, bno = ? where uuid in (%s)`, table, uuids), flag, bno)
 			if e != nil {
-				log.Printf("failed to update flag %s,%d: %+v, retrying %d...", flag, bno, e, rt+1)
+				logrus.Printf("failed to update flag %s,%d: %+v, retrying %d...", flag, bno, e, rt+1)
 			} else {
 				break
 			}

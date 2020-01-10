@@ -3,10 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/sirupsen/logrus"
 
 	//mysql driver
 	_ "github.com/go-sql-driver/mysql"
@@ -29,7 +29,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 	sch := conf.Args.Database.Schema
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?readTimeout=12h&writeTimeout=12h", usr, pwd, host, port, sch))
 	if err != nil {
-		log.Panic("sql.Open failed", err)
+		logrus.Panic("sql.Open failed", err)
 	}
 
 	db.SetMaxOpenConns(64)
@@ -49,18 +49,18 @@ func Get(create, truncate bool) *gorp.DbMap {
 	if create {
 		err = dbmap.CreateTablesIfNotExists()
 		if err != nil {
-			log.Panic("Create tables failed", err)
+			logrus.Panic("Create tables failed", err)
 		}
 	}
 	if truncate {
 		err = dbmap.TruncateTables()
 		if err != nil {
-			log.Panic("Truncate tables failed", err)
+			logrus.Panic("Truncate tables failed", err)
 		}
 	}
 
 	if err != nil {
-		log.Panic("Failed to ping db", err)
+		logrus.Panic("Failed to ping db", err)
 	}
 
 	return dbmap
@@ -69,7 +69,7 @@ func Get(create, truncate bool) *gorp.DbMap {
 // func GetMySql() (c *pool.Conn) {
 // 	c, e := p.Get()
 // 	if e != nil {
-// 		log.Println("failed to get connection from pool", e)
+// 		logrus.Println("failed to get connection from pool", e)
 // 	}
 // 	return
 // }

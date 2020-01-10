@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"log"
-
 	"github.com/carusyte/stock/getd"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +22,7 @@ var getCmd = &cobra.Command{
 func shutdownHook() {
 	if r := recover(); r != nil {
 		if er, hasError := r.(error); hasError {
-			log.Printf("caught error:%+v, trying to cleanup...", er)
+			logrus.Printf("caught error:%+v, trying to cleanup...", er)
 			getd.Cleanup()
 		}
 	}

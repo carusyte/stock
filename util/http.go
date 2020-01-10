@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/carusyte/stock/conf"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	logr "github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 )
@@ -28,7 +28,7 @@ var PROXY_ADDR string
 //HTTPGetResponse initiates HTTP get request and returns its response
 func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rotateProxy, rotateAgent bool) (res *http.Response, e error) {
 	if useMasterProxy && rotateProxy {
-		log.Panic("can't useMasterProxy and rotateProxy at the same time.")
+		logrus.Panic("can't useMasterProxy and rotateProxy at the same time.")
 	}
 
 	host := ""
@@ -47,7 +47,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 		// create a socks5 dialer
 		dialer, err := proxy.SOCKS5("tcp", conf.Args.Network.MasterProxyAddr, nil, proxy.Direct)
 		if err != nil {
-			log.Printf("can't connect to the master proxy: %+v", err)
+			logrus.Printf("can't connect to the master proxy: %+v", err)
 			return nil, errors.WithStack(err)
 		}
 		// setup a http client
@@ -61,7 +61,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 	for i := 0; true; i++ {
 		req, err := http.NewRequest(http.MethodGet, link, nil)
 		if err != nil {
-			log.Panic(err)
+			logrus.Panic(err)
 		}
 
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,"+
@@ -78,7 +78,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 		if rotateAgent {
 			uagent, e = PickUserAgent()
 			if e != nil {
-				log.Printf("failed to acquire rotate user agent: %+v", e)
+				logrus.Printf("failed to acquire rotate user agent: %+v", e)
 				time.Sleep(time.Millisecond * time.Duration(300+rand.Intn(300)))
 				continue
 			}
@@ -99,7 +99,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 			//determine if we must use a rotated proxy
 			prx, e = PickProxy()
 			if e != nil {
-				log.Printf("failed to acquire rotate proxy: %+v", e)
+				logrus.Printf("failed to acquire rotate proxy: %+v", e)
 				return nil, errors.WithStack(e)
 			}
 			proxyAddr := fmt.Sprintf("%s://%s:%s", prx.Type, prx.Host, prx.Port)
@@ -108,7 +108,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				// create a socks5 dialer
 				dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("%s:%s", prx.Host, prx.Port), nil, proxy.Direct)
 				if err != nil {
-					log.Printf("can't connect to the socks5 proxy: %+v", err)
+					logrus.Printf("can't connect to the socks5 proxy: %+v", err)
 					return nil, errors.WithStack(err)
 				}
 				// setup a http client
@@ -119,7 +119,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				//http proxy
 				proxyURL, e := url.Parse(proxyAddr)
 				if e != nil {
-					log.Printf("invalid proxy: %s, %+v", proxyAddr, e)
+					logrus.Printf("invalid proxy: %s, %+v", proxyAddr, e)
 					return nil, errors.WithStack(e)
 				}
 				// setup a http client
@@ -140,11 +140,11 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				MarkProxyFailure(prx)
 			}
 			if i >= RETRY {
-				log.Printf("http communication failed.%s url=%s\n%+v", proxyStr, link, err)
+				logrus.Printf("http communication failed.%s url=%s\n%+v", proxyStr, link, err)
 				e = err
 				return
 			}
-			log.Printf("http communication error.%s url=%s, retrying %d ...\n%+v", proxyStr, link, i+1, err)
+			logrus.Printf("http communication error.%s url=%s, retrying %d ...\n%+v", proxyStr, link, i+1, err)
 			if res != nil {
 				res.Body.Close()
 			}
@@ -188,7 +188,7 @@ func HttpGetRespUsingHeaders(link string, headers map[string]string) (res *http.
 	for i := 0; true; i++ {
 		req, err := http.NewRequest(http.MethodGet, link, nil)
 		if err != nil {
-			log.Panic(err)
+			logrus.Panic(err)
 		}
 
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,"+
@@ -218,11 +218,11 @@ func HttpGetRespUsingHeaders(link string, headers map[string]string) (res *http.
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", link, err)
+				logrus.Printf("http communication failed. url=%s\n%+v", link, err)
 				e = err
 				return
 			} else {
-				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+				logrus.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 				if res != nil {
 					res.Body.Close()
 				}
@@ -246,10 +246,10 @@ func HttpGetBytesUsingHeaders(link string, headers map[string]string) (body []by
 		res, e := HttpGetRespUsingHeaders(link, headers)
 		if e != nil {
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", link, e)
+				logrus.Printf("http communication failed. url=%s\n%+v", link, e)
 				return nil, e
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, e)
+			logrus.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, e)
 			if res != nil {
 				res.Body.Close()
 			}
@@ -262,10 +262,10 @@ func HttpGetBytesUsingHeaders(link string, headers map[string]string) (body []by
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", link, err)
+				logrus.Printf("http communication failed. url=%s\n%+v", link, err)
 				return nil, e
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+			logrus.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 			if resBody != nil {
 				res.Body.Close()
 			}
@@ -330,11 +330,11 @@ func HTTPPostJSON(link string, headers, params map[string]string) (body []byte, 
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
 			if i >= RETRY {
-				log.Printf("http communication failed. url=%s\n%+v", link, err)
+				logrus.Printf("http communication failed. url=%s\n%+v", link, err)
 				e = err
 				return
 			}
-			log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+			logrus.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 			if res != nil {
 				res.Body.Close()
 			}
@@ -345,10 +345,10 @@ func HTTPPostJSON(link string, headers, params map[string]string) (body []byte, 
 			if err != nil {
 				//handle "read: connection reset by peer" error by retrying
 				if i >= RETRY {
-					log.Printf("http communication failed. url=%s\n%+v", link, err)
+					logrus.Printf("http communication failed. url=%s\n%+v", link, err)
 					return nil, e
 				}
-				log.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
+				logrus.Printf("http communication error. url=%s, retrying %d ...\n%+v", link, i+1, err)
 				if resBody != nil {
 					res.Body.Close()
 				}
@@ -371,7 +371,7 @@ func Download(link, file string) (err error) {
 }
 
 func DownloadUsingHeaders(link, file string, headers map[string]string) (e error) {
-	log.Printf("Downloading from %s", link)
+	logrus.Printf("Downloading from %s", link)
 
 	if _, e := os.Stat(file); e == nil {
 		os.Remove(file)
@@ -379,25 +379,25 @@ func DownloadUsingHeaders(link, file string, headers map[string]string) (e error
 
 	output, err := os.Create(file)
 	if err != nil {
-		log.Printf("Error while creating %s\n%+v", file, err)
+		logrus.Printf("Error while creating %s\n%+v", file, err)
 		return
 	}
 	defer output.Close()
 
 	response, err := HttpGetRespUsingHeaders(link, headers)
 	if err != nil {
-		log.Printf("Error while downloading %s\n%+v", link, err)
+		logrus.Printf("Error while downloading %s\n%+v", link, err)
 		return
 	}
 	defer response.Body.Close()
 
 	n, err := io.Copy(output, response.Body)
 	if err != nil {
-		log.Printf("Error while downloading %s\n%+v", link, err)
+		logrus.Printf("Error while downloading %s\n%+v", link, err)
 		return
 	}
 
-	log.Printf("%d bytes downloaded. file saved to %s.", n, file)
+	logrus.Printf("%d bytes downloaded. file saved to %s.", n, file)
 
 	return nil
 }

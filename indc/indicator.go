@@ -1,11 +1,11 @@
 package indc
 
 import (
-	"log"
 	"math"
 	"reflect"
 
 	"github.com/montanaflynn/stats"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/model"
 )
@@ -13,7 +13,7 @@ import (
 //MA calculates moving average for given values.
 func MA(vals []float64, curIdx, n int) float64 {
 	if curIdx >= len(vals) {
-		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
+		logrus.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
 	}
 	nu := 0.
 	for i := int(math.Max(0, float64(curIdx-n+1))); i <= curIdx; i++ {
@@ -25,12 +25,12 @@ func MA(vals []float64, curIdx, n int) float64 {
 //STD calculates standard deviation for given values.
 func STD(vals []float64, curIdx, n int) float64 {
 	if curIdx >= len(vals) {
-		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
+		logrus.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(vals)-1)
 	}
 	bg := int(math.Max(0, float64(curIdx-n+1)))
 	std, e := stats.StandardDeviation(vals[bg : curIdx+1])
 	if e != nil {
-		log.Panicf("failed to calculate standard deviation: %+v", e)
+		logrus.Panicf("failed to calculate standard deviation: %+v", e)
 	}
 	return std
 }
@@ -48,7 +48,7 @@ func SMA(src []float64, n, m int) []float64 {
 			r[x] = (fm*i + (fn-fm)*r[x-1]) / fn
 		}
 		if math.IsNaN(r[x]) {
-			log.Printf("NaN detected in SMA, x[%d], i[%f], m[%d], n[%d], %+v", x, i, m, n, src)
+			logrus.Printf("NaN detected in SMA, x[%d], i[%f], m[%d], n[%d], %+v", x, i, m, n, src)
 			panic(src)
 		}
 	}

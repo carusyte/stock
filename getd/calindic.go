@@ -2,7 +2,6 @@ package getd
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"runtime"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 
 //CalcIndics calculates various indicators for given stocks.
 func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
-	log.Println("calculating indices...")
+	logrus.Println("calculating indices...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, JOB_CAPACITY)
@@ -41,11 +41,11 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	log.Printf("%d indicators updated", rstks.Size())
+	logrus.Printf("%d indicators updated", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			log.Printf("Failed: %+v", skp)
+			logrus.Printf("Failed: %+v", skp)
 		}
 	}
 	//Pruning takes too long to complete, make it a separate process
@@ -296,13 +296,13 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
+				logrus.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
+		logrus.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
 	}
 	batchSize := 200
 	for idx := 0; idx < len(indc); idx += batchSize {
@@ -391,11 +391,11 @@ func insertIndicMiniBatch(indc []*model.Indicator, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+				logrus.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 			}
 		}
 		return len(indc)
 	}
-	log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+	logrus.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 	return
 }

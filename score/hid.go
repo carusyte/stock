@@ -3,7 +3,6 @@ package score
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"sort"
@@ -108,7 +107,7 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 			if "sql: no rows in result set" == e.Error() {
 				logrus.Warnf("%s lack of kline_d data", item.Code)
 			} else {
-				log.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
+				logrus.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
 			}
 		}
 		ih.Price = lp.Price

@@ -3,7 +3,6 @@ package sampler
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"runtime"
 	"strings"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -20,12 +20,12 @@ var (
 
 //SampAllKeyPoints sample all keypoints using goroutine and save sampled data to kpts table.
 func SampAllKeyPoints() (e error) {
-	log.Printf("sampling key points...")
+	logrus.Printf("sampling key points...")
 	var stks []*model.Stock
 	dbmap.Select(&stks, "select * from basics")
-	log.Printf("%d stocks loaded from db", len(stks))
+	logrus.Printf("%d stocks loaded from db", len(stks))
 	if len(stks) == 0 {
-		log.Printf("no stock available, skipping key point sampling")
+		logrus.Printf("no stock available, skipping key point sampling")
 		return nil
 	}
 
@@ -47,11 +47,11 @@ func SampAllKeyPoints() (e error) {
 	waitKpSave(wgdb)
 	close(fail)
 	wgr.Wait()
-	log.Printf("kpts data saved. %d / %d, failed: %+v", len(stks)-len(failstks), len(stks), failstks)
+	logrus.Printf("kpts data saved. %d / %d, failed: %+v", len(stks)-len(failstks), len(stks), failstks)
 
 	frames := conf.Args.Sampler.GraderTimeFrames
 	failFrames := graderStats(frames)
-	log.Printf("grader stats collected. %d / %d, frames failed: %+v", len(frames)-len(failFrames), len(frames), failFrames)
+	logrus.Printf("grader stats collected. %d / %d, frames failed: %+v", len(frames)-len(failFrames), len(frames), failFrames)
 
 	return e
 }
@@ -81,7 +81,7 @@ func goSaveKpts(fail chan string) (wgs []*sync.WaitGroup) {
 					}
 				} else {
 					if len(kpts) > 0 {
-						log.Printf("%s %d %s saved", kpts[0].Code, len(kpts), table)
+						logrus.Printf("%s %d %s saved", kpts[0].Code, len(kpts), table)
 					}
 				}
 			}
@@ -100,10 +100,10 @@ func createDbJobQueues() (qmap map[int]chan []*model.KeyPoint) {
 
 func graderStats(frames []int) (fail []int) {
 	for _, frame := range frames {
-		log.Printf("collecting stats for frame %d", frame)
+		logrus.Printf("collecting stats for frame %d", frame)
 		e := grader.stats(frame)
 		if e != nil {
-			log.Printf("grader failed to collect stats for frame %d : %+v", frame, e)
+			logrus.Printf("grader failed to collect stats for frame %d : %+v", frame, e)
 			fail = append(fail, frame)
 		}
 	}
@@ -118,7 +118,7 @@ func sampKeyPoints(code string, wg *sync.WaitGroup, wf *chan int, fail chan stri
 	prior := conf.Args.Sampler.PriorLength
 	e := KeyPoints(code, conf.Args.Sampler.Resample, prior)
 	if e != nil {
-		log.Printf("%s sampling failed, %+v", code, e)
+		logrus.Printf("%s sampling failed, %+v", code, e)
 		fail <- code
 		return
 	}
@@ -167,7 +167,7 @@ func KeyPoints(code string, resample, prior int) (err error) {
 		}
 
 		if len(klhist) < frame {
-			log.Printf("%s insufficient data for key point sampling: %d, %d required",
+			logrus.Printf("%s insufficient data for key point sampling: %d, %d required",
 				code, len(klhist), frame)
 			return nil
 		}
@@ -177,7 +177,7 @@ func KeyPoints(code string, resample, prior int) (err error) {
 			return
 		}
 		chkpts[frame] <- r
-		log.Printf("%s kpts%d sampled: %d", code, frame, len(r))
+		logrus.Printf("%s kpts%d sampled: %d", code, frame, len(r))
 	}
 	return nil
 }

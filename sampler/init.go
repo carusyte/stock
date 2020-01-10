@@ -1,12 +1,12 @@
 package sampler
 
 import (
-	"log"
 	"math/rand"
 	"time"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/model"
 )
@@ -14,7 +14,7 @@ import (
 var (
 	grader Grader
 	dbmap  = global.Dbmap
-	dot = global.Dot
+	dot    = global.Dot
 )
 
 func init() {
@@ -22,13 +22,13 @@ func init() {
 
 	switch conf.Args.Sampler.Grader {
 	case graderLr:
-		log.Println("Key point grader: LrGrader")
+		logrus.Println("Key point grader: LrGrader")
 		grader = new(lrGrader)
 	case graderRemaLr:
-		log.Println("Key point grader: RemaLrGrader")
+		logrus.Println("Key point grader: RemaLrGrader")
 		grader = new(remaLrGrader)
 	default:
-		log.Println("Key point grader: default grader")
+		logrus.Println("Key point grader: default grader")
 		grader = new(dwGrader)
 	}
 }

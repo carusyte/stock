@@ -2,7 +2,6 @@ package score
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"runtime"
@@ -19,7 +18,8 @@ import (
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
+	"github.com/sirupsen/logrus"
 	logr "github.com/sirupsen/logrus"
 )
 
@@ -306,7 +306,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 	kps := new(model.KDJVStat)
 	klhist := getd.GetKlineDb(code, model.KLINE_DAY, retro, false)
 	if len(klhist) < retro {
-		log.Printf("%s insufficient data to collect kdjv stats: %d", code, len(klhist))
+		logrus.Printf("%s insufficient data to collect kdjv stats: %d", code, len(klhist))
 		chkps <- nil
 		return
 	}
@@ -457,7 +457,7 @@ func fetchKdjScores(s []*rm.KdjSeries) (rowIds []string, scores []float64, detai
 	var rep *rm.KdjScoreRep
 	e = rpc.Call("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
-		log.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
+		logrus.Printf("RPC service IndcScorer.ScoreKdj failed\n%+v", e)
 		return nil, nil, nil, e
 	} else if len(rep.Scores) != len(rep.RowIds) {
 		return nil, nil, nil, errors.Errorf("len of Scores[%d] does not match len of RowIds[%d]",
@@ -791,7 +791,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 		e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
 		if e != nil {
 			if "sql: no rows in result set" != e.Error() {
-				log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
+				logrus.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 			}
 		} else {
 			kdjv.Sl = stat.Sl
@@ -864,7 +864,7 @@ func scoreKdjLocal(item *Item) {
 	e := dbmap.SelectOne(&stat, "select * from kdjv_stats where code = ?", item.Code)
 	if e != nil {
 		if "sql: no rows in result set" != e.Error() {
-			log.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
+			logrus.Panicf("%s failed to query kdjv stats\n%+v", item.Code, e)
 		}
 	} else {
 		kdjv.Sl = stat.Sl
@@ -941,7 +941,7 @@ func scoreKdj(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float64) 
 		case model.MONTH:
 			v.CCMO = val
 		default:
-			log.Panicf("unsupported cytp: %s", cytp)
+			logrus.Panicf("unsupported cytp: %s", cytp)
 		}
 	}
 	return
@@ -982,7 +982,7 @@ func scoreKdjRaw(v *KdjV, cytp model.CYTP, kdjhist []*model.Indicator) (s float6
 		case model.MONTH:
 			v.CCMO = val
 		default:
-			log.Panicf("unsupported cytp: %s", cytp)
+			logrus.Panicf("unsupported cytp: %s", cytp)
 		}
 	}
 	return

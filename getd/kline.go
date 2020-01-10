@@ -3,7 +3,6 @@ package getd
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -37,7 +36,7 @@ func init() {
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
 	defer Cleanup()
-	log.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
+	logrus.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
 	var wg sync.WaitGroup
 	parallel := conf.Args.ChromeDP.PoolSize
 	switch conf.Args.DataSource.Kline {
@@ -60,11 +59,11 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	waitDbjob(wgdb)
 	close(outstks)
 	wgr.Wait()
-	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
+	logrus.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
 	if stks.Size() != rstks.Size() {
 		same, skp := stks.Diff(rstks)
 		if !same {
-			log.Printf("Failed: %+v", skp)
+			logrus.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -106,7 +105,7 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
 						snmap.Delete(j.stock.Code)
 						outstks <- j.stock
-						log.Printf("%s all requested klines fetched", j.stock.Code)
+						logrus.Printf("%s all requested klines fetched", j.stock.Code)
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
 					}
@@ -333,52 +332,52 @@ func CalLogReturns(qs []*model.Quote) {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if q.Lr.Float64 < b {
-				log.Printf("%s %v %s %d lr below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.Lr.Float64)
+				logrus.Printf("%s %v %s %d lr below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.Lr.Float64)
 				q.Lr.Float64 = b
 			} else if q.Lr.Float64 > t {
-				log.Printf("%s %v %s %d lr exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.Lr.Float64)
+				logrus.Printf("%s %v %s %d lr exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.Lr.Float64)
 				q.Lr.Float64 = t
 			}
 			if q.LrHigh.Float64 < b {
-				log.Printf("%s %v %s %d lr_h below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHigh.Float64)
+				logrus.Printf("%s %v %s %d lr_h below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHigh.Float64)
 				q.LrHigh.Float64 = b
 			} else if q.LrHigh.Float64 > t {
-				log.Printf("%s %v %s %d lr_h exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHigh.Float64)
+				logrus.Printf("%s %v %s %d lr_h exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHigh.Float64)
 				q.LrHigh.Float64 = t
 			}
 			if q.LrHighClose.Float64 < b {
-				log.Printf("%s %v %s %d lr_h_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHighClose.Float64)
+				logrus.Printf("%s %v %s %d lr_h_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHighClose.Float64)
 				q.LrHighClose.Float64 = b
 			} else if q.LrHighClose.Float64 > t {
-				log.Printf("%s %v %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHighClose.Float64)
+				logrus.Printf("%s %v %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHighClose.Float64)
 				q.LrHighClose.Float64 = t
 			}
 			if q.LrOpen.Float64 < b {
-				log.Printf("%s %v %s %d lr_o below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpen.Float64)
+				logrus.Printf("%s %v %s %d lr_o below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpen.Float64)
 				q.LrOpen.Float64 = b
 			} else if q.LrOpen.Float64 > t {
-				log.Printf("%s %v %s %d lr_o exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpen.Float64)
+				logrus.Printf("%s %v %s %d lr_o exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpen.Float64)
 				q.LrOpen.Float64 = t
 			}
 			if q.LrOpenClose.Float64 < b {
-				log.Printf("%s %v %s %d lr_o_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpenClose.Float64)
+				logrus.Printf("%s %v %s %d lr_o_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpenClose.Float64)
 				q.LrOpenClose.Float64 = b
 			} else if q.LrOpenClose.Float64 > t {
-				log.Printf("%s %v %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpenClose.Float64)
+				logrus.Printf("%s %v %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpenClose.Float64)
 				q.LrOpenClose.Float64 = t
 			}
 			if q.LrLow.Float64 < b {
-				log.Printf("%s %v %s %d lr_l below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLow.Float64)
+				logrus.Printf("%s %v %s %d lr_l below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLow.Float64)
 				q.LrLow.Float64 = b
 			} else if q.LrLow.Float64 > t {
-				log.Printf("%s %v %s %d lr_l exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLow.Float64)
+				logrus.Printf("%s %v %s %d lr_l exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLow.Float64)
 				q.LrLow.Float64 = t
 			}
 			if q.LrLowClose.Float64 < b {
-				log.Printf("%s %v %s %d lr_l_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLowClose.Float64)
+				logrus.Printf("%s %v %s %d lr_l_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLowClose.Float64)
 				q.LrLowClose.Float64 = b
 			} else if q.LrLowClose.Float64 > t {
-				log.Printf("%s %v %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLowClose.Float64)
+				logrus.Printf("%s %v %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLowClose.Float64)
 				q.LrLowClose.Float64 = t
 			}
 		}
@@ -651,7 +650,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 			tdmap, lkmap, suc = getKlineWht(stk, kltnv, true)
 		case conf.THS:
 			// qmap, lkmap, suc = getKlineThs(stk, kltnv)
-			log.Panic("fetching kline from THS is unsupported after database refactoring.")
+			logrus.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
 			tdmap, lkmap, suc = getKlineTc(stk, kltnv)
 		}
@@ -722,10 +721,10 @@ func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bo
 			return kls, true
 		}
 		if retry && rt+1 < RETRIES {
-			log.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
+			logrus.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
 			continue
 		} else {
-			log.Printf("%s failed getting %s", code, tab)
+			logrus.Printf("%s failed getting %s", code, tab)
 			return klmin, false
 		}
 	}
@@ -755,13 +754,13 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
+		logrus.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
 	}
 	batchSize := 200
 	for idx := 0; idx < len(quotes); idx += batchSize {
@@ -922,12 +921,12 @@ func insertMinibatch(quotes []*model.Quote, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
 		return len(quotes)
 	}
-	log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+	logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	return
 }
 
@@ -1099,7 +1098,7 @@ func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 					k.Vol250.Float64 = mavol
 				}
 			default:
-				log.Panicf("unsupported MA value: %d", m)
+				logrus.Panicf("unsupported MA value: %d", m)
 			}
 		}
 	}
@@ -1122,7 +1121,7 @@ func getLatestTradeDataBase(code string, cycle model.CYTP, rtype model.Rtype, of
 		if "sql: no rows in result set" == e.Error() {
 			return nil
 		}
-		log.Panicln("failed to run sql", e)
+		logrus.Panicln("failed to run sql", e)
 	}
 	return
 }
@@ -1141,7 +1140,7 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 			//skip the rest types of kline
 		}
 		if e != nil {
-			log.Println(e)
+			logrus.Println(e)
 			return e
 		}
 		if retTgqs != nil {

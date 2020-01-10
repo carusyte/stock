@@ -3,7 +3,6 @@ package getd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -31,11 +30,11 @@ func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 				break
 			} else {
 				if retry && rt+1 < RETRIES {
-					log.Printf("%s retrying [%d]", code, rt+1)
+					logrus.Printf("%s retrying [%d]", code, rt+1)
 					time.Sleep(time.Millisecond * 2500)
 					continue
 				} else {
-					log.Printf("%s failed", code)
+					logrus.Printf("%s failed", code)
 					return tdmap, lkmap, false
 				}
 			}
@@ -98,10 +97,10 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 			}
 			nrec = int(time.Since(sTime).Hours()/24) + 1
 		} else {
-			log.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
+			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
 		}
 	} else {
-		log.Printf("%s %s data will be fully refreshed", code, tab)
+		logrus.Printf("%s %s data will be fully refreshed", code, tab)
 	}
 
 	if tab == model.KLINE_DAY_NR || tab == model.KLINE_WEEK_NR || tab == model.KLINE_MONTH_NR || isIndex(stock.Code) {
@@ -136,12 +135,12 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		//get kline data
 		body, e = util.HttpGetBytes(url)
 		if e != nil {
-			log.Printf("%s error visiting %s: \n%+v", code, url, e)
+			logrus.Printf("%s error visiting %s: \n%+v", code, url, e)
 			return trdat, sklid, false, true
 		}
 		e = json.Unmarshal(body, qj)
 		if e != nil {
-			log.Printf("failed to parse json from %s\n%+v", url, e)
+			logrus.Printf("failed to parse json from %s\n%+v", url, e)
 			return trdat, sklid, false, true
 		}
 		fin := false
@@ -165,7 +164,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		first := qj.TradeData.Base[0]
 		iDate, e := time.Parse("2006-01-02", first.Date)
 		if e != nil {
-			log.Printf("invalid date format in %+v", first)
+			logrus.Printf("invalid date format in %+v", first)
 		}
 		eDate = iDate.AddDate(0, 0, -1).Format("2006-01-02")
 	}

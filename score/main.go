@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 
 	"github.com/carusyte/stock/global"
 	"github.com/olekukonko/tablewriter"
+	"github.com/sirupsen/logrus"
 )
 
 type mark string
@@ -281,7 +281,7 @@ func Combine(rs ...*Result) (fr *Result) {
 		fr.Weight += r.Weight
 		for pfid := range r.Fields {
 			if _, exists := fr.Fields[pfid]; exists {
-				log.Panicf("unable to combine identical profile: %s", pfid)
+				logrus.Panicf("unable to combine identical profile: %s", pfid)
 			} else {
 				fr.SetFields(pfid, r.Fields[pfid]...)
 			}
@@ -298,7 +298,7 @@ func Combine(rs ...*Result) (fr *Result) {
 					mi.Score += it.Score * r.Weight
 					for k := range it.Profiles {
 						if _, exists := mi.Profiles[k]; exists {
-							log.Panicf("profile [%s] already exists: %+v", k, mi.Profiles[k])
+							logrus.Panicf("profile [%s] already exists: %+v", k, mi.Profiles[k])
 						} else {
 							mi.Profiles[k] = it.Profiles[k]
 						}

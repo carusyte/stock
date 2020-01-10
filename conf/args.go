@@ -152,14 +152,14 @@ func init() {
 	viper.AddConfigPath(filepath.Join(build.Default.GOPATH, "bin"))
 	viper.AddConfigPath(".") // optionally look for config in the working directory
 	viper.AddConfigPath("$HOME")
-	err := viper.ReadInConfig()
-	if err != nil {
-		logrus.Errorf("config file error: %+v", err)
+	e := viper.ReadInConfig()
+	if e != nil {
+		logrus.Errorf("config file error: %+v", e)
 		return
 	}
-	err = viper.Unmarshal(&Args)
-	if err != nil {
-		logrus.Errorf("config file error: %+v", err)
+	e = viper.Unmarshal(&Args)
+	if e != nil {
+		logrus.Errorf("config file error: %+v", e)
 		return
 	}
 	// logrus.Printf("Configuration: %+v", Args)

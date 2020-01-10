@@ -37,12 +37,6 @@ func TestParseIfengBonus(t *testing.T) {
 	ParseIfengBonus(s)
 }
 
-func TestGet(t *testing.T) {
-	// For better performance, if you want to update local data only
-	// please use test/main_test.go instead
-	Get()
-}
-
 func TestMean(t *testing.T) {
 	var data = []float64{1, 2, 3, 4, 4, 5}
 	r, _ := stats.Median(data)

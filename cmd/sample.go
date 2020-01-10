@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"log"
 	"strings"
 	"time"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/sampler"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +52,7 @@ var sampleCmd = &cobra.Command{
 				sampler.CalWcc(nil)
 				getd.StopWatch("WCC", s)
 			default:
-				log.Panicf("unsupported sampling target: %s", t)
+				logrus.Panicf("unsupported sampling target: %s", t)
 			}
 		}
 		ts, tr := false, false
@@ -63,7 +63,7 @@ var sampleCmd = &cobra.Command{
 			case "train":
 				tr = true
 			default:
-				log.Panicf("unsupported data set for tagging: %s", s)
+				logrus.Panicf("unsupported data set for tagging: %s", s)
 			}
 		}
 		for _, t := range tagTargets {
@@ -72,20 +72,20 @@ var sampleCmd = &cobra.Command{
 				frames := conf.Args.Sampler.GraderTimeFrames
 				if ts {
 					for _, f := range frames {
-						log.Printf("tagging kpts%d data for test set...", f)
+						logrus.Printf("tagging kpts%d data for test set...", f)
 						e := sampler.TagTestSetByIndustry(f, conf.Args.Sampler.TestSetBatchSize)
 						if e != nil {
-							log.Println(e)
+							logrus.Println(e)
 						}
 					}
 				}
 				if tr {
 					bsize := conf.Args.Sampler.TrainSetBatchSize
 					for _, f := range frames {
-						log.Printf("tagging kpts%d data for training set, batch size: %d", f, bsize)
+						logrus.Printf("tagging kpts%d data for training set, batch size: %d", f, bsize)
 						e := sampler.TagTrainingSetByScore(f, bsize)
 						if e != nil {
-							log.Println(e)
+							logrus.Println(e)
 						}
 					}
 				}
@@ -93,30 +93,30 @@ var sampleCmd = &cobra.Command{
 				if ts {
 					e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TestFlag, eraseTag)
 					if e != nil {
-						log.Println(e)
+						logrus.Println(e)
 					}
 				}
 				if tr {
 					e := sampler.TagCorlTrn(sampler.XcorlTrn, sampler.TrainFlag, eraseTag)
 					if e != nil {
-						log.Println(e)
+						logrus.Println(e)
 					}
 				}
 			case "wcc":
 				if ts {
 					e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TestFlag, eraseTag)
 					if e != nil {
-						log.Println(e)
+						logrus.Println(e)
 					}
 				}
 				if tr {
 					e := sampler.TagCorlTrn(sampler.WccTrn, sampler.TrainFlag, eraseTag)
 					if e != nil {
-						log.Println(e)
+						logrus.Println(e)
 					}
 				}
 			default:
-				log.Panicf("unsupported target for tagging: %s", t)
+				logrus.Panicf("unsupported target for tagging: %s", t)
 			}
 		}
 	},

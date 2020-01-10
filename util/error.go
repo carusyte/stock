@@ -1,13 +1,11 @@
 package util
 
-import (
-	"log"
-)
+import "github.com/sirupsen/logrus"
 
 //CheckErr checks if err is nil, if not, panic with msg and err.
 func CheckErr(err error, msg string) bool {
 	if err != nil {
-		log.Panicln(msg, err)
+		logrus.Panicln(msg, err)
 		return true
 	}
 	return false
@@ -17,7 +15,7 @@ func CheckErr(err error, msg string) bool {
 func CheckErrNop(err error, msg string) (e bool) {
 	e = err != nil
 	if e {
-		log.Printf("%s, [%+v]", msg, err)
+		logrus.Printf("%s, [%+v]", msg, err)
 	}
 	return
 }

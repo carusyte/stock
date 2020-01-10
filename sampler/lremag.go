@@ -3,12 +3,12 @@ package sampler
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"sync"
 
 	"github.com/carusyte/stock/indc"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
@@ -98,7 +98,7 @@ func (g *remaLrGrader) stats(frame int) (e error) {
 	prev := 0.
 	cur := 0.
 	uuid := ""
-	log.Printf("score quotas for frame %d: %+v", frame, quotas)
+	logrus.Printf("score quotas for frame %d: %+v", frame, quotas)
 	for i, q := range quotas {
 		s := i - nclass/2
 		ud, ut := util.TimeStr()
@@ -126,17 +126,17 @@ func (g *remaLrGrader) stats(frame int) (e error) {
 		}
 		usql := ""
 		if i == 0 {
-			log.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
+			logrus.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
 			usql = fmt.Sprintf("update kpts%d set score = ? where rema_lr < ? or (rema_lr = ? and uuid <= ?)", frame)
 			_, e = dbmap.Exec(usql, s, cur, cur, kpts.UUID)
 		} else if i < len(quotas)-1 {
-			log.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
+			logrus.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
 			usql = fmt.Sprintf("update kpts%d set score = ? "+
 				"where (rema_lr > ? or (rema_lr = ? and uuid > ?)) "+
 				"and (rema_lr < ? or (rema_lr = ? and uuid <= ?))", frame)
 			_, e = dbmap.Exec(usql, s, prev, prev, uuid, cur, cur, kpts.UUID)
 		} else {
-			log.Printf("kpts%d score:[%d] threshold:[> %f] uuid:[> %s]", frame, s, prev, uuid)
+			logrus.Printf("kpts%d score:[%d] threshold:[> %f] uuid:[> %s]", frame, s, prev, uuid)
 			usql = fmt.Sprintf("update kpts%d set score = ? where rema_lr > ? or (rema_lr = ? and uuid > ?)", frame)
 			_, e = dbmap.Exec(usql, s, prev, prev, uuid)
 		}

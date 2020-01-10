@@ -2,12 +2,12 @@ package getd
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"github.com/sirupsen/logrus"
 )
 
 func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
@@ -18,7 +18,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 	// Load the URL
 	res, e := util.HttpGetResp(url)
 	if e != nil {
-		log.Printf("%s, http failed, giving up %s", stock.Code, url)
+		logrus.Printf("%s, http failed, giving up %s", stock.Code, url)
 		return false, false
 	}
 	defer res.Body.Close()
@@ -26,7 +26,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
@@ -75,7 +75,7 @@ func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 					case `转增股本上市日`:
 						xdxr.SharesCvtDate = util.Str2Snull(td)
 					default:
-						log.Printf("%s unidentified field: %s", stock.Code, field)
+						logrus.Printf("%s unidentified field: %s", stock.Code, field)
 					}
 				}
 

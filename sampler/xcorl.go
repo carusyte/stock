@@ -3,7 +3,6 @@ package sampler
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"math/rand"
 	"runtime"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
 	uuid "github.com/satori/go.uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
@@ -40,7 +40,7 @@ func CalXCorl(stocks *model.Stocks) {
 	wgr := collect(&rstks, suc)
 	chxcorl := make(chan *xCorlTrnDBJob, conf.Args.DBQueueCapacity)
 	wgdb := goSaveXCorlTrn(chxcorl, suc)
-	log.Printf("calculating cross correlations for training, parallel level:%d", pl)
+	logrus.Printf("calculating cross correlations for training, parallel level:%d", pl)
 	for _, stk := range stocks.List {
 		wg.Add(1)
 		wf <- 1
@@ -55,7 +55,7 @@ func CalXCorl(stocks *model.Stocks) {
 	close(suc)
 	wgr.Wait()
 
-	log.Printf("xcorl_trn data saved. %d / %d", len(rstks), stocks.Size())
+	logrus.Printf("xcorl_trn data saved. %d / %d", len(rstks), stocks.Size())
 	if stocks.Size() != len(rstks) {
 		codes := make([]string, stocks.Size())
 		for i, s := range stocks.List {
@@ -63,7 +63,7 @@ func CalXCorl(stocks *model.Stocks) {
 		}
 		eq, fs, _ := util.DiffStrings(codes, rstks)
 		if !eq {
-			log.Printf("Unsaved: %+v", fs)
+			logrus.Printf("Unsaved: %+v", fs)
 		}
 	}
 }
@@ -82,12 +82,12 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	portion := conf.Args.Sampler.CorlPortion
 	maxKlid, err := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
 	if err != nil {
-		log.Printf(`%s failed to query max klid, %+v`, code, err)
+		logrus.Printf(`%s failed to query max klid, %+v`, code, err)
 		return
 	}
 	maxk := int(maxKlid)
 	if maxk+1 < prior {
-		log.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
+		logrus.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
 			code, maxk+1, prior)
 		return
 	}
@@ -95,11 +95,11 @@ func sampXCorlTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan
 	if len(syear) > 0 {
 		sklid, err := dbmap.SelectInt(`select min(klid) from kline_d_b where code = ? and date >= ?`, code, syear)
 		if err != nil {
-			log.Printf(`%s failed to query min klid, %+v`, code, err)
+			logrus.Printf(`%s failed to query min klid, %+v`, code, err)
 			return
 		}
 		if int(sklid)+1 < prior {
-			log.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
+			logrus.Printf("%s insufficient data for xcorl_trn sampling: got %d, prior of %d required",
 				code, int(sklid)+1, prior)
 			return
 		}
@@ -150,7 +150,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	// use backward reinstated kline
 	query, err := global.Dot.Raw("QUERY_BWR_DAILY")
 	if err != nil {
-		log.Printf(`%s failed to load sql QUERY_BWR_DAILY, %+v`, code, err)
+		logrus.Printf(`%s failed to load sql QUERY_BWR_DAILY, %+v`, code, err)
 		return true, xt
 	}
 	query = fmt.Sprintf(query, qryKlid)
@@ -158,21 +158,21 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	_, err = dbmap.Select(&klhist, query, code)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			log.Printf(`%s failed to load kline hist data, %+v`, code, err)
+			logrus.Printf(`%s failed to load kline hist data, %+v`, code, err)
 			return true, xt
 		}
-		log.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
+		logrus.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
 		return
 	}
 	if len(klhist) < span+offset+shift {
-		log.Printf("%s insufficient data for xcorl_trn sampling at klid %d: %d, %d required",
+		logrus.Printf("%s insufficient data for xcorl_trn sampling at klid %d: %d, %d required",
 			code, klid, len(klhist)-shift, span+offset)
 		return
 	}
 
 	//query reference security kline_d_b with shifted matching dates & calculate correlation
 	skl := klhist[shift+offset-1]
-	log.Printf("%s sampling xcorl at %d, %s", skl.Code, skl.Klid, skl.Date)
+	logrus.Printf("%s sampling xcorl at %d, %s", skl.Code, skl.Klid, skl.Date)
 	dates := make([]string, len(klhist)-shift)
 	lrs := make([]float64, len(klhist)-shift-offset)
 	for i, k := range klhist {
@@ -181,7 +181,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		}
 		if i >= shift+offset {
 			if !k.Lr.Valid {
-				log.Printf(`%s %s log return is null, skipping`, code, k.Date)
+				logrus.Printf(`%s %s log return is null, skipping`, code, k.Date)
 				return
 			}
 			lrs[i-shift-offset] = k.Lr.Float64
@@ -194,22 +194,22 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	_, err = dbmap.Select(&codes, query, code, len(dates), minReq-1)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
+			logrus.Printf(`%s failed to load reference kline data, %+v`, code, err)
 			return true, xt
 		}
-		log.Printf(`%s no available reference data between %s and %s`,
+		logrus.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
 	if len(codes) == 0 {
-		log.Printf(`%s no available reference data between %s and %s`,
+		logrus.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
 
 	query, err = global.Dot.Raw("QUERY_BWR_DAILY_4_XCORL_TRN")
 	if err != nil {
-		log.Printf(`%s failed to load sql QUERY_BWR_DAILY_4_XCORL_TRN, %+v`, code, err)
+		logrus.Printf(`%s failed to load sql QUERY_BWR_DAILY_4_XCORL_TRN, %+v`, code, err)
 		return true, xt
 	}
 	codeStr := util.Join(codes, ",", true)
@@ -219,10 +219,10 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 	_, err = dbmap.Select(&rhist, query)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
+			logrus.Printf(`%s failed to load reference kline data, %+v`, code, err)
 			return true, xt
 		}
-		log.Printf(`%s no available reference data between %s and %s`,
+		logrus.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
@@ -234,7 +234,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 			if k.Lr.Valid {
 				bucket = append(bucket, k.Lr.Float64)
 			} else {
-				log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+				logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 			}
 			lcode = k.Code
 			if i != len(rhist)-1 {
@@ -243,19 +243,19 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		}
 		//process filled bucket
 		if len(bucket) != len(lrs) {
-			log.Printf(`%s reference %s data unmatched, skipping`, code, lcode)
+			logrus.Printf(`%s reference %s data unmatched, skipping`, code, lcode)
 			bucket = make([]float64, 0, 16)
 			if k.Lr.Valid {
 				bucket = append(bucket, k.Lr.Float64)
 			} else {
-				log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+				logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 			}
 			lcode = k.Code
 			continue
 		}
 		corl, err := stats.Correlation(lrs, bucket)
 		if err != nil {
-			log.Printf(`%s failed calculate correlation at klid %d, %+v`, code, klid, err)
+			logrus.Printf(`%s failed calculate correlation at klid %d, %+v`, code, klid, err)
 			return true, xt
 		}
 		dt, tm := util.TimeStr()
@@ -274,7 +274,7 @@ func sampXCorlTrnAt(stock *model.Stock, klid int) (stop bool, xt []*model.XCorlT
 		if k.Lr.Valid {
 			bucket = append(bucket, k.Lr.Float64)
 		} else {
-			log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+			logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 		}
 		lcode = k.Code
 	}
@@ -290,18 +290,18 @@ func goSaveXCorlTrn(chxcorl chan *xCorlTrnDBJob, suc chan string) (wg *sync.Wait
 		for x := range ch {
 			code := x.stock.Code
 			if x.fin < 0 {
-				log.Printf("%s failed samping xcorl_trn", code)
+				logrus.Printf("%s failed samping xcorl_trn", code)
 			} else if x.fin == 0 && len(x.xcorls) > 0 {
 				x1 := x.xcorls[0]
 				e := saveXCorlTrn(x.xcorls...)
 				if e == nil {
 					counter[code] += len(x.xcorls)
-					log.Printf("%s %d xcorl_trn saved, start date:%s", code, len(x.xcorls), x1.Date)
+					logrus.Printf("%s %d xcorl_trn saved, start date:%s", code, len(x.xcorls), x1.Date)
 				} else {
-					log.Panicf("%s %s db operation error:%+v", code, x1.Date, e)
+					logrus.Panicf("%s %s db operation error:%+v", code, x1.Date, e)
 				}
 			} else {
-				log.Printf("%s finished xcorl_trn sampling, total: %d", code, counter[code])
+				logrus.Printf("%s finished xcorl_trn sampling, total: %d", code, counter[code])
 				suc <- x.stock.Code
 			}
 		}

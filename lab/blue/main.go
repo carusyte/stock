@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
 	"time"
 
 	"github.com/carusyte/stock/score"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -20,8 +20,8 @@ func hidblue() {
 	r2.Weight = 0.8
 	r1r2 := score.Combine(r1, r2).Sort()
 	// .Shrink(int(c))
-	log.Printf("%+v", r1r2)
-	log.Printf("Time Cost: %v", time.Since(start).Seconds())
+	logrus.Printf("%+v", r1r2)
+	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func blue() {

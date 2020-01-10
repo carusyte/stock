@@ -1,10 +1,10 @@
 package indc
 
 import (
-	"log"
 	"math"
 
 	"github.com/carusyte/stock/model"
+	"github.com/sirupsen/logrus"
 )
 
 //BIAS calculates BIAS Indicator for the given parameters
@@ -42,7 +42,7 @@ func BIAS(src []*model.TradeDataBase, n1, n2, n3 int) []*model.Indicator {
 
 func calcMA(src []*model.TradeDataBase, curIdx, n int) float64 {
 	if curIdx >= len(src) {
-		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(src)-1)
+		logrus.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(src)-1)
 	}
 	nu := 0.
 	for i := int(math.Max(0, float64(curIdx-n+1))); i <= curIdx; i++ {

@@ -3,7 +3,6 @@ package getd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -39,7 +38,7 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 	)
 	_, e := dbmap.Select(&idxlst, `select * from idxlst`)
 	util.CheckErr(e, "failed to query idxlst")
-	log.Printf("# Indices: %d", len(idxlst))
+	logrus.Printf("# Indices: %d", len(idxlst))
 	codes := make([]string, len(idxlst))
 	idxMap := make(map[string]*model.IdxLst)
 	for i, idx := range idxlst {
@@ -55,15 +54,15 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 		for rc := range rchs {
 			rcodes = append(rcodes, rc.Code)
 			p := float64(len(rcodes)) / float64(len(idxlst)) * 100
-			log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
+			logrus.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 		}
 		for _, sc := range rcodes {
 			suclst = append(suclst, idxMap[sc])
 		}
-		log.Printf("Finished index data collecting")
+		logrus.Printf("Finished index data collecting")
 		eq, fs, _ := util.DiffStrings(codes, rcodes)
 		if !eq {
-			log.Printf("Failed indices: %+v", fs)
+			logrus.Printf("Failed indices: %+v", fs)
 		}
 	}()
 	chDbjob = createDbJobQueues(
@@ -129,7 +128,7 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 // 		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
 // 	d, e := util.HttpGetBytes(url)
 // 	if e != nil {
-// 		log.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
+// 		logrus.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
 // 		return false, true
 // 	}
 // 	qj := &model.QQJson{}
@@ -138,11 +137,11 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 // 	qj.Period = per
 // 	e = json.Unmarshal(d, qj)
 // 	if e != nil {
-// 		log.Printf("failed to parse json from %s\n%+v", url, e)
+// 		logrus.Printf("failed to parse json from %s\n%+v", url, e)
 // 		return false, true
 // 	}
 // 	if len(qj.Quotes) > 0 && ldate != "" && qj.Quotes[0].Date != ldate {
-// 		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
+// 		logrus.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
 // 		return false, true
 // 	}
 // 	supplementMisc(qj.Quotes, tab, sklid)
@@ -185,17 +184,17 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 		`symbol=%s&period=%s&type=normal%s`, code, per, bg)
 	d, e := util.HttpGetBytes(url)
 	if e != nil {
-		log.Printf("%s failed to get %s\n%+v", code, tab, e)
+		logrus.Printf("%s failed to get %s\n%+v", code, tab, e)
 		return false, true
 	}
 	xqj := &model.XQJson{}
 	e = json.Unmarshal(d, xqj)
 	if e != nil {
-		log.Printf("failed to parse json from %s\n%+v", url, e)
+		logrus.Printf("failed to parse json from %s\n%+v", url, e)
 		return false, true
 	}
 	if xqj.Success != "true" {
-		log.Printf("target server failed: %s\n%+v\n%+v", url, xqj, e)
+		logrus.Printf("target server failed: %s\n%+v\n%+v", url, xqj, e)
 		return false, true
 	}
 	xqj.Save(dbmap, sklid, string(tab))

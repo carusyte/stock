@@ -1,7 +1,8 @@
 package main
 
 import (
-	"log"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/carusyte/stock/cmd"
@@ -15,6 +16,23 @@ import (
 	"github.com/carusyte/stock/score"
 	"github.com/carusyte/stock/util"
 )
+
+const (
+	//LOGFILE the path for the global log file
+	LOGFILE = "stock.log"
+)
+
+func init() {
+	if _, e := os.Stat(LOGFILE); e == nil {
+		os.Remove(LOGFILE)
+	}
+	logFile, e := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
+	if e != nil {
+		logrus.Panicln("failed to open log file", e)
+	}
+	mw := io.MultiWriter(os.Stdout, logFile)
+	logrus.SetOutput(mw)
+}
 
 func main() {
 	switch strings.ToLower(conf.Args.Profiling) {
@@ -57,9 +75,9 @@ func test() {
 		model.KLINE_MONTH_NR)
 	e := getd.AppendVarateRgl(allstk...)
 	if e != nil {
-		log.Println(e)
+		logrus.Println(e)
 	} else {
-		log.Printf("%v stocks varate_rgl fixed", len(allstk))
+		logrus.Printf("%v stocks varate_rgl fixed", len(allstk))
 	}
 }
 
