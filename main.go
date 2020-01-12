@@ -42,6 +42,7 @@ func init() {
 }
 
 func main() {
+	logrus.Info("started...")
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":
 		defer profile.Start().Stop()
