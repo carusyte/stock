@@ -6,9 +6,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
-	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +14,7 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/gchaincl/dotsql"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/gorp.v2"
 )
 
@@ -29,10 +27,10 @@ var dot *dotsql.DotSql
 var dbmap *gorp.DbMap
 
 func init() {
-	logFile, err := os.OpenFile("calk.log", os.O_CREATE|os.O_RDWR, 0666)
-	util.CheckErr(err, "failed to open log file")
-	mw := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(mw)
+	// logFile, err := os.OpenFile("calk.log", os.O_CREATE|os.O_RDWR, 0666)
+	// util.CheckErr(err, "failed to open log file")
+	// mw := io.MultiWriter(os.Stdout, logFile)
+	// logrus.SetOutput(mw)
 	dbmap = db.Get(true, *pall)
 }
 
@@ -44,7 +42,7 @@ func main() {
 		dur := time.Since(start).Seconds()
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
 			" on duplicate key update start=?, end=?, dur=?", "CALK_TOTAL", ss, end, dur, ss, end, dur)
-		log.Printf("Complete. Time Elapsed: %f sec", time.Since(start).Seconds())
+		logrus.Printf("Complete. Time Elapsed: %f sec", time.Since(start).Seconds())
 	}()
 
 	flag.Parse() // Scan the arguments list
@@ -66,13 +64,13 @@ func getStocks() []model.Stock {
 	var stocks []model.Stock
 	_, err := dbmap.Select(&stocks, "select * from basics order by code")
 	checkErr(err, "Select failed")
-	log.Printf("number of stock: %d\n", len(stocks))
+	logrus.Printf("number of stock: %d\n", len(stocks))
 	return stocks
 }
 
 func checkErr(err error, msg string) {
 	if err != nil {
-		log.Fatalf("%s\n %+v\n", msg, err)
+		logrus.Fatalf("%s\n %+v\n", msg, err)
 	}
 }
 
@@ -204,7 +202,7 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 
 	// batchInsert(s.Code, klinesw, klinesm, kdj, kdjw, kdjm)
 
-	log.Printf("%s complete in %f s: dy: %d, wk: %d, mo: %d\n", s.Code, time.Since(start).Seconds(),
+	logrus.Printf("%s complete in %f s: dy: %d, wk: %d, mo: %d\n", s.Code, time.Since(start).Seconds(),
 		len(klines), len(klinesw), len(klinesm))
 }
 
@@ -317,7 +315,7 @@ func batchInsert(code string, klinesw []*model.KlineW, klinesm []*model.KlineM,
 	// cindc := getd.binsIndc(kdjw, "indicator_d")
 	// cindw := getd.binsIndc(kdjw, "indicator_w")
 	// cindm := getd.binsIndc(kdjw, "indicator_m")
-	// log.Printf("%s saved to database, wk[%d], mo[%d], ind[%d], indw[%d], indm[%d]", code, cklw, cklm,
+	// logrus.Printf("%s saved to database, wk[%d], mo[%d], ind[%d], indw[%d], indm[%d]", code, cklw, cklm,
 	// 	cindc, cindw, cindm)
 }
 
