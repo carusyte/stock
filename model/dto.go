@@ -231,12 +231,12 @@ func (l *Stocks) UnmarshalJSON(b []byte) error {
 	for i, da := range data {
 		s := &Stock{}
 		d := da.(map[string]interface{})
-		if v, e := strconv.ParseFloat(d["totalFlowShares"].(string), 64); e == nil {
-			s.Outstanding.Float64 = v / 10000.0
-			s.Outstanding.Valid = true
-		} else {
-			return fmt.Errorf("failed to parse totalFlowShares: %+v, %+v", d["totalFlowShares"], e)
-		}
+		// if v, e := strconv.ParseFloat(d["totalFlowShares"].(string), 64); e == nil {
+		// 	s.Outstanding.Float64 = v / 10000.0
+		// 	s.Outstanding.Valid = true
+		// } else {
+		// 	return fmt.Errorf("failed to parse totalFlowShares: %+v, %+v", d["totalFlowShares"], e)
+		// }
 		if v, ok := d["LISTING_DATE"].(string); ok {
 			s.TimeToMarket.String = v
 			s.TimeToMarket.Valid = true
@@ -253,12 +253,12 @@ func (l *Stocks) UnmarshalJSON(b []byte) error {
 		} else {
 			return fmt.Errorf("failed to parse SECURITY_ABBR_A: %+v", d["SECURITY_ABBR_A"])
 		}
-		if v, e := strconv.ParseFloat(d["totalShares"].(string), 64); e == nil {
-			s.Totals.Float64 = v / 10000.0
-			s.Totals.Valid = true
-		} else {
-			return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
-		}
+		// if v, e := strconv.ParseFloat(d["totalShares"].(string), 64); e == nil {
+		// 	s.Totals.Float64 = v / 10000.0
+		// 	s.Totals.Valid = true
+		// } else {
+		// 	return fmt.Errorf("failed to parse totalShares: %+v, %+v", d["totalShares"], e)
+		// }
 		dt, tm := util.TimeStr()
 		s.UDate.Valid = true
 		s.UTime.Valid = true

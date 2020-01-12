@@ -528,6 +528,10 @@ func getSSE() *model.Stocks {
 	if e != nil {
 		logrus.Panicf("failed to parse json from %s\n%+v", url_sh, e)
 	}
+	//TODO supplement shares info from the following
+	// http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback5040&isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000&_=1578668181485
+	// http://query.sse.com.cn/commonQuery.do?isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000
+	// Referer: http://www.sse.com.cn/assortment/stock/list/share/
 	list.SetMarket("SH")
 	return list
 }
