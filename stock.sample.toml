@@ -34,6 +34,8 @@ master_http_proxy = "http://localhost:1087"
 rotate_proxy_bypass_ratio = 0.05
 rotate_proxy_refresh_interval = 1
 rotate_proxy_freshness_min = 12
+user_agents = "https://developers.whatismybrowser.com/api/docs/latest/user-agent-database-dump-url-csv-sample.tar.gz"
+user_agent_lifespan = 10
 
 [GCS]
 connection = 8

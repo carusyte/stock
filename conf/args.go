@@ -62,6 +62,8 @@ type Arguments struct {
 		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`
 		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
+		UserAgents                 string  `mapstructure:"user_agents"`
+		UserAgentLifespan          int     `mapstructure:"user_agent_lifespan"`
 	}
 	GCS struct {
 		Connection  int    `mapstructure:"connection"`
