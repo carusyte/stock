@@ -413,6 +413,8 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 			stock.Name)
 		return false, true
 	}
+	
+	logrus.Debugf("%s returns: \n %s", url, doc.Text())
 
 	//parse industry value
 	sel := `#fieldstatus div.bd.pr div:nth-child(1) p span`

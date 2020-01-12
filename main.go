@@ -10,6 +10,7 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
+	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
@@ -23,6 +24,12 @@ const (
 )
 
 func init() {
+	logrus.SetFormatter(&prefixed.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		FullTimestamp:   true,
+		ForceFormatting: true,
+		// ForceColors:     true,
+	})
 	if _, e := os.Stat(LOGFILE); e == nil {
 		os.Remove(LOGFILE)
 	}

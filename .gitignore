@@ -9,3 +9,4 @@ getd/getd.log
 test/debug
 debug
 .history/*
+__debug_bin
