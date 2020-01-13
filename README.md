@@ -45,12 +45,19 @@ golang.org
 
 ### Run
 
+## Known Issue
+
+up to https://github.com/grpc/grpc-go/issues/3312
+
+    cd %GOPATH%\src\google.golang.org\grpc
+    git revert 336cf8d                              
+
 
 ## Change Log
 
 ## FAQ
 
-fix golang/text by following command, ref https://github.com/golang/text
-, or direclty remove correspoding package folder and rerun things like
+### can't find package xx at 'go get'
+re-fetch via 'go get -u', or direclty remove correspoding package folder and run it again
 
     go get -u golang.org/x/text
