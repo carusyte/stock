@@ -37,20 +37,31 @@ golang.org
 ### Build
 
     # have go-lang installed, (v1.13.6)
-    # have latest git installed (v2.24), consider use scoop to manage / install if using windows
+    # have latest git installed (v2.24)
 
     # this might take few minutes
+    cd %GOPATH%\src\github.com\carusyte\stock
     go get ...
+
+    # known issue https://github.com/grpc/grpc-go/issues/3312
+    cd %GOPATH%\src\google.golang.org\grpc
+    git revert 336cf8d       
+
+    cd %GOPATH%\src\github.com\carusyte\stock
     go build
+
 
 ### Run
 
-
-## Change Log
+    go run main.go
+    
+    # there are still some config parse problem, instruction required
+                      
 
 ## FAQ
 
-fix golang/text by following command, ref https://github.com/golang/text
-, or direclty remove correspoding package folder and rerun things like
+### can't find package xx at 'go get'
+re-fetch via 'go get -u', or direclty remove correspoding package folder and run it again
+
 
     go get -u golang.org/x/text

@@ -9,10 +9,12 @@ import (
 
 	"github.com/bitly/go-hostpool"
 	"github.com/carusyte/stock/conf"
-	"github.com/felixge/tcpkeepalive"
+
 	"github.com/pkg/errors"
 	logr "github.com/sirupsen/logrus"
 )
+
+	// "github.com/felixge/tcpkeepalive"
 
 var (
 	hp = hostpool.New(conf.Args.RPCServers)
@@ -77,10 +79,12 @@ func tryRpcCall(serverAddress, service string, request interface{}, reply interf
 		return errors.Wrapf(err, "failed to connect rpc server: %s", serverAddress)
 	}
 	defer conn.Close()
-	err = tcpkeepalive.SetKeepAlive(conn, time.Second*60, 2048, time.Second*45)
-	if err != nil {
-		return errors.Wrapf(err, "failed to set tcp keep-alive for connection to %s", serverAddress)
-	}
+
+	// err = tcpkeepalive.SetKeepAlive(conn, time.Second*60, 2048, time.Second*45)
+	// if err != nil {
+	// 	return errors.Wrapf(err, "failed to set tcp keep-alive for connection to %s", serverAddress)
+	// }
+	
 	client := rpc.NewClient(conn)
 	defer client.Close()
 	err = client.Call(service, request, reply)
