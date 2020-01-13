@@ -37,23 +37,26 @@ golang.org
 ### Build
 
     # have go-lang installed, (v1.13.6)
-    # have latest git installed (v2.24), consider use scoop to manage / install if using windows
+    # have latest git installed (v2.24)
 
     # this might take few minutes
+    cd %GOPATH%\src\github.com\carusyte\stock
     go get ...
+
+    # known issue https://github.com/grpc/grpc-go/issues/3312
+    cd %GOPATH%\src\google.golang.org\grpc
+    git revert 336cf8d       
+
+    cd %GOPATH%\src\github.com\carusyte\stock
     go build
+
+
 
 ### Run
 
-## Known Issue
+    go run main.go
+                      
 
-up to https://github.com/grpc/grpc-go/issues/3312
-
-    cd %GOPATH%\src\google.golang.org\grpc
-    git revert 336cf8d                              
-
-
-## Change Log
 
 ## FAQ
 
