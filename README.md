@@ -51,12 +51,12 @@ golang.org
     go build
 
 
-
 ### Run
 
     go run main.go
+    
+    # there are still some config parse problem, instruction required
                       
-
 
 ## FAQ
 
