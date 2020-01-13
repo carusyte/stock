@@ -18,7 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
-	"gopkg.in/chromedp/chromedp.v0"
+	"github.com/chromedp/chromedp"
 )
 
 var (

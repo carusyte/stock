@@ -528,7 +528,7 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 			if !fnd {
 				continue
 			}
-			ks.RowId = fmt.Sprintf("BUY-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.Must(uuid.NewV1()))
+			ks.RowId = fmt.Sprintf("BUY-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.Must(uuid.NewV1(), nil))
 		}
 		i += tspan
 	}
@@ -588,7 +588,7 @@ func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 			if !fnd {
 				continue
 			}
-			ks.RowId = fmt.Sprintf("SELL-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.Must(uuid.NewV1()))
+			ks.RowId = fmt.Sprintf("SELL-%d-%d-%d-%s", len(ks.KdjDy), len(ks.KdjWk), len(ks.KdjMo), uuid.Must(uuid.NewV1(), nil))
 		}
 		i += tspan
 	}
@@ -775,7 +775,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 		ip.FieldHolder = kdjv
 
 		k := new(rm.KdjSeries)
-		k.RowId = fmt.Sprintf("%s:%s", item.Code, uuid.Must(uuid.NewV1()))
+		k.RowId = fmt.Sprintf("%s:%s", item.Code, uuid.Must(uuid.NewV1(), nil))
 		fdy, fwk, fmo := false, false, false
 		k.KdjDy, fdy = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_DAY, 100, ""))
 		k.KdjWk, fwk = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_WEEK, 100, ""))

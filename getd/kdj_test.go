@@ -1,18 +1,19 @@
 package getd
 
 import (
-	"testing"
-	"github.com/carusyte/stock/model"
-	"log"
-	"time"
-	"sync"
-	"github.com/satori/go.uuid"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"runtime"
-	"github.com/montanaflynn/stats"
+	"log"
 	"math"
+	"runtime"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/model"
+	"github.com/montanaflynn/stats"
+	uuid "github.com/satori/go.uuid"
+	"github.com/sirupsen/logrus"
 )
 
 func TestConcurrentModifySlice(t *testing.T) {
@@ -202,7 +203,7 @@ func (s *FloatSlice) Remove(i int) {
 
 func TestUUID(t *testing.T) {
 	for i := 0; i < 50; i++ {
-		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1()))
+		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1(), nil))
 		log.Printf("%s,   len:%d", uuid, len(uuid))
 	}
 }
@@ -219,7 +220,7 @@ func TestPruneKdjFeatDatRunMode(t *testing.T) {
 	st := time.Now()
 	fdk := &fdKey{"D", "BY", smpNum, 763}
 	fdrvs := GetKdjFeatDatRaw(model.DAY, true, smpNum)
-	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E) * math.Pow(float64(smpNum-2),
+	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(smpNum-2),
 		1+1./(math.Sqrt2*math.Pi)))
 	logrus.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 	fdvsInput := convert2Fdvs(fdk, fdrvs)

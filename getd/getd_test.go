@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"time"
 
-	"gopkg.in/chromedp/chromedp.v0"
+	"github.com/chromedp/chromedp"
 )
 
 func TestGet(t *testing.T) {

@@ -53,7 +53,7 @@ func (g *lrGrader) sample(code string, frame int, klhist []*model.Quote) (kpts [
 		}
 		d, t := util.TimeStr()
 		kp := &model.KeyPoint{
-			UUID:     fmt.Sprintf("%s", uuid.Must(uuid.NewV1())),
+			UUID:     fmt.Sprintf("%s", uuid.Must(uuid.NewV1(),nil)),
 			Code:     code,
 			Klid:     refQt.Klid,
 			Date:     refQt.Date,

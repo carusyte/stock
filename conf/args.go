@@ -150,17 +150,15 @@ type Arguments struct {
 
 func init() {
 	setDefaults()
+
+	viper.SetConfigName("stock") // name of config file (without extension)
+
 	gopath := os.Getenv("GOPATH")
 	if "" == gopath {
 		gopath = build.Default.GOPATH
 	}
-
-	viper.SetConfigName("stock.sample.toml") // name of config file (without extension)
-
-	// viper.AddConfigPath("$GOPATH/bin")
 	viper.AddConfigPath(filepath.Join(gopath, "bin"))
 	viper.AddConfigPath(".") // optionally look for config in the working directory
-	// viper.AddConfigPath("$HOME")
 
 	e := viper.ReadInConfig()
 	if e != nil {

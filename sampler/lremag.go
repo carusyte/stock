@@ -32,7 +32,7 @@ func (g *remaLrGrader) sample(code string, frame int, klhist []*model.Quote) (kp
 			return
 		}
 		remalr := remaLr(code, klhist, refIdx, frame)
-		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1()))
+		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1(),nil))
 		s, err := g.score(uuid, remalr, frame)
 		if err != nil {
 			return nil, err
