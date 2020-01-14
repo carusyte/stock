@@ -10,7 +10,6 @@ import (
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/score"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +43,7 @@ var scoreCmd = &cobra.Command{
 		case "bluekdjv":
 			blueKdjv()
 		default:
-			logrus.Panicf("unsupported scorer: %s", s)
+			log.Panicf("unsupported scorer: %s", s)
 		}
 	},
 }
@@ -52,8 +51,8 @@ var scoreCmd = &cobra.Command{
 func kdjOnly(code ...string) {
 	start := time.Now()
 	r1 := new(score.KdjV).Get(code, -1, true)
-	logrus.Printf("\n%+v", r1)
-	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
+	log.Printf("\n%+v", r1)
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func kdjFirst() {
@@ -63,8 +62,8 @@ func kdjFirst() {
 	r2.Weight = 0.2
 	r3 := new(score.BlueChip).Get(r1.Stocks(), -1, false)
 	r3.Weight = 0.8
-	logrus.Printf("\n%+v", score.Combine(r2, r3, r1).Sort())
-	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
+	log.Printf("\n%+v", score.Combine(r2, r3, r1).Sort())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func empirical() {
@@ -86,15 +85,15 @@ func empirical() {
 	r1r2.Weight = 0
 	r3 := kdjv.Get(r1r2.Stocks(), -1, false)
 	r3.Weight = 1
-	logrus.Printf("\n%+v", kdjv.Get(idxc, -1, false))
+	log.Printf("\n%+v", kdjv.Get(idxc, -1, false))
 	fmt.Println()
-	logrus.Printf("\n%+v", score.Combine(r1r2, r3).Sort())
-	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
+	log.Printf("\n%+v", score.Combine(r1r2, r3).Sort())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func blue() {
 	r := new(score.BlueChip).Get(nil, -1, true)
-	logrus.Printf("\n%+v", r)
+	log.Printf("\n%+v", r)
 }
 
 func blueKdjv() {
@@ -103,8 +102,8 @@ func blueKdjv() {
 	r2.Weight = 0
 	r3 := new(score.KdjV).Get(r2.Stocks(), -1, false)
 	r3.Weight = 1
-	logrus.Printf("\n%+v", score.Combine(r2, r3).Sort())
-	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
+	log.Printf("\n%+v", score.Combine(r2, r3).Sort())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }
 
 func hidBlueKdjSt() {
@@ -121,8 +120,8 @@ func hidBlueKdjSt() {
 	c, e := global.Dbmap.SelectInt("select round(count(*) * ? ) from basics",
 		conf.Args.Scorer.HidBlueBaseRatio)
 	if e != nil {
-		logrus.Println("failed to count from basics")
-		logrus.Println(e)
+		log.Println("failed to count from basics")
+		log.Println(e)
 	}
 	r1 := new(score.HiD).Geta()
 	r1.Weight = 1. - conf.Args.Scorer.BlueWeight
@@ -136,9 +135,9 @@ func hidBlueKdjSt() {
 	r1r2.Weight = 1. - conf.Args.Scorer.KdjStWeight
 	r3 := kdjst.Get(r1r2.Stocks(), -1, false)
 	r3.Weight = conf.Args.Scorer.KdjStWeight
-	logrus.Printf("\n%+v", kdjst.Get(idxc, -1, false))
+	log.Printf("\n%+v", kdjst.Get(idxc, -1, false))
 	fmt.Println()
-	logrus.Printf("\n%+v", score.Combine(r1r2, r3).
+	log.Printf("\n%+v", score.Combine(r1r2, r3).
 		Sort().Highlight(conf.Args.Scorer.Highlight...))
-	logrus.Printf("Time Cost: %v", time.Since(start).Seconds())
+	log.Printf("Time Cost: %v", time.Since(start).Seconds())
 }

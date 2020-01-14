@@ -2,7 +2,6 @@ package score
 
 import (
 	"testing"
-	"log"
 	"github.com/montanaflynn/stats"
 	"math"
 	"time"

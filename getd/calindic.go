@@ -12,7 +12,6 @@ import (
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,7 +23,7 @@ const (
 
 //CalcIndics calculates various indicators for given stocks.
 func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
-	logrus.Println("calculating indices...")
+	log.Println("calculating indices...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, JOB_CAPACITY)
@@ -41,11 +40,11 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d indicators updated", rstks.Size())
+	log.Printf("%d indicators updated", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	//Pruning takes too long to complete, make it a separate process
@@ -296,13 +295,13 @@ func binsIndc(indc []*model.Indicator, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
+				log.Panicf("%s failed to delete stale %s data\n%+v", code, table, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		logrus.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, sklid)
 	}
 	batchSize := 200
 	for idx := 0; idx < len(indc); idx += batchSize {
@@ -391,11 +390,11 @@ func insertIndicMiniBatch(indc []*model.Indicator, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+				log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 			}
 		}
 		return len(indc)
 	}
-	logrus.Panicf("%s failed to overwrite %s: %+v", code, table, e)
+	log.Panicf("%s failed to overwrite %s: %+v", code, table, e)
 	return
 }

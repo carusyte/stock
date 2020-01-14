@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/carusyte/stock/indc"
-	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
@@ -32,7 +31,7 @@ func (g *remaLrGrader) sample(code string, frame int, klhist []*model.Quote) (kp
 			return
 		}
 		remalr := remaLr(code, klhist, refIdx, frame)
-		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1(),nil))
+		uuid := fmt.Sprintf("%s", uuid.Must(uuid.NewV1(), nil))
 		s, err := g.score(uuid, remalr, frame)
 		if err != nil {
 			return nil, err
@@ -98,7 +97,7 @@ func (g *remaLrGrader) stats(frame int) (e error) {
 	prev := 0.
 	cur := 0.
 	uuid := ""
-	logrus.Printf("score quotas for frame %d: %+v", frame, quotas)
+	log.Printf("score quotas for frame %d: %+v", frame, quotas)
 	for i, q := range quotas {
 		s := i - nclass/2
 		ud, ut := util.TimeStr()
@@ -126,17 +125,17 @@ func (g *remaLrGrader) stats(frame int) (e error) {
 		}
 		usql := ""
 		if i == 0 {
-			logrus.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
+			log.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
 			usql = fmt.Sprintf("update kpts%d set score = ? where rema_lr < ? or (rema_lr = ? and uuid <= ?)", frame)
 			_, e = dbmap.Exec(usql, s, cur, cur, kpts.UUID)
 		} else if i < len(quotas)-1 {
-			logrus.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
+			log.Printf("kpts%d score:[%d] threshold:[%f] uuid:[%s]", frame, s, cur, kpts.UUID)
 			usql = fmt.Sprintf("update kpts%d set score = ? "+
 				"where (rema_lr > ? or (rema_lr = ? and uuid > ?)) "+
 				"and (rema_lr < ? or (rema_lr = ? and uuid <= ?))", frame)
 			_, e = dbmap.Exec(usql, s, prev, prev, uuid, cur, cur, kpts.UUID)
 		} else {
-			logrus.Printf("kpts%d score:[%d] threshold:[> %f] uuid:[> %s]", frame, s, prev, uuid)
+			log.Printf("kpts%d score:[%d] threshold:[> %f] uuid:[> %s]", frame, s, prev, uuid)
 			usql = fmt.Sprintf("update kpts%d set score = ? where rema_lr > ? or (rema_lr = ? and uuid > ?)", frame)
 			_, e = dbmap.Exec(usql, s, prev, prev, uuid)
 		}

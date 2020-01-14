@@ -19,7 +19,6 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -30,7 +29,7 @@ type xdxrDBJob struct {
 }
 
 func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
-	logrus.Println("getting XDXR info...")
+	log.Println("getting XDXR info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -47,11 +46,11 @@ func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d xdxr info updated", rstks.Size())
+	log.Printf("%d xdxr info updated", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -108,11 +107,11 @@ func parseBonusPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *mo
 			if ok {
 				chrstk <- stock
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(wait+rand.Intn(wait)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
 		}
@@ -128,7 +127,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	// Load the URL
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", stock.Code, url)
+		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -139,26 +138,26 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
 
 	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
-		logrus.Printf("%s encounter authorization block, retrying: %s", stock.Code, url)
+		log.Printf("%s encounter authorization block, retrying: %s", stock.Code, url)
 		return false, true
 	}
 
 	numXdxr := strings.TrimSpace(doc.Find("#bonuslist div.bd.pt5.pagination div strong").Text())
 	if len(numXdxr) == 0 {
-		logrus.Printf("%s possible erroneous page encountered."+
+		log.Printf("%s possible erroneous page encountered."+
 			" unable to find xdxr counts in page %s", stock.Code, url)
 		return false, true
 	}
 
 	//if table doesn't exist and historical xdxr record is 0, return normally
 	if doc.Find("#bonus_table").Size() == 0 && numXdxr == "0" {
-		logrus.Printf("%s no xdxr data found at %s", stock.Code, url)
+		log.Printf("%s no xdxr data found at %s", stock.Code, url)
 		return true, false
 	}
 
@@ -198,7 +197,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 			case "分红率":
 				iDivRate = j
 			default:
-				logrus.Printf("unidentified column header in bonus page %s : %s", url, v)
+				log.Printf("unidentified column header in bonus page %s : %s", url, v)
 			}
 		})
 	})
@@ -237,7 +236,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 					//xdxr.Dyr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
 					//	"%")))
 				default:
-					logrus.Printf("unidentified column value in bonus page %s : %s", url, v)
+					log.Printf("unidentified column value in bonus page %s : %s", url, v)
 				}
 			}
 		})
@@ -256,7 +255,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 	// no records found, possible errornous page encounter
 	if len(xdxrs) == 0 {
-		logrus.Printf("%s no xdxr data found at %s", stock.Code, url)
+		log.Printf("%s no xdxr data found at %s", stock.Code, url)
 		return false, true
 	}
 
@@ -314,7 +313,7 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 			}
 
 			if math.IsNaN(price) {
-				logrus.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear.String)
+				log.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear.String)
 			} else if price != 0 {
 				x.Dyr.Float64 = x.Divi.Float64 / price / 10.0
 				x.Dyr.Valid = true
@@ -324,7 +323,7 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 			eps, e := dbmap.SelectNullFloat("select eps from finance where code = ? "+
 				"and year < ? and year like '%-12-31' order by year desc limit 1", x.Code, date)
 			if e != nil {
-				logrus.Printf("failed to query eps for %s before %s", x.Code, date)
+				log.Printf("failed to query eps for %s before %s", x.Code, date)
 			} else {
 				if eps.Valid && eps.Float64 != 0 {
 					x.Dpr.Float64 = x.Divi.Float64 / eps.Float64 / 10.0
@@ -399,13 +398,13 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to bulk update xdxr\n%+v", code, e)
+				log.Panicf("%s failed to bulk update xdxr\n%+v", code, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		logrus.Panicf("%s failed to bulk update xdxr, too much deadlock", code)
+		log.Panicf("%s failed to bulk update xdxr, too much deadlock", code)
 	}
 }
 
@@ -448,13 +447,13 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 	}
 
 	if allot == nil && cvt == nil && div == nil {
-		logrus.Printf("%s, no value parsed from plan: %s", xdxr.Code, xdxr.Plan.String)
+		log.Printf("%s, no value parsed from plan: %s", xdxr.Code, xdxr.Plan.String)
 	}
 }
 
 //GetFinance get finance info from server
 func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
-	logrus.Println("getting Finance info...")
+	log.Println("getting Finance info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -471,11 +470,11 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d finance info updated", rstks.Size())
+	log.Printf("%d finance info updated", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -483,7 +482,7 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 
 //GetFinPrediction get financial performance prediction
 func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
-	logrus.Println("getting financial prediction...")
+	log.Println("getting financial prediction...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -500,11 +499,11 @@ func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d finance prediction info updated", rstks.Size())
+	log.Printf("%d finance prediction info updated", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -524,11 +523,11 @@ func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk cha
 				chrstk <- stock
 				break
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(wait+rand.Intn(wait)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 				break
 			}
 		}
@@ -544,7 +543,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	// Load the URL
 	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", code, url)
+		log.Printf("%s, http failed %s", code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -553,11 +552,11 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	// parse body using goquery
 	doc, e = goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		logrus.Printf("%s failed to read from response body, retrying...", code)
+		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
 	}
 	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
-		logrus.Printf("%s encounter authorization block, retrying: %s", code, url)
+		log.Printf("%s encounter authorization block, retrying: %s", code, url)
 		return false, true
 	}
 	return parseFinPredictTables(doc, url, code)
@@ -565,7 +564,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 
 func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry bool) {
 	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p`).Text()) {
-		// logrus.Debugf("%s no prediction", code)
+		// log.Debugf("%s no prediction", code)
 		return true, false
 	}
 	//parse column index
@@ -587,12 +586,12 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			case "行业平均数":
 				iIndAvg = j
 			default:
-				logrus.Printf("unidentified column header in EPS predict table %s : %s", url, v)
+				log.Printf("unidentified column header in EPS predict table %s : %s", url, v)
 			}
 		})
 	})
 	if iNum == -1 {
-		logrus.Printf("%s unable to parse eps prediction table", url)
+		log.Printf("%s unable to parse eps prediction table", url)
 		return false, true
 	}
 	fpMap := make(map[string]*model.FinPredict)
@@ -614,12 +613,12 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 				case iIndAvg:
 					fp.EpsIndAvg = util.Str2Fnull(v)
 				default:
-					logrus.Printf("unidentified column value in eps table %s : %s", url, v)
+					log.Printf("unidentified column value in eps table %s : %s", url, v)
 				}
 			}
 		})
 		if fp.Year == "" {
-			logrus.Printf("%s eps year not found in %s", code, url)
+			log.Printf("%s eps year not found in %s", code, url)
 		} else {
 			fpMap[fp.Year] = fp
 		}
@@ -649,12 +648,12 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			case "行业平均数":
 				iIndAvg = j
 			default:
-				logrus.Printf("unidentified column header in NP predict table %s : %s", url, v)
+				log.Printf("unidentified column header in NP predict table %s : %s", url, v)
 			}
 		})
 	})
 	if iNum == -1 {
-		logrus.Printf("%s unable to parse np prediction table", url)
+		log.Printf("%s unable to parse np prediction table", url)
 		return false, true
 	}
 	doc.Find("#forecast div.bd div.clearfix div.fr.yjyc table tbody tr").Each(func(i int, s *goquery.Selection) {
@@ -675,12 +674,12 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 				case iIndAvg:
 					fp.NpIndAvg = util.Str2Fnull(v)
 				default:
-					logrus.Printf("unidentified column value in np table %s : %s", url, v)
+					log.Printf("unidentified column value in np table %s : %s", url, v)
 				}
 			}
 		})
 		if fp.Year == "" {
-			logrus.Printf("%s np year not found in %s", code, url)
+			log.Printf("%s np year not found in %s", code, url)
 		} else {
 			if efp, ok := fpMap[fp.Year]; ok {
 				efp.NpAvg = fp.NpAvg
@@ -700,7 +699,7 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 	})
 	// no records found, return normally
 	if len(fpMap) == 0 {
-		logrus.Printf("no prediction data %s", url)
+		log.Printf("no prediction data %s", url)
 		return true, false
 	}
 	ok = saveFinPredict(code, fpMap)
@@ -718,13 +717,13 @@ func saveFinPredict(code string, fpMap map[string]*model.FinPredict) bool {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to clean fin_predict data\n%+v", code, e)
+				log.Panicf("%s failed to clean fin_predict data\n%+v", code, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		logrus.Panicf("%s failed to clean fin_predict data, too much deadlock", code)
+		log.Panicf("%s failed to clean fin_predict data, too much deadlock", code)
 	}
 	rt = 0
 	//update to database
@@ -762,13 +761,13 @@ func saveFinPredict(code string, fpMap map[string]*model.FinPredict) bool {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to bulk update fin_predict\n%+v", code, e)
+				log.Panicf("%s failed to bulk update fin_predict\n%+v", code, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		logrus.Panicf("%s failed to bulk update fin_predict, too much deadlock", code)
+		log.Panicf("%s failed to bulk update fin_predict, too much deadlock", code)
 	}
 	return true
 }
@@ -802,11 +801,11 @@ func parseFinancePage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *
 				chrstk <- stock
 				break
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(wait+rand.Intn(wait)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 				break
 			}
 		}
@@ -822,7 +821,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	// Load the URL
 	res, e = util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", code, url)
+		log.Printf("%s, http failed %s", code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -831,19 +830,19 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	// parse body using goquery
 	doc, e = goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("%s failed to read from response body, retrying...", code)
+		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
 	}
 
 	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
-		logrus.Printf("%s encounter authorization block, retrying: %s", code, url)
+		log.Printf("%s encounter authorization block, retrying: %s", code, url)
 		return false, true
 	}
 
 	fr := &model.FinReport{Code: code}
 	e = json.Unmarshal([]byte(doc.Find("#main").Text()), fr)
 	if e != nil {
-		logrus.Printf("%s failed to parse json, retrying...\n%s", code, url)
+		log.Printf("%s failed to parse json, retrying...\n%s", code, url)
 		return false, true
 	}
 	fr.SetCode(code)
@@ -983,7 +982,7 @@ func latestUFRXdxr(code string) (x *model.Xdxr) {
 		if "sql: no rows in result set" == e.Error() {
 			return nil
 		}
-		logrus.Panicln("failed to run sql", e)
+		log.Panicln("failed to run sql", e)
 		return nil
 	}
 	return x

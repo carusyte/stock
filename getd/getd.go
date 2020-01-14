@@ -7,7 +7,6 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 )
 
 //Get miscellaneous stock info.
@@ -19,10 +18,10 @@ func Get() {
 		allstks = GetStockInfo()
 		StopWatch("STOCK_LIST", start)
 	} else {
-		logrus.Printf("skipped stock data from web")
+		log.Printf("skipped stock data from web")
 		allstks = new(model.Stocks)
 		stks := StocksDb()
-		logrus.Printf("%d stocks queried from db", len(stks))
+		log.Printf("%d stocks queried from db", len(stks))
 		allstks.Add(stks...)
 	}
 
@@ -32,7 +31,7 @@ func Get() {
 		stks = GetFinance(allstks)
 		StopWatch("GET_FINANCE", stgfi)
 	} else {
-		logrus.Printf("skipped finance data from web")
+		log.Printf("skipped finance data from web")
 		stks = allstks
 	}
 	if !conf.Args.DataSource.SkipKlineVld {
@@ -40,7 +39,7 @@ func Get() {
 		stks = GetKlines(stks, model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD)
 		StopWatch("GET_KLINES_VLD", stgkvld)
 	} else {
-		logrus.Printf("skipped kline-vld data from web")
+		log.Printf("skipped kline-vld data from web")
 	}
 	if !conf.Args.DataSource.SkipKlinePre {
 		stgkpre := time.Now()
@@ -48,7 +47,7 @@ func Get() {
 			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
 		StopWatch("GET_KLINES_PRE", stgkpre)
 	} else {
-		logrus.Printf("skipped kline-pre data from web")
+		log.Printf("skipped kline-pre data from web")
 	}
 
 	if !conf.Args.DataSource.SkipFinancePrediction {
@@ -56,7 +55,7 @@ func Get() {
 		stks = GetFinPrediction(stks)
 		StopWatch("GET_FIN_PREDICT", fipr)
 	} else {
-		logrus.Printf("skipped financial prediction data from web")
+		log.Printf("skipped financial prediction data from web")
 	}
 
 	if !conf.Args.DataSource.SkipXdxr {
@@ -64,7 +63,7 @@ func Get() {
 		stks = GetXDXRs(stks)
 		StopWatch("GET_XDXR", stgx)
 	} else {
-		logrus.Printf("skipped xdxr data from web")
+		log.Printf("skipped xdxr data from web")
 	}
 
 	if !conf.Args.DataSource.SkipKlines {
@@ -76,7 +75,7 @@ func Get() {
 		stks = KlinePostProcess(stks)
 		StopWatch("GET_KLINES", stgkl)
 	} else {
-		logrus.Printf("skipped klines data from web")
+		log.Printf("skipped klines data from web")
 	}
 
 	var allIdx, sucIdx []*model.IdxLst
@@ -88,7 +87,7 @@ func Get() {
 			allstks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
 		}
 	} else {
-		logrus.Printf("skipped index data from web")
+		log.Printf("skipped index data from web")
 	}
 
 	if !conf.Args.DataSource.SkipBasicsUpdate {
@@ -96,7 +95,7 @@ func Get() {
 		stks = updBasics(stks)
 		StopWatch("UPD_BASICS", updb)
 	} else {
-		logrus.Printf("skipped updating basics table")
+		log.Printf("skipped updating basics table")
 	}
 
 	// Add indices pending to be calculated
@@ -108,7 +107,7 @@ func Get() {
 		stks = CalcIndics(stks)
 		StopWatch("CALC_INDICS", stci)
 	} else {
-		logrus.Printf("skipped index calculation")
+		log.Printf("skipped index calculation")
 	}
 
 	if !conf.Args.DataSource.SkipFsStats {
@@ -116,13 +115,13 @@ func Get() {
 		CollectFsStats()
 		StopWatch("FS_STATS", stfss)
 	} else {
-		logrus.Printf("skipped feature scaling stats")
+		log.Printf("skipped feature scaling stats")
 	}
 
 	if !conf.Args.DataSource.SkipFinMark {
 		finMark(stks)
 	} else {
-		logrus.Printf("skipped updating fin mark")
+		log.Printf("skipped updating fin mark")
 	}
 
 	rptFailed(allstks, stks)
@@ -133,7 +132,7 @@ func StopWatch(code string, start time.Time) {
 	ss := start.Format("2006-01-02 15:04:05")
 	end := time.Now().Format("2006-01-02 15:04:05")
 	dur := time.Since(start).Seconds()
-	logrus.Printf("%s Complete. Time Elapsed: %f sec", code, dur)
+	log.Printf("%s Complete. Time Elapsed: %f sec", code, dur)
 	dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?) "+
 		"on duplicate key update start=values(start), end=values(end), dur=values(dur)",
 		code, ss, end, dur)
@@ -146,16 +145,16 @@ func finMark(stks *model.Stocks) *model.Stocks {
 	sql = fmt.Sprintf(sql, util.Join(stks.Codes, ",", true))
 	_, e = dbmap.Exec(sql)
 	util.CheckErr(e, "failed to update xprice, sql:\n"+sql)
-	logrus.Printf("%d xprice mark updated", stks.Size())
+	log.Printf("%d xprice mark updated", stks.Size())
 	return stks
 }
 
 func rptFailed(all *model.Stocks, fin *model.Stocks) {
-	logrus.Printf("Finish:[%d]\tTotal:[%d]", fin.Size(), all.Size())
+	log.Printf("Finish:[%d]\tTotal:[%d]", fin.Size(), all.Size())
 	if fin.Size() != all.Size() {
 		same, skp := all.Diff(fin)
 		if !same {
-			logrus.Printf("Unfinished: %+v", skp)
+			log.Printf("Unfinished: %+v", skp)
 		}
 	}
 }

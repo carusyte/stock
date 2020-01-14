@@ -2,7 +2,6 @@ package score
 
 import (
 	"testing"
-	"log"
 	"fmt"
 )
 

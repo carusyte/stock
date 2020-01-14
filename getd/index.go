@@ -10,7 +10,6 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 //GetIdxLst loads index data from database.
@@ -23,7 +22,7 @@ func GetIdxLst(code ...string) (idxlst []*model.IdxLst, e error) {
 	_, e = dbmap.Select(&idxlst, sql)
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
-			logrus.Warnf("no data in idxlst table")
+			log.Warnf("no data in idxlst table")
 			return idxlst, nil
 		}
 		return idxlst, errors.Wrapf(e, "failed to query idxlst, sql: %s, \n%+v", sql, errors.WithStack(e))
@@ -38,7 +37,7 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 	)
 	_, e := dbmap.Select(&idxlst, `select * from idxlst`)
 	util.CheckErr(e, "failed to query idxlst")
-	logrus.Printf("# Indices: %d", len(idxlst))
+	log.Printf("# Indices: %d", len(idxlst))
 	codes := make([]string, len(idxlst))
 	idxMap := make(map[string]*model.IdxLst)
 	for i, idx := range idxlst {
@@ -54,15 +53,15 @@ func GetIndices() (idxlst, suclst []*model.IdxLst) {
 		for rc := range rchs {
 			rcodes = append(rcodes, rc.Code)
 			p := float64(len(rcodes)) / float64(len(idxlst)) * 100
-			logrus.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
+			log.Printf("Progress: %d/%d, %.2f%%", len(rcodes), len(idxlst), p)
 		}
 		for _, sc := range rcodes {
 			suclst = append(suclst, idxMap[sc])
 		}
-		logrus.Printf("Finished index data collecting")
+		log.Printf("Finished index data collecting")
 		eq, fs, _ := util.DiffStrings(codes, rcodes)
 		if !eq {
-			logrus.Printf("Failed indices: %+v", fs)
+			log.Printf("Failed indices: %+v", fs)
 		}
 	}()
 	chDbjob = createDbJobQueues(
@@ -128,7 +127,7 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 // 		`param=%[1]s,%[2]s,%[3]s,,87654,qfq`, code, per, ldate)
 // 	d, e := util.HttpGetBytes(url)
 // 	if e != nil {
-// 		logrus.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
+// 		log.Printf("%s failed to get %s from %s\n%+v", code, tab, url, e)
 // 		return false, true
 // 	}
 // 	qj := &model.QQJson{}
@@ -137,11 +136,11 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 // 	qj.Period = per
 // 	e = json.Unmarshal(d, qj)
 // 	if e != nil {
-// 		logrus.Printf("failed to parse json from %s\n%+v", url, e)
+// 		log.Printf("failed to parse json from %s\n%+v", url, e)
 // 		return false, true
 // 	}
 // 	if len(qj.Quotes) > 0 && ldate != "" && qj.Quotes[0].Date != ldate {
-// 		logrus.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
+// 		log.Printf("start date %s not matched database: %s", qj.Quotes[0], ldate)
 // 		return false, true
 // 	}
 // 	supplementMisc(qj.Quotes, tab, sklid)
@@ -184,17 +183,17 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 		`symbol=%s&period=%s&type=normal%s`, code, per, bg)
 	d, e := util.HttpGetBytes(url)
 	if e != nil {
-		logrus.Printf("%s failed to get %s\n%+v", code, tab, e)
+		log.Printf("%s failed to get %s\n%+v", code, tab, e)
 		return false, true
 	}
 	xqj := &model.XQJson{}
 	e = json.Unmarshal(d, xqj)
 	if e != nil {
-		logrus.Printf("failed to parse json from %s\n%+v", url, e)
+		log.Printf("failed to parse json from %s\n%+v", url, e)
 		return false, true
 	}
 	if xqj.Success != "true" {
-		logrus.Printf("target server failed: %s\n%+v\n%+v", url, xqj, e)
+		log.Printf("target server failed: %s\n%+v\n%+v", url, xqj, e)
 		return false, true
 	}
 	xqj.Save(dbmap, sklid, string(tab))

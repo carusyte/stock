@@ -14,7 +14,6 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/global"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -63,7 +62,7 @@ func PickProxyDirect() (httpProxy string, e error) {
 	close(chpx)
 	wgc.Wait()
 
-	logrus.Printf("successfully fetched %d free proxy servers from remote.", len(proxyPool))
+	log.Printf("successfully fetched %d free proxy servers from remote.", len(proxyPool))
 	return pickFromProxyPool(), nil
 }
 
@@ -84,11 +83,11 @@ func PickProxy() (proxy Proxy, e error) {
 			status = ?`
 	_, e = global.Dbmap.Select(&proxyList, query, "OK")
 	if e != nil {
-		logrus.Println("failed to query proxy server from database", e)
+		log.Println("failed to query proxy server from database", e)
 		return proxy, errors.WithStack(e)
 	}
 	luProxy = time.Now()
-	logrus.Printf("successfully fetched %d free proxy servers from database.", len(proxyList))
+	log.Printf("successfully fetched %d free proxy servers from database.", len(proxyList))
 	return proxyList[rand.Intn(len(proxyList))], nil
 }
 
@@ -96,7 +95,7 @@ func PickProxy() (proxy Proxy, e error) {
 func MarkProxyFailure(p Proxy) {
 	_, e := global.Dbmap.Exec(`update proxy_list set fail = fail + 1 where host = ? and port = ?`, p.Host, p.Port)
 	if e != nil {
-		logrus.Printf("failed to increase fail counter for proxy %+v", p)
+		log.Printf("failed to increase fail counter for proxy %+v", p)
 	}
 }
 
@@ -105,15 +104,15 @@ func checkProxy(host, port string) bool {
 	addr := net.JoinHostPort(host, port)
 	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
-		logrus.Printf("%s failed: %+v", addr, err)
+		log.Printf("%s failed: %+v", addr, err)
 		return false
 	}
 	if conn != nil {
-		logrus.Printf("%s success", addr)
+		log.Printf("%s success", addr)
 		conn.Close()
 		return true
 	}
-	logrus.Printf("%s failed", addr)
+	log.Printf("%s failed", addr)
 	return false
 }
 
@@ -139,17 +138,17 @@ func collectProxies(wgc *sync.WaitGroup, chpx chan []string) {
 func fetchProxyFromKuaidaili(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `https://www.kuaidaili.com/ops/proxylist/1/`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, false, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -164,7 +163,7 @@ func fetchProxyFromKuaidaili(wg *sync.WaitGroup, chpx chan []string) {
 						return
 					}
 				} else {
-					logrus.Printf("failed to parse proxy last check string: %s, %+v", m, e)
+					log.Printf("failed to parse proxy last check string: %s, %+v", m, e)
 					return
 				}
 			}
@@ -179,24 +178,24 @@ func fetchProxyFromKuaidaili(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 
 func fetchProxyFromFreeProxyList(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `https://free-proxy-list.net/`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, true, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -211,7 +210,7 @@ func fetchProxyFromFreeProxyList(wg *sync.WaitGroup, chpx chan []string) {
 						return
 					}
 				} else {
-					logrus.Printf("failed to parse proxy last check string: %s, %+v", m, e)
+					log.Printf("failed to parse proxy last check string: %s, %+v", m, e)
 					return
 				}
 			}
@@ -226,24 +225,24 @@ func fetchProxyFromFreeProxyList(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 
 func fetchProxyFromHinkyDink(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `http://www.mrhinkydink.com/proxies.htm`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, false, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -263,17 +262,17 @@ func fetchProxyFromHinkyDink(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 
 func fetchProxyFrom66IP(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `http://www.66ip.cn/1.html`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, false, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
@@ -282,7 +281,7 @@ func fetchProxyFrom66IP(wg *sync.WaitGroup, chpx chan []string) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -308,17 +307,17 @@ func fetchProxyFrom66IP(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 
 func fetchProxyFromIP3366(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `http://www.ip3366.net/free/?stype=1`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, false, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
@@ -327,7 +326,7 @@ func fetchProxyFromIP3366(wg *sync.WaitGroup, chpx chan []string) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -345,7 +344,7 @@ func fetchProxyFromIP3366(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 
@@ -357,17 +356,17 @@ func fetchProxyFromData5u(wg *sync.WaitGroup, chpx chan []string) {
 		`http://www.data5u.com/free/gwgn/index.shtml`,
 	}
 	for _, url := range urls {
-		logrus.Printf("fetching free proxy list from %s", url)
+		log.Printf("fetching free proxy list from %s", url)
 		res, e := HTTPGetResponse(url, nil, false, false, false)
 		if e != nil {
-			logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+			log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 			return
 		}
 		defer res.Body.Close()
 		// parse body using goquery
 		doc, e := goquery.NewDocumentFromReader(res.Body)
 		if e != nil {
-			logrus.Printf("failed to read response body from %s: %+v", url, e)
+			log.Printf("failed to read response body from %s: %+v", url, e)
 			return
 		}
 		var pool []string
@@ -389,7 +388,7 @@ func fetchProxyFromData5u(wg *sync.WaitGroup, chpx chan []string) {
 					)
 				}
 			})
-		logrus.Printf("%d proxies available from %s", len(pool), url)
+		log.Printf("%d proxies available from %s", len(pool), url)
 		chpx <- pool
 	}
 }
@@ -397,17 +396,17 @@ func fetchProxyFromData5u(wg *sync.WaitGroup, chpx chan []string) {
 func fetchProxyFromSocksProxy(wg *sync.WaitGroup, chpx chan []string) {
 	defer wg.Done()
 	url := `https://www.socks-proxy.net/`
-	logrus.Printf("fetching free proxy list from %s", url)
+	log.Printf("fetching free proxy list from %s", url)
 	res, e := HTTPGetResponse(url, nil, true, false, false)
 	if e != nil {
-		logrus.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
+		log.Printf("failed to get free proxy list from %s, giving up %+v", url, e)
 		return
 	}
 	defer res.Body.Close()
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(res.Body)
 	if e != nil {
-		logrus.Printf("failed to read response body from %s: %+v", url, e)
+		log.Printf("failed to read response body from %s: %+v", url, e)
 		return
 	}
 	var pool []string
@@ -429,7 +428,7 @@ func fetchProxyFromSocksProxy(wg *sync.WaitGroup, chpx chan []string) {
 				)
 			}
 		})
-	logrus.Printf("%d proxies available from %s", len(pool), url)
+	log.Printf("%d proxies available from %s", len(pool), url)
 	chpx <- pool
 }
 

@@ -16,7 +16,6 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/cpu"
-	"github.com/sirupsen/logrus"
 	"github.com/ssgreg/repeat"
 )
 
@@ -35,7 +34,7 @@ func ParseLines(path string, retry int, parser func(no int, line []byte) error, 
 	op := func(c int) error {
 		var f *os.File
 		if f, e = os.Open(path); e != nil {
-			logrus.Printf("#%d failed to open file %s: %+v", c, path, e)
+			log.Printf("#%d failed to open file %s: %+v", c, path, e)
 			return repeat.HintTemporary(e)
 		}
 		defer f.Close()
@@ -49,13 +48,13 @@ func ParseLines(path string, retry int, parser func(no int, line []byte) error, 
 				if e == io.EOF {
 					return nil
 				}
-				logrus.Printf("failed to read line: %+v", e)
+				log.Printf("failed to read line: %+v", e)
 				return repeat.HintTemporary(e)
 			}
 			line = append(line, ln...)
 			if !ispr {
 				if e := parser(no, line); e != nil {
-					logrus.Printf("failed to parse line@%d : %+v", no, e)
+					log.Printf("failed to parse line@%d : %+v", no, e)
 					return repeat.HintStop(e)
 				}
 				no++
@@ -108,7 +107,7 @@ func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, 
 		if searchSubDirectory {
 			dirs, err := ioutil.ReadDir(dir)
 			if err != nil {
-				logrus.Printf("#%d failed to read content from %s: %+v", c, dir, err)
+				log.Printf("#%d failed to read content from %s: %+v", c, dir, err)
 				return repeat.HintTemporary(errors.WithStack(err))
 			}
 			for _, d := range dirs {
@@ -121,7 +120,7 @@ func FileExists(dir, name string, searchSubDirectory, retry bool) (exists bool, 
 			_, e = os.Stat(p)
 			if e != nil {
 				if !os.IsNotExist(e) {
-					logrus.Printf("#%d failed to check existence of %s : %+v", c, p, e)
+					log.Printf("#%d failed to check existence of %s : %+v", c, p, e)
 					return repeat.HintTemporary(errors.WithStack(e))
 				} else {
 					e = nil
@@ -159,7 +158,7 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 			if os.IsNotExist(e) {
 				return repeat.HintStop(e)
 			} else {
-				logrus.Printf("#%d failed to read stat for %s: %+v", c, dir, e)
+				log.Printf("#%d failed to read stat for %s: %+v", c, dir, e)
 				return repeat.HintTemporary(e)
 			}
 		}
@@ -167,7 +166,7 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 		if searchSubDirectory {
 			dirs, e := ioutil.ReadDir(dir)
 			if e != nil {
-				logrus.Printf("#%d failed to read content from %s: %+v", c, dir, e)
+				log.Printf("#%d failed to read content from %s: %+v", c, dir, e)
 				return repeat.HintTemporary(e)
 			}
 			for _, d := range dirs {
@@ -179,7 +178,7 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 		for _, p := range paths {
 			files, e := ioutil.ReadDir(p)
 			if e != nil {
-				logrus.Printf("#%d failed to read content from %s: %+v", c, p, e)
+				log.Printf("#%d failed to read content from %s: %+v", c, p, e)
 				return repeat.HintTemporary(e)
 			}
 			for _, f := range files {
@@ -216,7 +215,7 @@ func NumOfFiles(dir, pattern string, searchSubDirectory bool) (num int, e error)
 func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath string, e error) {
 	op := func(c int) error {
 		if c > 0 {
-			logrus.Printf("#%d retrying to write json file to %s...", c, path)
+			log.Printf("#%d retrying to write json file to %s...", c, path)
 		}
 		tmp := fmt.Sprintf("%s.tmp", path)
 		if compress {
@@ -242,17 +241,17 @@ func WriteJSONFile(payload interface{}, path string, compress bool) (finalPath s
 		}
 		jsonBytes, e := json.Marshal(payload)
 		if e != nil {
-			logrus.Printf("#%d failed to marshal payload %+v: %+v", c, payload, e)
+			log.Printf("#%d failed to marshal payload %+v: %+v", c, payload, e)
 			return repeat.HintStop(e)
 		}
 		_, e = bufferedWrite(tmp, jsonBytes, compress)
 		if e != nil {
-			logrus.Printf("#%d %+v", c, e)
+			log.Printf("#%d %+v", c, e)
 			return repeat.HintTemporary(e)
 		}
 		e = os.Rename(tmp, finalPath)
 		if e != nil {
-			logrus.Printf("#%d failed to rename %s to %s: %+v", c, tmp, finalPath, e)
+			log.Printf("#%d failed to rename %s to %s: %+v", c, tmp, finalPath, e)
 			return repeat.HintTemporary(e)
 		}
 		return nil

@@ -8,7 +8,7 @@ import (
 )
 
 func TestCalcIndics(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(logrus.DebugLevel)
 	stks := StocksDb()
 	allstk := new(model.Stocks)
 	for _, s := range stks {
@@ -18,7 +18,7 @@ func TestCalcIndics(t *testing.T) {
 }
 
 func TestCalIndicators4Indices(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(logrus.DebugLevel)
 	stks, e := GetIdxLst()
 	if e != nil {
 		panic(e)

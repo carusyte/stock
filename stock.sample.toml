@@ -21,6 +21,9 @@ rpc_servers = []
 # mem / cpu / none
 profiling = "none"
 
+# log file location. the file will be saved to the working directory by default
+log_file = "stock.log"
+
 [Database]
 host = "localhost"
 port = 3306

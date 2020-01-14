@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"testing"
 
 	"github.com/carusyte/stock/model"

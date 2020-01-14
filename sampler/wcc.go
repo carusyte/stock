@@ -28,7 +28,6 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/ssgreg/repeat"
 	"google.golang.org/api/iterator"
 )
@@ -101,17 +100,17 @@ type impJob struct {
 
 //PcalWcc pre-calculates future wcc value using non-reinstated daily kline data and updates stockrel table.
 func PcalWcc(expInferFile, upload, nocache, overwrite bool, localPath, rbase string) {
-	logrus.Println("starting wcc pre-calculation...")
+	log.Println("starting wcc pre-calculation...")
 	jobs, e := getPcalJobs()
 	if e != nil || len(jobs) <= 0 {
 		return
 	}
-	logrus.Printf("#jobs: %d", len(jobs))
+	log.Printf("#jobs: %d", len(jobs))
 	var expch chan<- *ExpJob
 	var expcho <-chan *expJobRpt
 	var expwg *sync.WaitGroup
 	if expInferFile {
-		logrus.Println("inference file exportation enabled")
+		log.Println("inference file exportation enabled")
 		expch, expcho, expwg = wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
 	}
 	// make db job channel & waitgroup, start db goroutine
@@ -165,7 +164,7 @@ func CalWcc(stocks *model.Stocks) {
 	wgr := collect(&rstks, suc)
 	chwcc := make(chan *wccTrnDBJob, conf.Args.DBQueueCapacity)
 	wgdb := goSaveWccTrn(chwcc, suc)
-	logrus.Printf("calculating warping correlation coefficients for training, parallel level:%d", pl)
+	log.Printf("calculating warping correlation coefficients for training, parallel level:%d", pl)
 	for _, stk := range stocks.List {
 		wg.Add(1)
 		wf <- 1
@@ -182,7 +181,7 @@ func CalWcc(stocks *model.Stocks) {
 
 	UpdateWcc()
 
-	logrus.Printf("wcc_trn data saved. sampled stocks: %d / %d", len(rstks), stocks.Size())
+	log.Printf("wcc_trn data saved. sampled stocks: %d / %d", len(rstks), stocks.Size())
 	if stocks.Size() != len(rstks) {
 		codes := make([]string, stocks.Size())
 		for i, s := range stocks.List {
@@ -190,7 +189,7 @@ func CalWcc(stocks *model.Stocks) {
 		}
 		eq, fs, _ := util.DiffStrings(codes, rstks)
 		if !eq {
-			logrus.Printf("Unsampled: %+v", fs)
+			log.Printf("Unsampled: %+v", fs)
 		}
 	}
 }
@@ -200,23 +199,23 @@ func UpdateWcc() {
 	//remap [0, x] to [1, -1] (in opposite direction)
 	//formula: -1 * ((x-f1)/(t1-f1) * (t2-f2) + f2)
 	//simplified: (f1-x)/(t1-f1)*(t2-f2)-f2
-	logrus.Printf("querying max(max_diff) + min(min_diff)...")
+	log.Printf("querying max(max_diff) + min(min_diff)...")
 	max, e := dbmap.SelectFloat("select max(max_diff) + min(min_diff) from wcc_trn")
 	if e != nil {
-		logrus.Printf("failed to query max(max_diff) + min(min_diff) for wcc: %+v", errors.WithStack(e))
+		log.Printf("failed to query max(max_diff) + min(min_diff) for wcc: %+v", errors.WithStack(e))
 		return
 	}
 	//update corl stock by stock to avoid undo file explosion
 	var codes []string
 	_, e = dbmap.Select(&codes, `select distinct code from wcc_trn order by code`)
 	if e != nil {
-		logrus.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
+		log.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
 		return
 	}
-	logrus.Printf("max: %f, updating corl value for %d stocks...", max, len(codes))
+	log.Printf("max: %f, updating corl value for %d stocks...", max, len(codes))
 	for i, c := range codes {
 		prog := float32(i+1) / float32(len(codes)) * 100.
-		logrus.Printf("updating corl for %s, progress: %.3f%%", c, prog)
+		log.Printf("updating corl for %s, progress: %.3f%%", c, prog)
 		_, e = dbmap.Exec(`
 			UPDATE wcc_trn  
 			SET
@@ -229,15 +228,15 @@ func UpdateWcc() {
 			WHERE code = :code
 	`, map[string]interface{}{"mx": max, "code": c})
 		if e != nil {
-			logrus.Printf("failed to update corl for %s: %+v", c, errors.WithStack(e))
+			log.Printf("failed to update corl for %s: %+v", c, errors.WithStack(e))
 			return
 		}
 	}
-	logrus.Printf("collecting corl stats...")
+	log.Printf("collecting corl stats...")
 	// _, e = dbmap.Exec(`delete from fs_stats where method = ? and tab = ? and fields = ?`,
 	// 	"standardization", "wcc_trn", "corl")
 	// if e != nil {
-	// 	logrus.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
+	// 	log.Printf("failed to delete existing corl stats: %+v", errors.WithStack(e))
 	// 	return
 	// }
 	_, e = dbmap.Exec(`
@@ -246,7 +245,7 @@ func UpdateWcc() {
 		ON DUPLICATE KEY UPDATE mean=values(mean),std=values(std),vmax=values(vmax),udate=values(udate),utime=values(utime)
 	`, max)
 	if e != nil {
-		logrus.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
+		log.Printf("failed to collect corl stats: %+v", errors.WithStack(e))
 		return
 	}
 
@@ -255,12 +254,12 @@ func UpdateWcc() {
 
 //StzWcc standardizes wcc_trn corl value and updates corl_stz field in the table.
 func StzWcc(codes ...string) (e error) {
-	logrus.Printf("standardizing...")
+	log.Printf("standardizing...")
 	if codes == nil {
-		logrus.Printf("querying codes in wcc_trn table...")
+		log.Printf("querying codes in wcc_trn table...")
 		_, e = dbmap.Select(&codes, `select distinct code from wcc_trn order by code`)
 		if e != nil {
-			logrus.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
+			log.Printf("failed to query codes in wcc_trn: %+v", errors.WithStack(e))
 			return
 		}
 	}
@@ -270,14 +269,14 @@ func StzWcc(codes ...string) (e error) {
 	e = dbmap.SelectOne(&cstat, `select mean, std, vmax from fs_stats where method = ? and tab = ? and fields = ?`,
 		`standardization`, `wcc_trn`, `corl`)
 	if e != nil {
-		logrus.Printf("failed to query corl stats: %+v", errors.WithStack(e))
+		log.Printf("failed to query corl stats: %+v", errors.WithStack(e))
 		return
 	}
-	logrus.Printf("%d codes, mean: %f std: %f, vmax: %f", len(codes), cstat.Mean, cstat.Std, cstat.Vmax)
+	log.Printf("%d codes, mean: %f std: %f, vmax: %f", len(codes), cstat.Mean, cstat.Std, cstat.Vmax)
 	//update stock by stock to avoid undo file explosion
 	for i, c := range codes {
 		prog := float32(i+1) / float32(len(codes)) * 100.
-		logrus.Printf("standardizing %s, progress: %.3f%%", c, prog)
+		log.Printf("standardizing %s, progress: %.3f%%", c, prog)
 		_, e = dbmap.Exec(`
 			UPDATE wcc_trn w
 			SET 
@@ -287,7 +286,7 @@ func StzWcc(codes ...string) (e error) {
 			WHERE code = ?
 		`, cstat.Mean, cstat.Std, c)
 		if e != nil {
-			logrus.Printf("failed to standardize wcc corl for %s: %+v", c, errors.WithStack(e))
+			log.Printf("failed to standardize wcc corl for %s: %+v", c, errors.WithStack(e))
 			return
 		}
 	}
@@ -296,7 +295,7 @@ func StzWcc(codes ...string) (e error) {
 
 //ExpInferFile exports inference file to local disk, and optionally uploads to google cloud storage.
 func ExpInferFile(localPath, rbase string, upload, nocache, overwrite, chron bool) {
-	logrus.Printf("localPath=%v, rbase=%v, upload=%v, nocache=%v, overwrite=%v, chron=%v",
+	log.Printf("localPath=%v, rbase=%v, upload=%v, nocache=%v, overwrite=%v, chron=%v",
 		localPath, rbase, upload, nocache, overwrite, chron)
 	if chron {
 		expInferFileChron(localPath, rbase, upload, nocache, overwrite)
@@ -311,29 +310,29 @@ func expInferFileChron(localPath, rbase string, upload, nocache, overwrite bool)
 	if e != nil {
 		panic(e)
 	}
-	logrus.Printf("got %d dates to process. ", len(dates))
+	log.Printf("got %d dates to process. ", len(dates))
 	if len(dates) == 0 {
 		return
 	}
-	logrus.Printf("starting from %s", dates[0])
+	log.Printf("starting from %s", dates[0])
 
 	//TODO run in goroutine
 	for i, d := range dates {
-		logrus.Printf("[%d/%d] getting klines on date %s ...", i+1, len(dates), d)
+		log.Printf("[%d/%d] getting klines on date %s ...", i+1, len(dates), d)
 		klines, e := getKlinesOnDate(d)
 		if e != nil {
 			panic(e)
 		}
 		for j, k := range klines {
-			logrus.Printf("[%d/%d] querying rcodes for %s@%d, %s ...", j+1, len(klines), k.Code, k.Klid, d)
+			log.Printf("[%d/%d] querying rcodes for %s@%d, %s ...", j+1, len(klines), k.Code, k.Klid, d)
 			rcodes, e := getRcodes4WccInfer(k.Code, k.Klid)
 			if e != nil {
 				panic(e)
 			} else if len(rcodes) < 2 {
-				logrus.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", k.Code, k.Klid, d)
+				log.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", k.Code, k.Klid, d)
 				continue
 			}
-			logrus.Printf("%s@[%d,%s] got %d ref-codes.", k.Code, k.Klid, d, len(rcodes))
+			log.Printf("%s@[%d,%s] got %d ref-codes.", k.Code, k.Klid, d, len(rcodes))
 
 		}
 	}
@@ -344,7 +343,7 @@ func expInferFileByCode(localPath, rbase string, upload, nocache, overwrite bool
 	if e != nil {
 		panic(e)
 	}
-	logrus.Printf("got %d files to export.", len(jobs))
+	log.Printf("got %d files to export.", len(jobs))
 	fec, feco, fewg := wccInferFileExport(localPath, rbase, upload, nocache, overwrite)
 	// make db job channel & waitgroup, start db goroutine
 	dbch := make(chan *stockrelDBJob, conf.Args.DBQueueCapacity)
@@ -372,16 +371,16 @@ func expInferFileByCode(localPath, rbase string, upload, nocache, overwrite bool
 	go collectStockRels(dbwg, dbch)
 	for i, j := range jobs {
 		pg := float64(i+1) / float64(len(jobs)) * 100.
-		logrus.Printf("[%.3f%%] querying rcodes for %s@%d, %s ...", pg, j.Code, j.Klid, j.Date)
+		log.Printf("[%.3f%%] querying rcodes for %s@%d, %s ...", pg, j.Code, j.Klid, j.Date)
 		j.Rcodes, e = getRcodes4WccInfer(j.Code, j.Klid)
 		if e != nil {
-			logrus.Printf("%s@[%d,%s] error querying rcodes for inference. skipping", j.Code, j.Klid, j.Date)
+			log.Printf("%s@[%d,%s] error querying rcodes for inference. skipping", j.Code, j.Klid, j.Date)
 			continue
 		} else if len(j.Rcodes) < 2 {
-			logrus.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", j.Code, j.Klid, j.Date)
+			log.Printf("%s@[%d,%s] insufficient rcodes for inference. skipping", j.Code, j.Klid, j.Date)
 			continue
 		}
-		logrus.Printf("%s@[%d,%s] got %d ref-codes.", j.Code, j.Klid, j.Date, len(j.Rcodes))
+		log.Printf("%s@[%d,%s] got %d ref-codes.", j.Code, j.Klid, j.Date, len(j.Rcodes))
 		fec <- j
 		jobs[i] = nil
 	}
@@ -395,7 +394,7 @@ func wccInferFileExport(localPath, rbase string, upload, nocache, overwrite bool
 	var fuc chan *FileUploadJob
 	var fuwg *sync.WaitGroup
 	if upload {
-		logrus.Println("GCS uploading enabled")
+		log.Println("GCS uploading enabled")
 		if gcsClient == nil {
 			gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
 		}
@@ -422,7 +421,7 @@ func ImpWcc(tasklog, path string, del bool) {
 	dir, name := filepath.Dir(tasklog), filepath.Base(tasklog)
 	ex, _, e := util.FileExists(dir, name, false, true)
 	if e != nil {
-		logrus.Panicf("failed to check existence for tasklog path: %s", tasklog)
+		log.Panicf("failed to check existence for tasklog path: %s", tasklog)
 	}
 	if gcsClient == nil {
 		gcsClient = util.NewGCSClient(conf.Args.GCS.UseProxy)
@@ -431,12 +430,12 @@ func ImpWcc(tasklog, path string, del bool) {
 	if ex {
 		jobs, e = parseTasklog(tasklog)
 		if e != nil {
-			logrus.Panicf("failed to parse tasklog file %s: %+v", tasklog, e)
+			log.Panicf("failed to parse tasklog file %s: %+v", tasklog, e)
 		}
 	} else {
 		jobs, e = scanTasklog(tasklog, path)
 		if e != nil {
-			logrus.Panicf("failed to scan %s and generate tasklog file %s : %+v", path, tasklog, e)
+			log.Panicf("failed to scan %s and generate tasklog file %s : %+v", path, tasklog, e)
 		}
 	}
 	if len(jobs) <= 0 {
@@ -464,15 +463,15 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 	if len(r) > 0 {
 		objt = fmt.Sprintf("%s/r_%%s.json.gz", r[len(r)-1])
 	} else {
-		logrus.Panicf(`can't parse object prefix from path: %s`, path)
+		log.Panicf(`can't parse object prefix from path: %s`, path)
 	}
 	for j := range chjob {
 		objn := fmt.Sprintf(objt, j.path)
 		op := func(c int) error {
-			logrus.Printf("#%d downloading gcs object %s", c, objn)
+			log.Printf("#%d downloading gcs object %s", c, objn)
 			client, e := gcsClient.Get()
 			if e != nil {
-				logrus.Printf("failed to create gcs client: %+v", e)
+				log.Printf("failed to create gcs client: %+v", e)
 				return repeat.HintTemporary(e)
 			}
 			ctx := context.Background()
@@ -482,34 +481,34 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 			obj := client.Bucket(conf.Args.GCS.Bucket).Object(objn)
 			rc, e := obj.NewReader(tctx)
 			if e != nil {
-				logrus.Printf("failed to create reader for gcs object %s: %+v", objn, e)
+				log.Printf("failed to create reader for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			defer rc.Close()
 			gr, e := gzip.NewReader(rc)
 			if e != nil {
-				logrus.Printf("failed to gzip reader for gcs object %s: %+v", objn, e)
+				log.Printf("failed to gzip reader for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			defer gr.Close()
 			data, e := ioutil.ReadAll(bufio.NewReader(gr))
 			if e != nil {
-				logrus.Printf("failed to read data for gcs object %s: %+v", objn, e)
+				log.Printf("failed to read data for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			var r model.WccInferResult
 			if e = json.Unmarshal(data, &r); e != nil {
-				logrus.Printf("failed to unmarshal json for gcs object %s: %+v", objn, e)
+				log.Printf("failed to unmarshal json for gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			e = saveWCCIR(r.Records)
 			if e != nil {
-				logrus.Printf("failed to save wcc inference result for %s: %+v", objn, e)
+				log.Printf("failed to save wcc inference result for %s: %+v", objn, e)
 				return repeat.HintStop(e)
 			}
 			e = updateTasklogStatus(tasklog, j.idx, TaskStatusO)
 			if e != nil {
-				logrus.Printf("failed to update wcc inference tasklog status for %s: %+v", objn, e)
+				log.Printf("failed to update wcc inference tasklog status for %s: %+v", objn, e)
 				return repeat.HintStop(e)
 			}
 			return nil
@@ -523,7 +522,7 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 			),
 		)
 		if e != nil {
-			logrus.Printf("failed to process inference result file %s: %+v", objn, e)
+			log.Printf("failed to process inference result file %s: %+v", objn, e)
 			return
 		}
 		if !del {
@@ -533,7 +532,7 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 		op = func(c int) error {
 			client, e := gcsClient.Get()
 			if e != nil {
-				logrus.Printf("failed to create gcs client: %+v", e)
+				log.Printf("failed to create gcs client: %+v", e)
 				return repeat.HintTemporary(e)
 			}
 			ctx := context.Background()
@@ -541,7 +540,7 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 			tctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			if e = client.Bucket(conf.Args.GCS.Bucket).Object(objn).Delete(tctx); e != nil {
-				logrus.Printf("failed to delete gcs object %s: %+v", objn, e)
+				log.Printf("failed to delete gcs object %s: %+v", objn, e)
 				return repeat.HintTemporary(e)
 			}
 			return nil
@@ -555,7 +554,7 @@ func importWCCIR(chjob chan *impJob, wg *sync.WaitGroup, tasklog, path string, d
 			),
 		)
 		if e != nil {
-			logrus.Printf("failed to delete inference result file %s: %+v", objn, e)
+			log.Printf("failed to delete inference result file %s: %+v", objn, e)
 			return
 		}
 	}
@@ -566,7 +565,7 @@ func getKlinesOnDate(date string) (klines []*model.Quote, e error) {
 		_, e = dbmap.Select(&klines,
 			`select code, klid from kline_d_b where date = ? order by code`, date)
 		if e != nil {
-			logrus.Printf("#%d failed to query klines on date %s: %+v", c, date, e)
+			log.Printf("#%d failed to query klines on date %s: %+v", c, date, e)
 			return repeat.HintTemporary(e)
 		}
 		return nil
@@ -582,7 +581,7 @@ func getKlinesOnDate(date string) (klines []*model.Quote, e error) {
 	)
 
 	if e != nil {
-		logrus.Printf("failed to query klines on date %s: %+v", date, e)
+		log.Printf("failed to query klines on date %s: %+v", date, e)
 	}
 
 	return
@@ -592,11 +591,11 @@ func updateTasklogStatus(tasklog string, idx int64, status string) (e error) {
 	op := func(c int) error {
 		f, e := os.OpenFile(tasklog, os.O_WRONLY, 0666)
 		if e != nil {
-			logrus.Printf("#%d failed to open file %s: %+v", c, tasklog, e)
+			log.Printf("#%d failed to open file %s: %+v", c, tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		if _, e := f.WriteAt([]byte(status), idx); e != nil {
-			logrus.Printf("#%d failed to update status at index %d for %s: %+v", c, idx, tasklog, e)
+			log.Printf("#%d failed to update status at index %d for %s: %+v", c, idx, tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		return nil
@@ -612,7 +611,7 @@ func updateTasklogStatus(tasklog string, idx int64, status string) (e error) {
 	)
 
 	if e != nil {
-		logrus.Printf("failed to update tasklog status %s: %+v", tasklog, e)
+		log.Printf("failed to update tasklog status %s: %+v", tasklog, e)
 	}
 
 	return
@@ -622,7 +621,7 @@ func saveWCCIR(records []*model.WccInferRecord) (e error) {
 	if len(records) == 0 {
 		return nil
 	}
-	logrus.Printf("updating stockrel data, size: %d", len(records))
+	log.Printf("updating stockrel data, size: %d", len(records))
 	valueHolders := make([]string, 0, len(records))
 	valueArgs := make([]interface{}, 0, len(records)*16)
 	cols := []string{"code", "klid"}
@@ -639,7 +638,7 @@ func saveWCCIR(records []*model.WccInferRecord) (e error) {
 		case float64, string:
 			valid = true
 		default:
-			logrus.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
+			log.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
 		}
 		if valid {
 			valueArgs = append(valueArgs, f)
@@ -676,11 +675,11 @@ func saveWCCIR(records []*model.WccInferRecord) (e error) {
 	klid := records[0].Klid
 	op := func(c int) error {
 		if c > 0 {
-			logrus.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(records))
+			log.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(records))
 		}
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
-			logrus.Printf("failed to save stockrel for %s@%d: %+v\n%s", code, klid, e, stmt)
+			log.Printf("failed to save stockrel for %s@%d: %+v\n%s", code, klid, e, stmt)
 			return repeat.HintTemporary(e)
 		}
 		return nil
@@ -696,7 +695,7 @@ func saveWCCIR(records []*model.WccInferRecord) (e error) {
 	)
 
 	if e != nil {
-		logrus.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(records), e)
+		log.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(records), e)
 	}
 
 	return
@@ -707,11 +706,11 @@ func saveWCCIR(records []*model.WccInferRecord) (e error) {
 func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 	//TODO support both local and gcs path
 	op := func(c int) error {
-		logrus.Printf("#%d scanning %s for inference result files...", c, path)
+		log.Printf("#%d scanning %s for inference result files...", c, path)
 		ctx := context.Background()
 		client, err := gcsClient.Get()
 		if err != nil {
-			logrus.Printf("failed to create gcs client: %+v", err)
+			log.Printf("failed to create gcs client: %+v", err)
 			return repeat.HintTemporary(err)
 		}
 		pattern := fmt.Sprintf(`gs://%s/(.*)`, conf.Args.GCS.Bucket)
@@ -739,13 +738,13 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 				break
 			}
 			if e != nil {
-				logrus.Printf("failed to iterate gcs objects with prefix %s: %+v", prefix, e)
+				log.Printf("failed to iterate gcs objects with prefix %s: %+v", prefix, e)
 				return repeat.HintTemporary(e)
 			}
 			if !strings.HasSuffix(attrs.Name, ".json.gz") {
 				continue
 			}
-			// logrus.Printf("idxs:%v idxe:%v name:%v", idxs, idxe, attrs.Name)
+			// log.Printf("idxs:%v idxe:%v name:%v", idxs, idxe, attrs.Name)
 			impjobs = append(impjobs, &impJob{
 				path: attrs.Name[idxs : len(attrs.Name)-idxe],
 			})
@@ -755,14 +754,14 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 		maxLen += len(sep) + len(TaskStatusO)
 		tf, e := os.OpenFile(tasklog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 		if e != nil {
-			logrus.Printf("failed to create tasklog file at %s: %+v", tasklog, e)
+			log.Printf("failed to create tasklog file at %s: %+v", tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		defer tf.Close()
 		bw := bufio.NewWriter(tf)
 		head := fmt.Sprintf("%s%s%d%s%d", path, sep, len(impjobs), sep, maxLen)
 		if _, e = bw.WriteString(head + "\n"); e != nil {
-			logrus.Printf("failed to write header %s into %s: %+v", head, tasklog, e)
+			log.Printf("failed to write header %s into %s: %+v", head, tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		lenHd := len([]byte(head))
@@ -771,12 +770,12 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 			j.idx = int64(lenHd + 1 + i*(maxLen+1) + offset)
 			ln := fmt.Sprintf("%s%s%s", j.path, sep, TaskStatusP)
 			if _, e = bw.WriteString(ln + "\n"); e != nil {
-				logrus.Printf("failed to write line %s into %s: %+v", ln, tasklog, e)
+				log.Printf("failed to write line %s into %s: %+v", ln, tasklog, e)
 				return repeat.HintTemporary(e)
 			}
 		}
 		if e = bw.Flush(); e != nil {
-			logrus.Printf("failed to flush into file %s: %+v", tasklog, e)
+			log.Printf("failed to flush into file %s: %+v", tasklog, e)
 			return repeat.HintTemporary(e)
 		}
 		return nil
@@ -792,7 +791,7 @@ func scanTasklog(tasklog, path string) (impjobs []*impJob, e error) {
 	)
 
 	if e != nil {
-		logrus.Printf("failed to scan for import jobs at %s: %+v", path, e)
+		log.Printf("failed to scan for import jobs at %s: %+v", path, e)
 	}
 
 	return
@@ -836,19 +835,19 @@ func parseTasklog(tasklog string) (jobs []*impJob, e error) {
 
 func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stockrelDBJob, wg *sync.WaitGroup) {
 	defer wg.Done()
-	logrus.Println("pcal worker started")
+	log.Println("pcal worker started")
 	stats := getWccFeatStats()
 	for pcjob := range pcch {
 		code := pcjob.Code
 		klid := pcjob.Klid
 		date := pcjob.Date
-		logrus.Printf("processing %s@%d, %s...", code, klid, date)
+		log.Printf("processing %s@%d, %s...", code, klid, date)
 		rcodes, e := getRcodes4WccInfer(code, klid)
 		if e != nil || len(rcodes) < 2 {
 			continue
 		}
 		rcodeSize := sql.NullInt64{Int64: int64(len(rcodes)), Valid: true}
-		logrus.Printf("%s@%d has %d eligible reference codes for inference", code, klid, len(rcodes))
+		log.Printf("%s@%d has %d eligible reference codes for inference", code, klid, len(rcodes))
 		if expch != nil {
 			expch <- &ExpJob{
 				Code:   code,
@@ -864,12 +863,12 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		var rcodeSizeHs sql.NullInt64
 		if len(lrs) > 0 && len(reflrs) > 0 && e == nil {
 			//when different rcodes have equivalent corl, the first rcode win
-			logrus.Printf("%s@%d has %d eligible reference codes for pre-calculation", code, klid, len(reflrs))
+			log.Printf("%s@%d has %d eligible reference codes for pre-calculation", code, klid, len(reflrs))
 			rcodeSizeHs = sql.NullInt64{Int64: int64(len(reflrs)), Valid: true}
 			for rc, rlrs := range reflrs {
 				minDiff, maxDiff, e := warpingCorl(lrs, rlrs)
 				if e != nil {
-					logrus.Printf(`%s@%d failed to pre-calculate wcc with %s, skipping: %+v`, code, klid, rc, e)
+					log.Printf(`%s@%d failed to pre-calculate wcc with %s, skipping: %+v`, code, klid, rc, e)
 					continue
 				}
 				corl := 0.
@@ -892,7 +891,7 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 					maxv = sql.NullFloat64{Float64: corl, Valid: true}
 					maxc = sql.NullString{String: rc, Valid: true}
 				}
-				// logrus.Printf("%s@%d calculating wcc with reference %s, len(rlrs):%d, minDiff:%f, maxDiff:%f, "+
+				// log.Printf("%s@%d calculating wcc with reference %s, len(rlrs):%d, minDiff:%f, maxDiff:%f, "+
 				// 	"corl:%f, minv:%f, maxv:%f, minc:%s, maxc:%s, e:%+v",
 				// 	code, klid, rc, len(rlrs), minDiff, maxDiff, corl, minv.Float64, maxv.Float64,
 				// 	minc.String, maxc.String, e)
@@ -900,7 +899,7 @@ func pcalWccWorker(pcch <-chan *pcaljob, expch chan<- *ExpJob, dbch chan<- *stoc
 		} else if e != nil {
 			continue
 		}
-		logrus.Printf("%s@%d: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}  / %d",
+		log.Printf("%s@%d: {pcode:%s, pos:%.5f, ncode:%s, neg:%.5f}  / %d",
 			code, klid, maxc.String, maxv.Float64, minc.String, minv.Float64, rcodeSizeHs.Int64)
 		ud, ut := util.TimeStr()
 		dbch <- &stockrelDBJob{
@@ -928,12 +927,12 @@ func getWccFeatStats() (stats *model.FsStats) {
 	}
 	query := func() {
 		op := func(c int) (e error) {
-			logrus.Printf("#%d querying fs_stats for wcc_trn...", c)
+			log.Printf("#%d querying fs_stats for wcc_trn...", c)
 			e = dbmap.SelectOne(&wccStats, `select * from fs_stats where method = ? and fields = ? and tab = ?`,
 				"standardization", "corl", "wcc_trn")
 			if e != nil {
 				if sql.ErrNoRows != e {
-					logrus.Printf(`failed to query fs_stats: %+v`, e)
+					log.Printf(`failed to query fs_stats: %+v`, e)
 					return repeat.HintTemporary(e)
 				}
 				return repeat.HintStop(errors.New(`wcc stats not ready`))
@@ -949,7 +948,7 @@ func getWccFeatStats() (stats *model.FsStats) {
 			),
 		)
 		if e != nil {
-			logrus.Panicf("give up querying wcc stats: %+v", e)
+			log.Panicf("give up querying wcc stats: %+v", e)
 		}
 	}
 	statsQryInit.Do(query)
@@ -968,10 +967,10 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 		maxKlid, e := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
 		if e != nil {
 			if sql.ErrNoRows != e {
-				logrus.Printf(`#%d %s failed to query max klid, %+v`, c, code, e)
+				log.Printf(`#%d %s failed to query max klid, %+v`, c, code, e)
 				return repeat.HintTemporary(e)
 			}
-			logrus.Printf(`%s no data in kline_d_b`, code)
+			log.Printf(`%s no data in kline_d_b`, code)
 			return repeat.HintStop(e)
 		}
 		maxk := int(maxKlid)
@@ -981,7 +980,7 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 		}
 		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
 		if e != nil {
-			logrus.Printf(`#%d %s@%d-%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, start, end, e)
+			log.Printf(`#%d %s@%d-%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, start, end, e)
 			return repeat.HintTemporary(e)
 		}
 		query = fmt.Sprintf(query, qryKlid)
@@ -989,10 +988,10 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 		_, e = dbmap.Select(&klhist, query, code, start, end)
 		if e != nil {
 			if sql.ErrNoRows != e {
-				logrus.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, end, e)
+				log.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, end, e)
 				return repeat.HintTemporary(e)
 			}
-			logrus.Printf(`%s@%d-%d no data in kline_d_b`, code, start, end)
+			log.Printf(`%s@%d-%d no data in kline_d_b`, code, start, end)
 			return repeat.HintStop(e)
 		}
 		if len(klhist) < span {
@@ -1027,14 +1026,14 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 		_, e = dbmap.Select(&frcodes, qry, args...)
 		if e != nil {
 			if sql.ErrNoRows != e {
-				logrus.Printf(`#%d %s@%d-%d failed to query reference codes: %+v`, c, code, start, end, e)
+				log.Printf(`#%d %s@%d-%d failed to query reference codes: %+v`, c, code, start, end, e)
 				return repeat.HintTemporary(e)
 			}
-			logrus.Printf(`%s@%d-%d no matching reference code`, code, start, end)
+			log.Printf(`%s@%d-%d no matching reference code`, code, start, end)
 			return repeat.HintStop(e)
 		}
 		if len(frcodes) == 0 {
-			logrus.Printf(`%s no available reference data between %d and %d`,
+			log.Printf(`%s no available reference data between %d and %d`,
 				code, start, end)
 			return repeat.HintStop(e)
 		}
@@ -1062,15 +1061,15 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 			_, e = dbmap.Select(&rhist, qry, args...)
 			if e != nil {
 				if sql.ErrNoRows != e {
-					logrus.Printf(`#%d %s@%d-%d failed to load reference kline of %s: %+v`, c, code, start, end, rc, e)
+					log.Printf(`#%d %s@%d-%d failed to load reference kline of %s: %+v`, c, code, start, end, rc, e)
 					return repeat.HintTemporary(e)
 				}
-				logrus.Printf(`%s reference code %s has no available data between %s and %s, skipping this one`,
+				log.Printf(`%s reference code %s has no available data between %s and %s, skipping this one`,
 					code, rc, args[1], args[len(args)-1])
 				continue
 			}
 			if len(rhist) != len(args)-1 {
-				logrus.Printf(`%s reference code %s has missing data between %s and %s, skipping this one`,
+				log.Printf(`%s reference code %s has missing data between %s and %s, skipping this one`,
 					code, rc, args[1], args[len(args)-1])
 				continue
 			}
@@ -1079,7 +1078,7 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 				if k.Lr.Valid {
 					rlrs[i] = k.Lr.Float64
 				} else {
-					logrus.Printf(`%s [severe] reference %s@%d %s log return is null. skipping`, code, k.Code, k.Klid, k.Date)
+					log.Printf(`%s [severe] reference %s@%d %s log return is null. skipping`, code, k.Code, k.Klid, k.Date)
 					continue LOOPRCODES
 				}
 			}
@@ -1098,7 +1097,7 @@ func getKlines4WccPreCalculation(code string, klid int, rcodes ...string) (lrs [
 	)
 
 	if e != nil {
-		logrus.Printf("%s@%d give up querying klines for wcc pre-calculation: %+v", code, klid, e)
+		log.Printf("%s@%d give up querying klines for wcc pre-calculation: %+v", code, klid, e)
 	}
 
 	return
@@ -1112,11 +1111,11 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	start := klid - steps - shift + 1
 	qryKlid := " and klid >= ? and klid <= ?"
 	op := func(c int) error {
-		logrus.Printf("#%d getting rcodes for %s@%d", c, code, klid)
+		log.Printf("#%d getting rcodes for %s@%d", c, code, klid)
 		rcodes = make([]string, 0, 64)
 		query, e := global.Dot.Raw("QUERY_BWR_DAILY")
 		if e != nil {
-			logrus.Printf(`#%d %s@%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, klid, e)
+			log.Printf(`#%d %s@%d failed to load sql QUERY_BWR_DAILY, %+v`, c, code, klid, e)
 			return repeat.HintTemporary(e)
 		}
 		query = fmt.Sprintf(query, qryKlid)
@@ -1124,10 +1123,10 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 		_, e = dbmap.Select(&klhist, query, code, start, klid)
 		if e != nil {
 			if sql.ErrNoRows != e {
-				logrus.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, klid, e)
+				log.Printf(`#%d %s@%d-%d failed to load kline hist data: %+v`, c, code, start, klid, e)
 				return repeat.HintTemporary(e)
 			}
-			logrus.Printf(`%s@%d-%d no data in kline_d_b`, code, start, klid)
+			log.Printf(`%s@%d-%d no data in kline_d_b`, code, start, klid)
 			return repeat.HintStop(e)
 		}
 		if len(klhist) < steps+shift {
@@ -1146,14 +1145,14 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 		_, e = dbmap.Select(&rcodes, qry, args...)
 		if e != nil {
 			if sql.ErrNoRows != e {
-				logrus.Printf(`#%d %s@%d-%d failed to query reference codes, %+v`, c, code, start, klid, e)
+				log.Printf(`#%d %s@%d-%d failed to query reference codes, %+v`, c, code, start, klid, e)
 				return repeat.HintTemporary(e)
 			}
-			logrus.Printf(`%s@%d-%d no matching reference code`, code, start, klid)
+			log.Printf(`%s@%d-%d no matching reference code`, code, start, klid)
 			return repeat.HintStop(e)
 		}
 		if len(rcodes) < 2 {
-			logrus.Printf(`%s insufficient reference code between %d and %d: %d`,
+			log.Printf(`%s insufficient reference code between %d and %d: %d`,
 				code, start, klid, len(rcodes))
 			return repeat.HintStop(e)
 		}
@@ -1170,7 +1169,7 @@ func getRcodes4WccInfer(code string, klid int) (rcodes []string, e error) {
 	)
 
 	if e != nil {
-		logrus.Printf("%s %d failed to get wcc reference codes for inference: %+v", code, klid, e)
+		log.Printf("%s %d failed to get wcc reference codes for inference: %+v", code, klid, e)
 		return nil, e
 	}
 
@@ -1191,12 +1190,12 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJ
 		fuwg.Wait()
 		close(feco)
 		if e := gcsClient.Close(); e != nil {
-			logrus.Printf("failed to close gcs client: %+v", e)
+			log.Printf("failed to close gcs client: %+v", e)
 		}
 		// clean empty volume sub-folders
 		dirs, err := ioutil.ReadDir(localPath)
 		if err != nil {
-			logrus.Printf("failed to read local path %s, unable to clean sub-folders: %+v", localPath, err)
+			log.Printf("failed to read local path %s, unable to clean sub-folders: %+v", localPath, err)
 			return
 		}
 		for _, d := range dirs {
@@ -1204,7 +1203,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJ
 				p := filepath.Join(localPath, d.Name())
 				files, err := ioutil.ReadDir(p)
 				if err != nil {
-					logrus.Printf("failed to read local path %s, unable to clean this sub-folder: %+v", p, err)
+					log.Printf("failed to read local path %s, unable to clean this sub-folder: %+v", p, err)
 					continue
 				}
 				removable := true
@@ -1215,7 +1214,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJ
 					}
 				}
 				if removable {
-					logrus.Printf("removing empty volume folder: %s", p)
+					log.Printf("removing empty volume folder: %s", p)
 					os.Remove(p)
 				}
 			}
@@ -1225,7 +1224,7 @@ func fileExporter(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJ
 
 func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *expJobRpt, fuc chan<- *FileUploadJob, wg *sync.WaitGroup) {
 	defer wg.Done()
-	logrus.Println("file export worker started")
+	log.Println("file export worker started")
 	step := conf.Args.Sampler.CorlTimeSteps
 	shift := conf.Args.Sampler.CorlTimeShift
 	limit := step + shift
@@ -1250,7 +1249,7 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 			panic(e)
 		}
 		if ex {
-			logrus.Printf("%s already exists.", p)
+			log.Printf("%s already exists.", p)
 			continue
 		}
 		rcodes := job.Rcodes
@@ -1261,10 +1260,10 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 		for _, rc := range rcodes {
 			batch, seqlen, e := getSeriesForPair(code, rc, s, klid, limit)
 			if e != nil {
-				logrus.Panicf("failed to get series for %s and %s, exiting program", code, rc)
+				log.Panicf("failed to get series for %s and %s, exiting program", code, rc)
 			}
 			if len(batch) == 0 {
-				logrus.Printf("no inference data for %s and %s", code, rc)
+				log.Printf("no inference data for %s and %s", code, rc)
 				continue
 			}
 			frcodes = append(frcodes, rc)
@@ -1272,13 +1271,13 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 			seqlens = append(seqlens, seqlen)
 		}
 		if len(feats) == 0 {
-			logrus.Printf("no inference data for %s", code)
+			log.Printf("no inference data for %s", code)
 			continue
 		}
 		// write lv9 gzipped json file, send it to fuc if the channel is not nil
 		dir, e := syncVolDir(localPath)
 		if e != nil {
-			logrus.Panicf("%s failed to read volume directory, exiting program", code)
+			log.Panicf("%s failed to read volume directory, exiting program", code)
 		}
 		cif := map[string]interface{}{
 			"code":     code,
@@ -1290,7 +1289,7 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 		path := filepath.Join(dir, fmt.Sprintf("%s_%d", code, klid))
 		path, e = util.WriteJSONFile(cif, path, true)
 		if e != nil {
-			logrus.Panicf("%s failed to export json file %s, exiting program: %+v", code, path, e)
+			log.Panicf("%s failed to export json file %s, exiting program: %+v", code, path, e)
 		}
 		feco <- &expJobRpt{
 			Code:      job.Code,
@@ -1298,7 +1297,7 @@ func fileExpWorker(localPath, rbase string, fec <-chan *ExpJob, feco chan<- *exp
 			Klid:      job.Klid,
 			RcodeSize: len(frcodes),
 		}
-		logrus.Printf("json file exported: %s", path)
+		log.Printf("json file exported: %s", path)
 		if fuc != nil {
 			sep := os.PathSeparator
 			pattern := fmt.Sprintf(`.*(vol_\d*%[1]c[^%[1]c]*)`, sep)
@@ -1372,19 +1371,19 @@ func getSeries(code string, start, end, limit int) (series [][]float64, seqlen i
 		defer func() {
 			if r := recover(); r != nil {
 				if er, hasError := r.(error); hasError {
-					logrus.Printf("caught runtime error:%+v, retrying...", er)
+					log.Printf("caught runtime error:%+v, retrying...", er)
 					e = repeat.HintTemporary(er)
 				}
 			}
 		}()
 		if c > 0 {
 			series = make([][]float64, 0, shift+step)
-			logrus.Printf("retry #%d getting feature batch [%s, %d, %d]", c, code, start, end)
+			log.Printf("retry #%d getting feature batch [%s, %d, %d]", c, code, start, end)
 		}
 		rows, e := dbmap.Query(qk, code, code, start, end, limit)
 		defer rows.Close()
 		if e != nil {
-			logrus.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
+			log.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
 			return repeat.HintTemporary(e)
 		}
 		cols, e := rows.Columns()
@@ -1398,7 +1397,7 @@ func getSeries(code string, start, end, limit int) (series [][]float64, seqlen i
 				vals[i] = new(interface{})
 			}
 			if e := rows.Scan(vals...); e != nil {
-				logrus.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
+				log.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
 				return repeat.HintTemporary(e)
 			}
 			for i := 0; i < unitFeatLen; i++ {
@@ -1412,7 +1411,7 @@ func getSeries(code string, start, end, limit int) (series [][]float64, seqlen i
 			}
 		}
 		if e := rows.Err(); e != nil {
-			logrus.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
+			log.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
 			return repeat.HintTemporary(e)
 		}
 		if count < limit {
@@ -1434,7 +1433,7 @@ func getSeries(code string, start, end, limit int) (series [][]float64, seqlen i
 	)
 
 	if err != nil {
-		logrus.Printf("failed to get series [%s, %d, %d]: %+v", code, start, end, err)
+		log.Printf("failed to get series [%s, %d, %d]: %+v", code, start, end, err)
 	}
 
 	return
@@ -1448,7 +1447,7 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 		defer func() {
 			if r := recover(); r != nil {
 				if er, hasError := r.(error); hasError {
-					logrus.Printf("caught runtime error:%+v, retrying...", er)
+					log.Printf("caught runtime error:%+v, retrying...", er)
 					e = repeat.HintTemporary(er)
 				}
 			}
@@ -1456,12 +1455,12 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 		if c > 0 {
 			series = make([][]float64, 0, step)
 			seqlen = 0
-			logrus.Printf("retry #%d getting feature batch [%s, %s, %d, %d]", c, code, rcode, start, end)
+			log.Printf("retry #%d getting feature batch [%s, %s, %d, %d]", c, code, rcode, start, end)
 		}
 		rows, e := dbmap.Query(qk, code, code, start, end, limit)
 		defer rows.Close()
 		if e != nil {
-			logrus.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
+			log.Printf("failed to query by klid [%s,%d,%d]: %+v", code, start, end, e)
 			return repeat.HintTemporary(e)
 		}
 		cols, e := rows.Columns()
@@ -1479,7 +1478,7 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 				vals[i] = new(interface{})
 			}
 			if e := rows.Scan(vals...); e != nil {
-				logrus.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
+				log.Printf("failed to scan result set [%s,%d,%d]: %+v", code, start, end, e)
 				return repeat.HintTemporary(e)
 			}
 			if d, ok := vals[0].(*interface{}); ok {
@@ -1500,14 +1499,14 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 			}
 		}
 		if e := rows.Err(); e != nil {
-			logrus.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
+			log.Printf("found error scanning result set [%s,%d,%d]: %+v", code, start, end, e)
 			return repeat.HintTemporary(e)
 		}
 		qdates := util.Join(dates, ",", true)
 		rRows, e := dbmap.Query(fmt.Sprintf(qd, qdates), rcode, rcode, limit)
 		defer rRows.Close()
 		if e != nil {
-			logrus.Printf("failed to query by dates [%s,%s]: %+v", code, rcode, e)
+			log.Printf("failed to query by dates [%s,%s]: %+v", code, rcode, e)
 			return repeat.HintTemporary(e)
 		}
 		for ; rRows.Next(); rcount++ {
@@ -1518,7 +1517,7 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 				vals[i] = new(interface{})
 			}
 			if e := rRows.Scan(vals...); e != nil {
-				logrus.Printf("failed to scan rcode result set [%s]: %+v", rcode, e)
+				log.Printf("failed to scan rcode result set [%s]: %+v", rcode, e)
 				return repeat.HintTemporary(e)
 			}
 			for i := 0; i < unitFeatLen; i++ {
@@ -1532,7 +1531,7 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 			}
 		}
 		if e := rRows.Err(); e != nil {
-			logrus.Printf("found error scanning rcode result set [%s]: %+v", rcode, e)
+			log.Printf("found error scanning rcode result set [%s]: %+v", rcode, e)
 			return repeat.HintTemporary(e)
 		}
 		if count != rcount {
@@ -1572,7 +1571,7 @@ func getSeriesForPair(code, rcode string, start, end, limit int) (series [][]flo
 	)
 
 	if err != nil {
-		logrus.Printf("failed to get series [%s, %s, %d, %d]: %+v", code, rcode, start, end, err)
+		log.Printf("failed to get series [%s, %s, %d, %d]: %+v", code, rcode, start, end, err)
 	}
 
 	return
@@ -1585,7 +1584,7 @@ func getFeatQuery() (qk, qd string) {
 	ftQryInit.Do(func() {
 		tmpl, e := dot.Raw("CORL_FEAT_QUERY_TMPL")
 		if e != nil {
-			logrus.Panicf("failed to load sql CORL_FEAT_QUERY_TMPL:%+v", e)
+			log.Panicf("failed to load sql CORL_FEAT_QUERY_TMPL:%+v", e)
 		}
 		var strs []string
 		cols := conf.Args.Sampler.FeatureCols
@@ -1619,16 +1618,16 @@ func getFeatQuery() (qk, qd string) {
 
 func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrite bool) {
 	defer wg.Done()
-	logrus.Println("gcs upload worker started")
+	log.Println("gcs upload worker started")
 	for job := range ch {
 		// gcs api may have utilized retry mechanism already.
 		// see https://godoc.org/cloud.google.com/go/storage
 		op := func(c int) error {
-			logrus.Printf("#%d uploading %s to %s", c, job.localFile, job.dest)
+			log.Printf("#%d uploading %s to %s", c, job.localFile, job.dest)
 			ctx := context.Background()
 			client, err := gcsClient.Get()
 			if err != nil {
-				logrus.Printf("failed to create gcs client when uploading %s: %+v", job.localFile, err)
+				log.Printf("failed to create gcs client when uploading %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
 			timeout := time.Duration(conf.Args.GCS.Timeout) * time.Second
@@ -1645,17 +1644,17 @@ func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrit
 				}()
 				if err != nil {
 					if err != storage.ErrObjectNotExist {
-						logrus.Printf("failed to check existence for %s: %+v", job.dest, err)
+						log.Printf("failed to check existence for %s: %+v", job.dest, err)
 						return repeat.HintTemporary(err)
 					}
 				} else {
-					logrus.Printf("%s already exists, skip uploading", job.dest)
+					log.Printf("%s already exists, skip uploading", job.dest)
 					return nil
 				}
 			}
 			file, err := os.Open(job.localFile)
 			if err != nil {
-				logrus.Printf("failed to open %s: %+v", job.localFile, err)
+				log.Printf("failed to open %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
 			defer file.Close()
@@ -1663,18 +1662,18 @@ func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrit
 			wc.ContentType = "application/json"
 			// wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
 			if _, err := io.Copy(wc, bufio.NewReader(file)); err != nil {
-				logrus.Printf("failed to upload %s: %+v", job.localFile, err)
+				log.Printf("failed to upload %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
 			if err := wc.Close(); err != nil {
-				logrus.Printf("failed to upload %s: %+v", job.localFile, err)
+				log.Printf("failed to upload %s: %+v", job.localFile, err)
 				return repeat.HintTemporary(err)
 			}
-			logrus.Printf("%s uploaded", job.dest)
+			log.Printf("%s uploaded", job.dest)
 			if nocache {
 				err = os.Remove(job.localFile)
 				if err != nil {
-					logrus.Printf("failed to remove %s: %+v", job.localFile, err)
+					log.Printf("failed to remove %s: %+v", job.localFile, err)
 				}
 			}
 			return nil
@@ -1690,25 +1689,25 @@ func uploadToGCS(ch <-chan *FileUploadJob, wg *sync.WaitGroup, nocache, overwrit
 		)
 
 		if err != nil {
-			logrus.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
+			log.Printf("failed to upload file %s to gcs: %+v", job.localFile, err)
 		}
 	}
 }
 
 func getDatesForWccInfer() (dates []string, e error) {
-	logrus.Println("querying dates for candidate...")
+	log.Println("querying dates for candidate...")
 	var sdate sql.NullString
 	if e = dbmap.SelectOne(&sdate, `select max(date) from stockrel`); e != nil {
-		logrus.Printf("failed to query max(date) from stockrel: %+v", e)
+		log.Printf("failed to query max(date) from stockrel: %+v", e)
 		return dates, errors.WithStack(e)
 	} else if !sdate.Valid {
 		if e = dbmap.SelectOne(&sdate,
 			`select min(date) from kline_d_b where klid = ?`,
 			conf.Args.Sampler.CorlPrior-1); e != nil {
-			logrus.Printf("failed to query min(date) from kline_d_b: %+v", e)
+			log.Printf("failed to query min(date) from kline_d_b: %+v", e)
 			return dates, errors.WithStack(e)
 		} else if !sdate.Valid {
-			logrus.Println("no data in kline_d_b.")
+			log.Println("no data in kline_d_b.")
 			return dates, errors.New("no data in kline_d_b")
 		}
 	}
@@ -1722,14 +1721,14 @@ func getDatesForWccInfer() (dates []string, e error) {
 		ORDER BY date
 	`, sdate.String)
 	if e != nil {
-		logrus.Printf("failed to query dates for wcc inference export: %+v", e)
+		log.Printf("failed to query dates for wcc inference export: %+v", e)
 		return dates, errors.WithStack(e)
 	}
 	return
 }
 
 func getWccInferExpJobs() (jobs []*ExpJob, e error) {
-	logrus.Println("querying klines for candidate...")
+	log.Println("querying klines for candidate...")
 	sklid := conf.Args.Sampler.CorlPrior
 	_, e = dbmap.Select(&jobs, `
 		SELECT 
@@ -1750,7 +1749,7 @@ func getWccInferExpJobs() (jobs []*ExpJob, e error) {
 			)
 	`, sklid)
 	if e != nil {
-		logrus.Printf("failed to query wcc inference export jobs: %+v", e)
+		log.Printf("failed to query wcc inference export jobs: %+v", e)
 		e = errors.WithStack(e)
 	}
 	return
@@ -1758,7 +1757,7 @@ func getWccInferExpJobs() (jobs []*ExpJob, e error) {
 
 //getPcalJobs fetchs kline data not in stockrel with non-blank value
 func getPcalJobs() (jobs []*pcaljob, e error) {
-	logrus.Println("querying klines for candidate...")
+	log.Println("querying klines for candidate...")
 	sklid := conf.Args.Sampler.CorlPrior
 	_, e = dbmap.Select(&jobs, `
 		SELECT 
@@ -1780,7 +1779,7 @@ func getPcalJobs() (jobs []*pcaljob, e error) {
 					rcode_pos_hs IS NOT NULL)
 	`, sklid)
 	if e != nil {
-		logrus.Printf("failed to query pcal jobs: %+v", e)
+		log.Printf("failed to query pcal jobs: %+v", e)
 		e = errors.WithStack(e)
 	}
 	return
@@ -1800,12 +1799,12 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	portion := conf.Args.Sampler.CorlPortion
 	maxKlid, err := dbmap.SelectInt(`select max(klid) from kline_d_b where code = ?`, code)
 	if err != nil {
-		logrus.Printf(`%s failed to query max klid, %+v`, code, err)
+		log.Printf(`%s failed to query max klid, %+v`, code, err)
 		return
 	}
 	maxk := int(maxKlid)
 	if maxk+1 < prior {
-		logrus.Printf("%s insufficient data for wcc_trn sampling: got %d, prior of %d required",
+		log.Printf("%s insufficient data for wcc_trn sampling: got %d, prior of %d required",
 			code, maxk+1, prior)
 		return
 	}
@@ -1813,7 +1812,7 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	if len(syear) > 0 {
 		sklid, err := dbmap.SelectInt(`select min(klid) from kline_d_b where code = ? and date >= ?`, code, syear)
 		if err != nil {
-			logrus.Printf(`%s failed to query min klid, %+v`, code, err)
+			log.Printf(`%s failed to query min klid, %+v`, code, err)
 			return
 		}
 		if int(sklid)+1 < prior {
@@ -1842,11 +1841,11 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 	)
 	num := int(float64(len(klids)) * portion)
 	if num == 0 {
-		logrus.Printf("%s insufficient data for wcc_trn sampling", code)
+		log.Printf("%s insufficient data for wcc_trn sampling", code)
 		return
 	}
 	sidx := rand.Perm(len(klids))[:num]
-	logrus.Printf("%s selected %d/%d klids from kline_d_b", code, num, len(klids))
+	log.Printf("%s selected %d/%d klids from kline_d_b", code, num, len(klids))
 	retry := false
 	var e error
 	var wccs []*model.WccTrn
@@ -1857,7 +1856,7 @@ func sampWccTrn(stock *model.Stock, wg *sync.WaitGroup, wf *chan int, out chan *
 			if !retry && e == nil {
 				break
 			}
-			logrus.Printf("%s klid(%d) retrying %d...", stock.Code, klid, rt+1)
+			log.Printf("%s klid(%d) retrying %d...", stock.Code, klid, rt+1)
 		}
 		if e != nil {
 			out <- &wccTrnDBJob{
@@ -1896,7 +1895,7 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 	// use backward reinstated kline
 	query, err := global.Dot.Raw("QUERY_BWR_DAILY")
 	if err != nil {
-		logrus.Printf(`%s failed to load sql QUERY_BWR_DAILY, %+v`, code, err)
+		log.Printf(`%s failed to load sql QUERY_BWR_DAILY, %+v`, code, err)
 		return true, wccs, err
 	}
 	query = fmt.Sprintf(query, qryKlid)
@@ -1904,21 +1903,21 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 	_, err = dbmap.Select(&klhist, query, code)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			logrus.Printf(`%s failed to load kline hist data, %+v`, code, err)
+			log.Printf(`%s failed to load kline hist data, %+v`, code, err)
 			return true, wccs, err
 		}
-		logrus.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
+		log.Printf(`%s no data in kline_d_b %s`, code, qryKlid)
 		return
 	}
 	if len(klhist) < prior+shift+span {
-		logrus.Printf("%s insufficient data for wcc_trn sampling at klid %d: %d, %d required",
+		log.Printf("%s insufficient data for wcc_trn sampling at klid %d: %d, %d required",
 			code, klid, len(klhist), prior+shift+span)
 		return
 	}
 
 	//query reference security kline_d_b with shifted matching dates & calculate correlation
 	skl := klhist[offset]
-	logrus.Printf("%s sampling wcc at %d, %s", skl.Code, skl.Klid, skl.Date)
+	log.Printf("%s sampling wcc at %d, %s", skl.Code, skl.Klid, skl.Date)
 	// ref code dates
 	dates := make([]string, len(klhist)-1)
 	// target code lrs
@@ -1929,7 +1928,7 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 		}
 		if i >= shift+prior {
 			if !k.Lr.Valid {
-				logrus.Printf(`%s %s log return is null, skipping`, code, k.Date)
+				log.Printf(`%s %s log return is null, skipping`, code, k.Date)
 				return
 			}
 			lrs[i-shift-prior] = k.Lr.Float64
@@ -1942,22 +1941,22 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 	_, err = dbmap.Select(&codes, query, code, len(dates), minReq-1)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			logrus.Printf(`%s failed to load reference kline data, %+v`, code, err)
+			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
 			return true, wccs, err
 		}
-		logrus.Printf(`%s no available reference data between %s and %s`,
+		log.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
 	if len(codes) == 0 {
-		logrus.Printf(`%s no available reference data between %s and %s`,
+		log.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
 
 	query, err = global.Dot.Raw("QUERY_BWR_DAILY_4_XCORL_TRN")
 	if err != nil {
-		logrus.Printf(`%s failed to load sql QUERY_BWR_DAILY_4_XCORL_TRN, %+v`, code, err)
+		log.Printf(`%s failed to load sql QUERY_BWR_DAILY_4_XCORL_TRN, %+v`, code, err)
 		return true, wccs, err
 	}
 	codeStr := util.Join(codes, ",", true)
@@ -1967,10 +1966,10 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 	_, err = dbmap.Select(&rhist, query)
 	if err != nil {
 		if sql.ErrNoRows != err {
-			logrus.Printf(`%s failed to load reference kline data, %+v`, code, err)
+			log.Printf(`%s failed to load reference kline data, %+v`, code, err)
 			return true, wccs, err
 		}
-		logrus.Printf(`%s no available reference data between %s and %s`,
+		log.Printf(`%s no available reference data between %s and %s`,
 			code, dates[0], dates[len(dates)-1])
 		return
 	}
@@ -1982,7 +1981,7 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 			if k.Lr.Valid {
 				bucket = append(bucket, k.Lr.Float64)
 			} else {
-				logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+				log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 			}
 			lcode = k.Code
 			if i != len(rhist)-1 {
@@ -1991,12 +1990,12 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 		}
 		//process filled bucket
 		if len(bucket) != len(lrs)+shift-1 {
-			logrus.Printf(`%s reference %s data unmatched: %d+%d != %d, skipping`, code, lcode, len(lrs), shift, len(bucket))
+			log.Printf(`%s reference %s data unmatched: %d+%d != %d, skipping`, code, lcode, len(lrs), shift, len(bucket))
 			bucket = make([]float64, 0, 16)
 			if k.Lr.Valid {
 				bucket = append(bucket, k.Lr.Float64)
 			} else {
-				logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+				log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 			}
 			lcode = k.Code
 			continue
@@ -2004,7 +2003,7 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 		//calculate mindiff and maxdiff
 		minDiff, maxDiff, err := warpingCorl(lrs, bucket)
 		if err != nil {
-			logrus.Printf(`%s failed calculate wcc at klid %d, %+v`, code, klid, err)
+			log.Printf(`%s failed calculate wcc at klid %d, %+v`, code, klid, err)
 			return false, wccs, err
 		}
 		dt, tm := util.TimeStr()
@@ -2023,7 +2022,7 @@ func sampWccTrnAt(stock *model.Stock, klid int) (retry bool, wccs []*model.WccTr
 		if k.Lr.Valid {
 			bucket = append(bucket, k.Lr.Float64)
 		} else {
-			logrus.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
+			log.Printf(`%s reference %s %s log return is null`, code, k.Code, k.Date)
 		}
 		lcode = k.Code
 	}
@@ -2039,18 +2038,18 @@ func goSaveWccTrn(chwcc chan *wccTrnDBJob, suc chan string) (wg *sync.WaitGroup)
 		for w := range ch {
 			code := w.stock.Code
 			if w.fin < 0 {
-				logrus.Printf("%s failed samping wcc_trn", code)
+				log.Printf("%s failed samping wcc_trn", code)
 			} else if w.fin == 0 && len(w.wccs) > 0 {
 				w1 := w.wccs[0]
 				e := saveWccTrn(w.wccs...)
 				if e == nil {
 					counter[code] += len(w.wccs)
-					logrus.Printf("%s %d wcc_trn saved, start date:%s", code, len(w.wccs), w1.Date)
+					log.Printf("%s %d wcc_trn saved, start date:%s", code, len(w.wccs), w1.Date)
 				} else {
-					logrus.Panicf("%s %s db operation error:%+v", code, w1.Date, e)
+					log.Panicf("%s %s db operation error:%+v", code, w1.Date, e)
 				}
 			} else {
-				logrus.Printf("%s finished wccs_trn sampling, total: %d", code, counter[code])
+				log.Printf("%s finished wccs_trn sampling, total: %d", code, counter[code])
 				suc <- w.stock.Code
 			}
 		}
@@ -2141,7 +2140,7 @@ func warpingCorl(lrs, bucket []float64) (minDiff, maxDiff float64, e error) {
 
 func collectStockRels(wg *sync.WaitGroup, ch <-chan *stockrelDBJob) {
 	defer wg.Done()
-	logrus.Println("db worker started")
+	log.Println("db worker started")
 	size := 64
 	wait := 15 * time.Second
 	bucket := make([]*model.StockRel, 0, size)
@@ -2179,7 +2178,7 @@ func saveStockRel(rels ...*model.StockRel) {
 	if len(rels) == 0 {
 		return
 	}
-	logrus.Printf("saving stockrel data, size: %d", len(rels))
+	log.Printf("saving stockrel data, size: %d", len(rels))
 	valueHolders := make([]string, 0, len(rels))
 	valueArgs := make([]interface{}, 0, len(rels)*16)
 	cols := []string{"code", "klid"}
@@ -2194,7 +2193,7 @@ func saveStockRel(rels ...*model.StockRel) {
 		case sql.NullInt64:
 			valid = f.(sql.NullInt64).Valid
 		default:
-			logrus.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
+			log.Panicf("unsupported sql type: %+v", reflect.TypeOf(f))
 		}
 		if valid {
 			valueArgs = append(valueArgs, f)
@@ -2238,11 +2237,11 @@ func saveStockRel(rels ...*model.StockRel) {
 	var e error
 	op := func(c int) error {
 		if c > 0 {
-			logrus.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(rels))
+			log.Printf("retry #%d saving stockrel for %s@%d, size %d", c, code, klid, len(rels))
 		}
 		_, e = dbmap.Exec(stmt, valueArgs...)
 		if e != nil {
-			logrus.Printf("failed to save stockrel for %s@%d: %+v", code, klid, e)
+			log.Printf("failed to save stockrel for %s@%d: %+v", code, klid, e)
 			return repeat.HintTemporary(e)
 		}
 		return nil
@@ -2258,6 +2257,6 @@ func saveStockRel(rels ...*model.StockRel) {
 	)
 
 	if e != nil {
-		logrus.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(rels), e)
+		log.Printf("give up saving stockrel for %s@%d size %d: %+v", code, klid, len(rels), e)
 	}
 }

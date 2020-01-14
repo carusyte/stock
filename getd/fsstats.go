@@ -2,22 +2,20 @@ package getd
 
 import (
 	"fmt"
-
-	"github.com/sirupsen/logrus"
 )
 
 //CollectFsStats updates feature scaling stats.
 func CollectFsStats() {
 	// _, e := dbmap.Exec("delete from fs_stats where method = ?", "standardization")
 	// if e != nil {
-	// 	logrus.Printf("failed to clean up fs_stats %+v", e)
+	// 	log.Printf("failed to clean up fs_stats %+v", e)
 	// 	return
 	// }
 
 	// basic log returns
 	sqlt, e := dot.Raw("COLLECT_STANDARDIZATION_STATS")
 	if e != nil {
-		logrus.Printf("failed to get fs_stats sql %+v", e)
+		log.Printf("failed to get fs_stats sql %+v", e)
 		return
 	}
 	fields := []string{
@@ -27,10 +25,10 @@ func CollectFsStats() {
 		usql := fmt.Sprintf(sqlt, f, "lr", "kline_d_b_lr", "kline_d_f_lr")
 		_, e = dbmap.Exec(usql)
 		if e != nil {
-			logrus.Printf("failed to update fs_stats for field %s: %+v", f, e)
+			log.Printf("failed to update fs_stats for field %s: %+v", f, e)
 			continue
 		}
-		logrus.Printf("fs_stats for field %s updated.", f)
+		log.Printf("fs_stats for field %s updated.", f)
 	}
 	// moving average log returns
 	fields = []string{
@@ -48,16 +46,16 @@ func CollectFsStats() {
 		usql := fmt.Sprintf(sqlt, f, "ma_lr", "kline_d_b_ma_lr", "kline_d_f_ma_lr")
 		_, e = dbmap.Exec(usql)
 		if e != nil {
-			logrus.Printf("failed to update fs_stats for field %s: %+v", f, e)
+			log.Printf("failed to update fs_stats for field %s: %+v", f, e)
 			continue
 		}
-		logrus.Printf("fs_stats for field %s updated.", f)
+		log.Printf("fs_stats for field %s updated.", f)
 	}
 
 	// indicators
 	sqlt, e = dot.Raw("COLLECT_INDICATOR_STANDARDIZATION_STATS")
 	if e != nil {
-		logrus.Printf("failed to get fs_stats sql %+v", e)
+		log.Printf("failed to get fs_stats sql %+v", e)
 		return
 	}
 	tabs := []string{"indicator_d"}
@@ -75,10 +73,10 @@ func CollectFsStats() {
 			usql := fmt.Sprintf(sqlt, t, f)
 			_, e = dbmap.Exec(usql)
 			if e != nil {
-				logrus.Printf("failed to update fs_stats for field %s: %+v", f, e)
+				log.Printf("failed to update fs_stats for field %s: %+v", f, e)
 				continue
 			}
-			logrus.Printf("fs_stats for table %s field %s updated.", t, f)
+			log.Printf("fs_stats for table %s field %s updated.", t, f)
 		}
 	}
 }

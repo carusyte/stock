@@ -6,7 +6,6 @@ import (
 	"math/rand"
 
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/errors"
@@ -39,7 +38,7 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 		return errors.WithStack(e)
 	}
 	if len(stats) == 0 {
-		logrus.Printf("no available data in basics table. aborting")
+		log.Printf("no available data in basics table. aborting")
 		return nil
 	}
 	// multiply by 0.1 and floor each count
@@ -65,7 +64,7 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 		if e != nil {
 			return errors.WithStack(e)
 		}
-		logrus.Printf("%s\t%d", s.Industry, len(kpts))
+		log.Printf("%s\t%d", s.Industry, len(kpts))
 		toTag = append(toTag, kpts...)
 	}
 	// tag head record with 'TEST' flag
@@ -80,7 +79,7 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 	var scores []int
 	_, e = dbmap.Select(&scores, fmt.Sprintf(`select distinct score from kpts%d order by score`, frame))
 	if e != nil {
-		logrus.Println(e)
+		log.Println(e)
 		return errors.WithStack(e)
 	}
 	smap := make(map[int][]string)
@@ -89,13 +88,13 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 		`and flag is null ORDER BY RAND()`, frame)
 	for i, s := range scores {
 		var uuids []string
-		logrus.Printf("fetching sample data for score %v", s)
+		log.Printf("fetching sample data for score %v", s)
 		_, e = dbmap.Select(&uuids, qry, s, TestFlag)
 		if e != nil {
-			logrus.Println(e)
+			log.Println(e)
 			return errors.WithStack(e)
 		}
-		logrus.Printf("score %v size: %d", s, len(uuids))
+		log.Printf("score %v size: %d", s, len(uuids))
 		if len(uuids) > 0 {
 			smap[s] = uuids
 		} else {
@@ -143,7 +142,7 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 			uuids = append(uuids, nus...)
 		}
 		flag := fmt.Sprintf("TEST_%v", bno)
-		logrus.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
+		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
 		updSQL := fmt.Sprintf(`update kpts%d set flag = ? where uuid in (%s)`,
 			frame, util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)
@@ -168,7 +167,7 @@ func TagTestSetByIndustry(frame, batchSize int) (e error) {
 	if e != nil {
 		return errors.WithStack(e)
 	}
-	logrus.Printf("kpts%d Test Set Summary:\t%d stocks, %.2f%% sampled data", frame,
+	log.Printf("kpts%d Test Set Summary:\t%d stocks, %.2f%% sampled data", frame,
 		len(toTag), nTest/nTotal*100.)
 	return nil
 }
@@ -179,7 +178,7 @@ func TagTrainingSetByScore(frame, batchSize int) (e error) {
 	var scores []int
 	_, e = dbmap.Select(&scores, fmt.Sprintf(`select distinct score from kpts%d order by score`, frame))
 	if e != nil {
-		logrus.Println(e)
+		log.Println(e)
 		return errors.WithStack(e)
 	}
 	smap := make(map[int][]string)
@@ -188,13 +187,13 @@ func TagTrainingSetByScore(frame, batchSize int) (e error) {
 		`and flag is null ORDER BY RAND()`, frame)
 	for i, s := range scores {
 		var uuids []string
-		logrus.Printf("fetching sample data for score %v", s)
+		log.Printf("fetching sample data for score %v", s)
 		_, e = dbmap.Select(&uuids, qry, s)
 		if e != nil {
-			logrus.Println(e)
+			log.Println(e)
 			return errors.WithStack(e)
 		}
-		logrus.Printf("score %v size: %d", s, len(uuids))
+		log.Printf("score %v size: %d", s, len(uuids))
 		if len(uuids) > 0 {
 			smap[s] = uuids
 		} else {
@@ -243,7 +242,7 @@ func TagTrainingSetByScore(frame, batchSize int) (e error) {
 			uuids = append(uuids, nus...)
 		}
 		flag := fmt.Sprintf("%s_%v", TrainFlag, bno)
-		logrus.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
+		log.Printf("Tagging [%s]: %s", flag, strQmap(scores, qmap))
 		updSQL := fmt.Sprintf(`update kpts%d set flag = ? where uuid in (%s)`,
 			frame, util.Join(uuids, ",", true))
 		_, e = dbmap.Exec(updSQL, flag)

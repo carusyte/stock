@@ -6,7 +6,7 @@ import (
 
 //UpdateStockRels updates stock relationship data in db.
 func UpdateStockRels(stocks *model.Stocks) (rstks *model.Stocks) {
-	// logrus.Printf("begin to collect stock relationship data")
+	// log.Printf("begin to collect stock relationship data")
 	// var wg sync.WaitGroup
 	// parallel := conf.Args.Concurrency
 	// wf := make(chan int, parallel)
@@ -25,11 +25,11 @@ func UpdateStockRels(stocks *model.Stocks) (rstks *model.Stocks) {
 	// waitDbjob(wgdb)
 	// close(outstks)
 	// wgr.Wait()
-	// logrus.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
+	// log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
 	// if stks.Size() != rstks.Size() {
 	// 	same, skp := stks.Diff(rstks)
 	// 	if !same {
-	// 		logrus.Printf("Failed: %+v", skp)
+	// 		log.Printf("Failed: %+v", skp)
 	// 	}
 	// }
 	// return

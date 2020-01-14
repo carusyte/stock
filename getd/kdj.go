@@ -16,7 +16,6 @@ import (
 	"github.com/carusyte/stock/rpc"
 	"github.com/carusyte/stock/util"
 	uuid "github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
 	logr "github.com/sirupsen/logrus"
 )
 
@@ -36,7 +35,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 	defer func() {
 		if r := recover(); r != nil {
 			if er, hasError := r.(error); hasError {
-				logrus.Panicf("%s, %s, %d, %s, error:\n%+v", code, tab, retro, toDate, er)
+				log.Panicf("%s, %s, %d, %s, error:\n%+v", code, tab, retro, toDate, er)
 			}
 		}
 	}()
@@ -58,7 +57,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 				logr.Warnf("%s, %s, %d: %+v", code, tab, retro, e.Error())
 				return
 			}
-			logrus.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
+			log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 		}
 	} else {
 		if retro > 0 {
@@ -74,7 +73,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 				logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
 				return
 			} else {
-				logrus.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
+				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 			}
 		}
 		if len(indcs) > 0 && indcs[len(indcs)-1].Date == toDate {
@@ -96,7 +95,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 					logr.Warnf("%s, %s, sql: %s, %s: %+v, ", code, tab, toDate, sql, e.Error())
 					return
 				}
-				logrus.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
+				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
 			}
 			qsdy := GetTrDataBtwn(
 				code,
@@ -152,17 +151,17 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 		ktab = model.KLINE_MONTH
 		minSize = 15
 	default:
-		logrus.Panicf("not supported cycle type: %+v", cytp)
+		log.Panicf("not supported cycle type: %+v", cytp)
 	}
 	hist := GetKdjHist(code, itab, 0, "")
 	//TODO refactor: use GetTrDataDB instead
 	klhist := GetKlineDb(code, ktab, 0, false)
 	if len(hist) != len(klhist) {
-		logrus.Panicf("%s %s and %s does not match: %d:%d", code, itab, ktab, len(hist),
+		log.Panicf("%s %s and %s does not match: %d:%d", code, itab, ktab, len(hist),
 			len(klhist))
 	}
 	if len(hist) < minSize {
-		logrus.Printf("%s %s insufficient data for sampling: %d", code, cytp, len(hist))
+		log.Printf("%s %s insufficient data for sampling: %d", code, cytp, len(hist))
 		return
 	}
 	indf, kfds := smpKdjBY(code, cytp, hist, klhist, expvr, mxrt, mxhold)
@@ -389,7 +388,7 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 			kdjFdrMap[mk] = fdvs
 			return fdvs
 		} else {
-			logrus.Panicf("failed to query kdj feat dat raw, sql:\n%s\n%+v", sql, e)
+			log.Panicf("failed to query kdj feat dat raw, sql:\n%s\n%+v", sql, e)
 		}
 	}
 	defer rows.Close()
@@ -412,7 +411,7 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 		pfid = fid
 	}
 	if err := rows.Err(); err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 	kdjFdrMap[mk] = fdvs
 	logr.Debugf("query kdj_feat_dat_raw(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
@@ -440,7 +439,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 			kdjFdMap[mk] = fdvs
 			return fdvs
 		} else {
-			logrus.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
+			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 		}
 	}
 	defer rows.Close()
@@ -462,7 +461,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 		pfid = fid
 	}
 	if err := rows.Err(); err != nil {
-		logrus.Panicln("failed to query kdj feat dat.", err)
+		log.Panicln("failed to query kdj feat dat.", err)
 	}
 	kdjFdMap[mk] = fdvs
 	logr.Debugf("query kdj_feat_dat(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
@@ -487,7 +486,7 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 		if "sql: no rows in result set" == e.Error() {
 			return kdjFdMap, 0
 		} else {
-			logrus.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
+			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 		}
 	}
 	defer rows.Close()
@@ -518,7 +517,7 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 	}
 	kdjFdMap[mk] = fdvs
 	if err := rows.Err(); err != nil {
-		logrus.Panicln("failed to query kdj feat dat.", err)
+		log.Panicln("failed to query kdj feat dat.", err)
 	}
 	logr.Debugf("query all kdj_feat_dat: %d, mk: %d,  time: %.2f", count, len(kdjFdMap), time.Since(start).Seconds())
 	return kdjFdMap, count
@@ -550,15 +549,15 @@ func purgeKdjFeatDat(code string) {
 	//purge data of this code before insertion
 	_, e = tran.Exec("delete from indc_feat_raw where code = ?", code)
 	if e != nil {
-		logrus.Printf("failed to purge indc_feat_raw, %s", code)
+		log.Printf("failed to purge indc_feat_raw, %s", code)
 		tran.Rollback()
-		logrus.Panicln(e)
+		log.Panicln(e)
 	}
 	_, e = tran.Exec("delete from kdj_feat_dat_raw where code = ?", code)
 	if e != nil {
-		logrus.Printf("failed to purge indc_feat_raw, %s", code)
+		log.Printf("failed to purge indc_feat_raw, %s", code)
 		tran.Rollback()
-		logrus.Panicln(e)
+		log.Panicln(e)
 	}
 	tran.Commit()
 }
@@ -595,9 +594,9 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 		util.CheckErr(e, "failed to begin new transaction")
 		_, err := tran.Exec(stmt, valueArgs...)
 		if err != nil {
-			logrus.Printf("%s failed to bulk insert indc_feat_raw", code)
+			log.Printf("%s failed to bulk insert indc_feat_raw", code)
 			tran.Rollback()
-			logrus.Panicln(err)
+			log.Panicln(err)
 		}
 
 		valueStrings = make([]string, 0, len(kfds))
@@ -619,9 +618,9 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 			strings.Join(valueStrings, ","))
 		_, err = tran.Exec(stmt, valueArgs...)
 		if err != nil {
-			logrus.Printf("%s failed to bulk insert kdj_feat_dat_raw", code)
+			log.Printf("%s failed to bulk insert kdj_feat_dat_raw", code)
 			tran.Rollback()
-			logrus.Panicln(err)
+			log.Panicln(err)
 		}
 
 		tran.Commit()
@@ -647,7 +646,7 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 		if "sql: no rows in result set" == e.Error() {
 			return
 		}
-		logrus.Panicln("failed to query indc_feat_dat_raw", e)
+		log.Panicln("failed to query indc_feat_dat_raw", e)
 
 	}
 	if !resume {
@@ -703,7 +702,7 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 	sumaf, e := dbmap.SelectInt("select count(*) from indc_feat")
 	util.CheckErr(e, "failed to count indc_feat")
 	prate := float64(sumbf-int(sumaf)) / float64(sumbf) * 100
-	logrus.Printf("raw kdj feature data pruned. before: %d, after: %d, rate: %.2f%%, time: %.2f",
+	log.Printf("raw kdj feature data pruned. before: %d, after: %d, rate: %.2f%%, time: %.2f",
 		sumbf, sumaf, prate, time.Since(st).Seconds())
 }
 
@@ -765,7 +764,7 @@ func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, p
 	var rep *rm.KdjPruneRep
 	e := rpc.Call("IndcScorer.PruneKdj", req, &rep, 3)
 	if e != nil {
-		logrus.Printf("RPC service IndcScorer.PruneKdj failed\n%+v", e)
+		log.Printf("RPC service IndcScorer.PruneKdj failed\n%+v", e)
 		return fdvs, e
 	}
 	fdvs = rep.Data
@@ -814,7 +813,7 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 		_, err := tran.Exec(stmt, valueArgs...)
 		if err != nil {
 			tran.Rollback()
-			logrus.Panicln("failed to bulk insert indc_feat", err)
+			log.Panicln("failed to bulk insert indc_feat", err)
 		}
 
 		for _, f := range fdvs {
@@ -837,7 +836,7 @@ func saveKdjFd(fdvs []*model.KDJfdView) {
 			_, err = tran.Exec(stmt, valueArgs...)
 			if err != nil {
 				tran.Rollback()
-				logrus.Panicln("failed to bulk insert kdj_feat_dat", err)
+				log.Panicln("failed to bulk insert kdj_feat_dat", err)
 			}
 		}
 		tran.Commit()

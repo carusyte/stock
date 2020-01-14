@@ -9,7 +9,6 @@ import (
 
 	"github.com/carusyte/stock/global"
 	"github.com/olekukonko/tablewriter"
-	"github.com/sirupsen/logrus"
 )
 
 type mark string
@@ -29,6 +28,7 @@ const (
 var (
 	dbmap = global.Dbmap
 	dot   = global.Dot
+	log   = global.Log
 )
 
 type Profile struct {
@@ -281,7 +281,7 @@ func Combine(rs ...*Result) (fr *Result) {
 		fr.Weight += r.Weight
 		for pfid := range r.Fields {
 			if _, exists := fr.Fields[pfid]; exists {
-				logrus.Panicf("unable to combine identical profile: %s", pfid)
+				log.Panicf("unable to combine identical profile: %s", pfid)
 			} else {
 				fr.SetFields(pfid, r.Fields[pfid]...)
 			}
@@ -298,7 +298,7 @@ func Combine(rs ...*Result) (fr *Result) {
 					mi.Score += it.Score * r.Weight
 					for k := range it.Profiles {
 						if _, exists := mi.Profiles[k]; exists {
-							logrus.Panicf("profile [%s] already exists: %+v", k, mi.Profiles[k])
+							log.Panicf("profile [%s] already exists: %+v", k, mi.Profiles[k])
 						} else {
 							mi.Profiles[k] = it.Profiles[k]
 						}

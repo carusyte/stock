@@ -18,7 +18,6 @@ import (
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -37,7 +36,7 @@ func StocksDbByCode(code ...string) (stocks []*model.Stock) {
 		if "sql: no rows in result set" == e.Error() {
 			return
 		}
-		logrus.Panicln("failed to run sql", e)
+		log.Panicln("failed to run sql", e)
 	}
 	return
 }
@@ -53,7 +52,7 @@ func GetStockInfo() (allstk *model.Stocks) {
 	//allstk = getFrom10jqk()
 	//allstk = getFromQq()
 	allstk = getFromExchanges()
-	logrus.Printf("total stocks: %d", allstk.Size())
+	log.Printf("total stocks: %d", allstk.Size())
 
 	getIndustry(allstk)
 	getShares(allstk)
@@ -64,7 +63,7 @@ func GetStockInfo() (allstk *model.Stocks) {
 }
 
 func getIndustry(stocks *model.Stocks) {
-	logrus.Println("getting industry info...")
+	log.Println("getting industry info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -85,18 +84,18 @@ func getIndustry(stocks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d industry info fetched", rstks.Size())
+	log.Printf("%d industry info fetched", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
 }
 
 func getShares(stocks *model.Stocks) {
-	logrus.Println("getting share info...")
+	log.Println("getting share info...")
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -113,11 +112,11 @@ func getShares(stocks *model.Stocks) {
 	wg.Wait()
 	close(chrstk)
 	wgr.Wait()
-	logrus.Printf("%d share info fetched", rstks.Size())
+	log.Printf("%d share info fetched", rstks.Size())
 	if stocks.Size() != rstks.Size() {
 		same, skp := stocks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -140,11 +139,11 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			if ok {
 				chrstk <- stock
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(1000+rand.Intn(1000)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
 		}
@@ -161,28 +160,28 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			if ok {
 				chrstk <- stock
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
 		}
 		if ok {
 			continue
 		}
-		logrus.Printf("%s switching to secondary source xueqiu.com", stock.Code)
+		log.Printf("%s switching to secondary source xueqiu.com", stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
 			ok, r = xqShares(stock)
 			if ok {
 				chrstk <- stock
 			} else if r {
-				logrus.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
 				continue
 			} else {
-				logrus.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
 		}
@@ -193,7 +192,7 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/equity.html`, stock.Code)
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", stock.Code, url)
+		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -204,7 +203,7 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
@@ -225,13 +224,13 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 			if strings.Contains(sval, "亿") {
 				fval, e = strconv.ParseFloat(strings.TrimSuffix(sval, "亿"), 64)
 				if e != nil {
-					logrus.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
+					log.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
 				}
 				div = 1.
 			} else if strings.Contains(sval, "万") {
 				fval, e = strconv.ParseFloat(strings.TrimSuffix(sval, "万"), 64)
 				if e != nil {
-					logrus.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
+					log.Panicf("%s invalid share value format: %s, url: %s\n%+v", stock.Code, sval, url, e)
 				}
 				div = 10000.
 			}
@@ -269,7 +268,7 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 				stock.HShareR.Valid = true
 				stock.HShareR.Float64 = fval
 			default:
-				logrus.Printf("%s unrecognized type: %s, url: %s", stock.Code, typ, url)
+				log.Printf("%s unrecognized type: %s, url: %s", stock.Code, typ, url)
 				ok, retry, cont = false, true, false
 				return
 			}
@@ -284,26 +283,26 @@ func xqShares(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=%s%s&count=1000&extend=true`, stock.Market.String, stock.Code)
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", stock.Code, url)
+		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
 	}
 	defer res.Body.Close()
 	var xqshare model.XqSharesChg
 	if body, e := ioutil.ReadAll(res.Body); e != nil {
-		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	} else if e = json.Unmarshal(body, &xqshare); e != nil {
-		logrus.Printf("[%s,%s] failed to parse json body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to parse json body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
 	if xqshare.ErrorCode != 0 {
-		logrus.Printf("[%s,%s] failed from xueqiu.com:[%d, %s] retrying...", stock.Code,
+		log.Printf("[%s,%s] failed from xueqiu.com:[%d, %s] retrying...", stock.Code,
 			stock.Name, xqshare.ErrorCode, xqshare.ErrorDesc)
 		return false, true
 	} else if len(xqshare.Data.Items) == 0 {
-		logrus.Printf("[%s,%s] no share info from xueqiu.com", stock.Code, stock.Name)
+		log.Printf("[%s,%s] no share info from xueqiu.com", stock.Code, stock.Name)
 		return true, false
 	}
 	mod := 0.00000001
@@ -361,7 +360,7 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://stock.finance.qq.com/corp1/plate.php?zqdm=%s`, stock.Code)
 	res, e := util.HttpGetResp(url)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", stock.Code, url)
+		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -372,7 +371,7 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
@@ -385,7 +384,7 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	case conf.TENCENT_CSRC:
 		sel = `body div.page div table.list tbody tr.nobor td:nth-child(2) a`
 	default:
-		logrus.Panicf("unrecognized industry info source: %s", conf.Args.DataSource.Industry)
+		log.Panicf("unrecognized industry info source: %s", conf.Args.DataSource.Industry)
 	}
 	val := doc.Find(sel).Text()
 	stock.Industry.Valid = true
@@ -398,7 +397,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	url := fmt.Sprintf(`http://basic.10jqka.com.cn/%s/field.html`, stock.Code)
 	res, e := util.HTTPGetResponse(url, nil, false, true, true)
 	if e != nil {
-		logrus.Printf("%s, http failed %s", stock.Code, url)
+		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
 	}
 	defer res.Body.Close()
@@ -409,12 +408,12 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		logrus.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
-	
-	logrus.Debugf("%s returns: \n %s", url, doc.Text())
+
+	log.Debugf("%s returns: \n %s", url, doc.Text())
 
 	//parse industry value
 	sel := `#fieldstatus div.bd.pr div:nth-child(1) p span`
@@ -425,7 +424,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sep := " -- "
 	idx := strings.Index(val, sep)
 	if idx <= 0 {
-		logrus.Printf("%s no industry lv1 data. value: %s, source: %s", stock.Code, val, url)
+		log.Printf("%s no industry lv1 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv1.Valid = true
@@ -433,7 +432,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sval := val[idx+4:]
 	idx = strings.Index(sval, sep)
 	if idx <= 0 {
-		logrus.Printf("%s no industry lv2 data. value: %s, source: %s", stock.Code, val, url)
+		log.Printf("%s no industry lv2 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv2.Valid = true
@@ -441,7 +440,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sval = sval[idx+4:]
 	idx = strings.Index(sval, " ")
 	if idx <= 0 {
-		logrus.Printf("%s no industry lv3 data. value: %s, source: %s", stock.Code, val, url)
+		log.Printf("%s no industry lv3 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv3.Valid = true
@@ -460,7 +459,7 @@ func getFromExchanges() (allstk *model.Stocks) {
 
 //get Shenzhen A-share list
 func getSZSE() (list []*model.Stock) {
-	logrus.Println("Fetching Shenzhen A-Share list...")
+	log.Println("Fetching Shenzhen A-Share list...")
 	url_sz := `http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1110x&TABKEY=tab1&random=%.16f`
 	url_sz = fmt.Sprintf(url_sz, rand.Float64())
 	d, e := util.HttpGetBytes(url_sz)
@@ -518,7 +517,7 @@ func getSZSE() (list []*model.Stock) {
 
 //get Shanghai A-share list
 func getSSE() *model.Stocks {
-	logrus.Println("Fetching Shanghai A-Share list...")
+	log.Println("Fetching Shanghai A-Share list...")
 
 	url_sh := `http://query.sse.com.cn/security/stock/getStockListData2.do` +
 		`?&isPagination=false&stockType=1&pageHelp.pageSize=9999`
@@ -528,7 +527,7 @@ func getSSE() *model.Stocks {
 	list := &model.Stocks{}
 	e = json.Unmarshal(d, list)
 	if e != nil {
-		logrus.Panicf("failed to parse json from %s\n%+v", url_sh, e)
+		log.Panicf("failed to parse json from %s\n%+v", url_sh, e)
 	}
 	//TODO supplement shares info from the following
 	// http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback5040&isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000&_=1578668181485
@@ -599,14 +598,14 @@ func overwrite(allstk []*model.Stock) {
 		rs, e := tran.Exec(fmt.Sprintf("delete from basics where code not in (%s)", util.Join(codes, ",", true)))
 		if e != nil {
 			tran.Rollback()
-			logrus.Panicf("failed to clean basics %d\n%+v", len(allstk), e)
+			log.Panicf("failed to clean basics %d\n%+v", len(allstk), e)
 		}
 		ra, e := rs.RowsAffected()
 		if e != nil {
 			tran.Rollback()
-			logrus.Panicf("failed to get delete sql rows affected\n%+v", e)
+			log.Panicf("failed to get delete sql rows affected\n%+v", e)
 		}
-		logrus.Printf("%d stale stock record deleted from basics", ra)
+		log.Printf("%d stale stock record deleted from basics", ra)
 		for _, b := range batches {
 			stmt := fmt.Sprintf("INSERT INTO basics (code,name,market,industry,ind_lv1,ind_lv2,ind_lv3,price,"+
 				"varate,var,accer,xrate,volratio,ampl,turnover,outstanding,totals,circmarval,timeToMarket,"+
@@ -624,11 +623,11 @@ func overwrite(allstk []*model.Stock) {
 			_, e = tran.Exec(stmt, b.values...)
 			if e != nil {
 				tran.Rollback()
-				logrus.Panicf("failed to bulk update basics %d\n%+v", len(allstk), e)
+				log.Panicf("failed to bulk update basics %d\n%+v", len(allstk), e)
 			}
 		}
 		tran.Commit()
-		logrus.Printf("%d stocks info overwrite to basics", len(allstk))
+		log.Printf("%d stocks info overwrite to basics", len(allstk))
 	}
 }
 
@@ -640,14 +639,14 @@ func getFrom10jqk() (allstk []*model.Stock) {
 	chstk := make(chan []*model.Stock, 100)
 	wg.Add(1)
 	tp := parse10jqk(chstk, 1, true, &wg)
-	logrus.Printf("total page: %d", tp)
+	log.Printf("total page: %d", tp)
 	wgget.Add(1)
 	go func() {
 		defer wgget.Done()
 		c := 1
 		for stks := range chstk {
 			allstk = append(allstk, stks...)
-			logrus.Printf("%d/%d, %d", c, tp, len(allstk))
+			log.Printf("%d/%d, %d", c, tp, len(allstk))
 			c++
 		}
 	}()
@@ -681,8 +680,8 @@ func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.Wa
 	// parse utfBody using goquery
 	doc, err := goquery.NewDocumentFromReader(utfBody)
 	if err != nil {
-		logrus.Printf("%+v", utfBody)
-		logrus.Panic(err)
+		log.Printf("%+v", utfBody)
+		log.Panic(err)
 	}
 
 	doc.Find("tbody tr").Each(func(i int, s *goquery.Selection) {
@@ -738,7 +737,7 @@ func parse10jqk(chstk chan []*model.Stock, page int, parsePage bool, wg *sync.Wa
 			if len(ps) == 2 {
 				cp, e := strconv.ParseInt(ps[1], 10, 32)
 				if e != nil {
-					logrus.Printf("can't parse total page: %+v, error: %+v", t, e)
+					log.Printf("can't parse total page: %+v, error: %+v", t, e)
 				} else {
 					totalPage = int(cp)
 				}
@@ -765,14 +764,14 @@ func getQqMarket(name, urlt string) (allstk []*model.Stock) {
 	chstk := make(chan []*model.Stock, 100)
 	wg.Add(1)
 	tp := parseQq(chstk, 1, true, urlt, &wg)
-	logrus.Printf("%s total page: %d", name, tp)
+	log.Printf("%s total page: %d", name, tp)
 	wgget.Add(1)
 	go func() {
 		defer wgget.Done()
 		c := 1
 		for stks := range chstk {
 			allstk = append(allstk, stks...)
-			logrus.Printf("%d/%d, %d", c, tp, len(allstk))
+			log.Printf("%d/%d, %d", c, tp, len(allstk))
 			c++
 		}
 	}()
@@ -804,8 +803,8 @@ func parseQq(chstk chan []*model.Stock, page int, parsePage bool, urlt string, w
 	// parse utfBody using goquery
 	doc, err := goquery.NewDocumentFromReader(utfBody)
 	if err != nil {
-		logrus.Printf("%+v", utfBody)
-		logrus.Panic(err)
+		log.Printf("%+v", utfBody)
+		log.Panic(err)
 	}
 
 	//> tr:nth - child(1)
@@ -866,7 +865,7 @@ func parseQq(chstk chan []*model.Stock, page int, parsePage bool, urlt string, w
 			if len(ps) == 2 {
 				cp, e := strconv.ParseInt(ps[1], 10, 32)
 				if e != nil {
-					logrus.Printf("can't parse total page: %+v, error: %+v", t, e)
+					log.Printf("can't parse total page: %+v, error: %+v", t, e)
 				} else {
 					totalPage = int(cp)
 				}
@@ -911,7 +910,7 @@ func updBasics(stocks *model.Stocks) *model.Stocks {
 	sql = fmt.Sprintf(sql, util.Join(stocks.Codes, ",", true))
 	_, e = dbmap.Exec(sql)
 	util.CheckErr(e, "failed to update basics, sql:\n"+sql)
-	logrus.Printf("%d basics info updated", stocks.Size())
+	log.Printf("%d basics info updated", stocks.Size())
 	return stocks
 }
 

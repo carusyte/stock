@@ -1,16 +1,12 @@
 package main
 
 import (
-	"io"
-	"os"
 	"strings"
 
 	"github.com/carusyte/stock/cmd"
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/pkg/profile"
-	"github.com/sirupsen/logrus"
-	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
@@ -23,26 +19,10 @@ const (
 	LOGFILE = "stock.log"
 )
 
-func init() {
-	logrus.SetFormatter(&prefixed.TextFormatter{
-		TimestampFormat: "2006-01-02 15:04:05",
-		FullTimestamp:   true,
-		ForceFormatting: true,
-		// ForceColors:     true,
-	})
-	if _, e := os.Stat(LOGFILE); e == nil {
-		os.Remove(LOGFILE)
-	}
-	logFile, e := os.OpenFile(LOGFILE, os.O_CREATE|os.O_RDWR, 0666)
-	if e != nil {
-		logrus.Panicln("failed to open log file", e)
-	}
-	mw := io.MultiWriter(os.Stdout, logFile)
-	logrus.SetOutput(mw)
-}
+var log = global.Log
 
 func main() {
-	logrus.Info("started...")
+	log.Info("started...")
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":
 		defer profile.Start().Stop()
@@ -54,7 +34,7 @@ func main() {
 
 func fixVarate() {
 	getd.FixVarate()
-	logrus.Info("all varate has been fixed.")
+	log.Info("all varate has been fixed.")
 }
 
 func test() {
@@ -83,9 +63,9 @@ func test() {
 		model.KLINE_MONTH_NR)
 	e := getd.AppendVarateRgl(allstk...)
 	if e != nil {
-		logrus.Println(e)
+		log.Println(e)
 	} else {
-		logrus.Printf("%v stocks varate_rgl fixed", len(allstk))
+		log.Printf("%v stocks varate_rgl fixed", len(allstk))
 	}
 }
 

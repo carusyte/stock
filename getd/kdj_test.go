@@ -2,7 +2,6 @@ package getd
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"runtime"
 	"sync"
@@ -209,7 +208,7 @@ func TestUUID(t *testing.T) {
 }
 
 func TestPruneKdjFeatDat(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(logrus.DebugLevel)
 	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_PRUNE_RATE, true)
 }
 
@@ -222,7 +221,7 @@ func TestPruneKdjFeatDatRunMode(t *testing.T) {
 	fdrvs := GetKdjFeatDatRaw(model.DAY, true, smpNum)
 	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(smpNum-2),
 		1+1./(math.Sqrt2*math.Pi)))
-	logrus.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
+	log.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 	fdvsInput := convert2Fdvs(fdk, fdrvs)
 	fdvs := smartPruneKdjFeatDat(fdk, fdvsInput, nprec, pruneRate, runMode)
 	for _, fdv := range fdvs {
@@ -230,7 +229,7 @@ func TestPruneKdjFeatDatRunMode(t *testing.T) {
 	}
 	//saveKdjFd(fdvs)
 	prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
-	logrus.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
+	log.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
 		fdk.ID(), fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
 }
 

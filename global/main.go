@@ -2,19 +2,21 @@ package global
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/db"
 	"github.com/gchaincl/dotsql"
 	"github.com/sirupsen/logrus"
+	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 	"gopkg.in/gorp.v2"
 )
 
 var (
 	Dbmap *gorp.DbMap
 	Dot   *dotsql.DotSql
-
+	Log   = logrus.New()
 	//RPC_SERVER_ADDRESS = "localhost:45321"    // for local test
 )
 
@@ -40,6 +42,37 @@ func init() {
 	}
 	Dot, e = dotsql.LoadFromFile(sqlp)
 	if e != nil {
-		logrus.Panicln("failed to init dotsql", e)
+		Log.Panicln("failed to init dotsql", e)
 	}
+
+	switch conf.Args.LogLevel {
+	case "debug":
+		Log.SetLevel(logrus.DebugLevel)
+	case "info":
+		Log.SetLevel(logrus.InfoLevel)
+	case "warning":
+		Log.SetLevel(logrus.WarnLevel)
+	case "error":
+		Log.SetLevel(logrus.ErrorLevel)
+	case "fatal":
+		Log.SetLevel(logrus.FatalLevel)
+	case "panic":
+		Log.SetLevel(logrus.PanicLevel)
+	}
+
+	Log.SetFormatter(&prefixed.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		FullTimestamp:   true,
+		ForceFormatting: true,
+		// ForceColors:     true,
+	})
+	if _, e := os.Stat(conf.Args.LogFile); e == nil {
+		os.Remove(conf.Args.LogFile)
+	}
+	logFile, e := os.OpenFile(conf.Args.LogFile, os.O_CREATE|os.O_RDWR, 0666)
+	if e != nil {
+		Log.Panicln("failed to open log file", e)
+	}
+	mw := io.MultiWriter(os.Stdout, logFile)
+	Log.SetOutput(mw)
 }

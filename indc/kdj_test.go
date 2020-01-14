@@ -2,7 +2,6 @@ package indc
 
 import (
 	"io"
-	"log"
 	"os"
 
 	"github.com/carusyte/stock/db"

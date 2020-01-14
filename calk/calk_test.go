@@ -7,7 +7,6 @@ import (
 	"github.com/carusyte/stock/util"
 	"github.com/gchaincl/dotsql"
 	"gopkg.in/gorp.v2"
-	"log"
 	"strings"
 	"sync"
 	"testing"

@@ -17,7 +17,6 @@ import (
 	"github.com/carusyte/roprox/data"
 	"github.com/carusyte/roprox/types"
 	"github.com/carusyte/stock/conf"
-	"github.com/sirupsen/logrus"
 	"github.com/ssgreg/repeat"
 )
 
@@ -55,14 +54,14 @@ func PickUserAgent() (ua string, e error) {
 	//if none, or outdated, refresh table from remote server
 	if refresh || len(agents) == 0 {
 		//download sample file and load into database server
-		logrus.Info("fetching user agent list from remote server...")
+		log.Info("fetching user agent list from remote server...")
 		exePath, e := os.Executable()
 		if e != nil {
-			logrus.Panicln("failed to get executable path", e)
+			log.Panicln("failed to get executable path", e)
 		}
 		path, e := filepath.EvalSymlinks(exePath)
 		if e != nil {
-			logrus.Panicln("failed to evaluate symlinks, ", exePath, e)
+			log.Panicln("failed to evaluate symlinks, ", exePath, e)
 		}
 		local := filepath.Join(filepath.Dir(path), filepath.Base(conf.Args.Network.UserAgents))
 		if _, e := os.Stat(local); e == nil {
@@ -71,14 +70,14 @@ func PickUserAgent() (ua string, e error) {
 		e = downloadFile(local, conf.Args.Network.UserAgents)
 		defer os.Remove(local)
 		if e != nil {
-			logrus.Panicln("failed to download user agent sample file ", conf.Args.Network.UserAgents, e)
+			log.Panicln("failed to download user agent sample file ", conf.Args.Network.UserAgents, e)
 		}
 		agents, e = readCSV(local)
 		if e != nil {
-			logrus.Panicln("failed to download and read csv, ", local, e)
+			log.Panicln("failed to download and read csv, ", local, e)
 		}
 		mergeAgents(agents)
-		logrus.Infof("successfully fetched %d user agents from remote server.", len(agentPool))
+		log.Infof("successfully fetched %d user agents from remote server.", len(agentPool))
 		//reload agents from database
 		agents = loadUserAgents()
 	}
@@ -92,7 +91,7 @@ func loadUserAgents() (agents []*types.UserAgent) {
 	_, e := data.DB.Select(&agents, "select * from user_agents where hardware_type = ? order by updated_at desc", "computer")
 	if e != nil {
 		if "sql: no rows in result set" != e.Error() {
-			logrus.Panicln("failed to run sql", e)
+			log.Panicln("failed to run sql", e)
 		}
 	}
 	return
@@ -146,12 +145,12 @@ func mergeAgents(agents []*types.UserAgent) (e error) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicln("failed to merge user_agent", e)
+				log.Panicln("failed to merge user_agent", e)
 			}
 		}
 		return nil
 	}
-	logrus.Panicln("failed to merge user_agent", e)
+	log.Panicln("failed to merge user_agent", e)
 	return
 }
 

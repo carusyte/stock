@@ -14,7 +14,6 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type dbJob struct {
@@ -36,7 +35,7 @@ func init() {
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
 	defer Cleanup()
-	logrus.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
+	log.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
 	var wg sync.WaitGroup
 	parallel := conf.Args.ChromeDP.PoolSize
 	switch conf.Args.DataSource.Kline {
@@ -59,11 +58,11 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	waitDbjob(wgdb)
 	close(outstks)
 	wgr.Wait()
-	logrus.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
+	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(kt2strs(kltype), ", "))
 	if stks.Size() != rstks.Size() {
 		same, skp := stks.Diff(rstks)
 		if !same {
-			logrus.Printf("Failed: %+v", skp)
+			log.Printf("Failed: %+v", skp)
 		}
 	}
 	return
@@ -105,7 +104,7 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
 						snmap.Delete(j.stock.Code)
 						outstks <- j.stock
-						logrus.Printf("%s all requested klines fetched", j.stock.Code)
+						log.Printf("%s all requested klines fetched", j.stock.Code)
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
 					}
@@ -229,24 +228,24 @@ func FixVarate() {
 		_, e := dbmap.Select(&qs, qry)
 		if e != nil {
 			if e == sql.ErrNoRows {
-				logrus.Infof("%v has no 0 close price records.", t)
+				log.Infof("%v has no 0 close price records.", t)
 				continue
 			} else {
-				logrus.Panicf("failed to query %v for 0 close price records. %+v", t, e)
+				log.Panicf("failed to query %v for 0 close price records. %+v", t, e)
 			}
 		}
 		if len(qs) == 0 {
-			logrus.Infof("%v has no 0 close price records.", t)
+			log.Infof("%v has no 0 close price records.", t)
 			continue
 		}
 		qmap := make(map[string]*model.Quote)
-		logrus.Infof("%v found %d 0 close price records", t, len(qs))
+		log.Infof("%v found %d 0 close price records", t, len(qs))
 		for i, q := range qs {
 			tbu := make([]*model.Quote, 0, 3)
 			qry = fmt.Sprintf("select * from %v where code = ? and klid between ? and ? order by klid", t)
 			_, e := dbmap.Select(&tbu, qry, q.Code, q.Klid-1, q.Klid+1)
 			if e != nil {
-				logrus.Panicf("failed to query %v for 0 close price records. %+v", t, e)
+				log.Panicf("failed to query %v for 0 close price records. %+v", t, e)
 			}
 			if len(tbu) == 1 {
 				continue
@@ -270,7 +269,7 @@ func FixVarate() {
 				qmap[k] = tbu[j]
 			}
 			prgs := float64(i+1) / float64(len(qs)) * 100.
-			logrus.Infof("%d/%d\t%.2f%%\t%s %d %s varate recalculated",
+			log.Infof("%d/%d\t%.2f%%\t%s %d %s varate recalculated",
 				i+1, len(qs), prgs, q.Code, q.Klid, q.Date)
 		}
 		updateVarate(qmap, t)
@@ -332,52 +331,52 @@ func CalLogReturns(qs []*model.Quote) {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if q.Lr.Float64 < b {
-				logrus.Printf("%s %v %s %d lr below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.Lr.Float64)
+				log.Printf("%s %v %s %d lr below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.Lr.Float64)
 				q.Lr.Float64 = b
 			} else if q.Lr.Float64 > t {
-				logrus.Printf("%s %v %s %d lr exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.Lr.Float64)
+				log.Printf("%s %v %s %d lr exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.Lr.Float64)
 				q.Lr.Float64 = t
 			}
 			if q.LrHigh.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_h below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHigh.Float64)
+				log.Printf("%s %v %s %d lr_h below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHigh.Float64)
 				q.LrHigh.Float64 = b
 			} else if q.LrHigh.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_h exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHigh.Float64)
+				log.Printf("%s %v %s %d lr_h exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHigh.Float64)
 				q.LrHigh.Float64 = t
 			}
 			if q.LrHighClose.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_h_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHighClose.Float64)
+				log.Printf("%s %v %s %d lr_h_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrHighClose.Float64)
 				q.LrHighClose.Float64 = b
 			} else if q.LrHighClose.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHighClose.Float64)
+				log.Printf("%s %v %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrHighClose.Float64)
 				q.LrHighClose.Float64 = t
 			}
 			if q.LrOpen.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_o below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpen.Float64)
+				log.Printf("%s %v %s %d lr_o below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpen.Float64)
 				q.LrOpen.Float64 = b
 			} else if q.LrOpen.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_o exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpen.Float64)
+				log.Printf("%s %v %s %d lr_o exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpen.Float64)
 				q.LrOpen.Float64 = t
 			}
 			if q.LrOpenClose.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_o_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpenClose.Float64)
+				log.Printf("%s %v %s %d lr_o_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrOpenClose.Float64)
 				q.LrOpenClose.Float64 = b
 			} else if q.LrOpenClose.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpenClose.Float64)
+				log.Printf("%s %v %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrOpenClose.Float64)
 				q.LrOpenClose.Float64 = t
 			}
 			if q.LrLow.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_l below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLow.Float64)
+				log.Printf("%s %v %s %d lr_l below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLow.Float64)
 				q.LrLow.Float64 = b
 			} else if q.LrLow.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_l exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLow.Float64)
+				log.Printf("%s %v %s %d lr_l exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLow.Float64)
 				q.LrLow.Float64 = t
 			}
 			if q.LrLowClose.Float64 < b {
-				logrus.Printf("%s %v %s %d lr_l_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLowClose.Float64)
+				log.Printf("%s %v %s %d lr_l_c below lower limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, b, q.LrLowClose.Float64)
 				q.LrLowClose.Float64 = b
 			} else if q.LrLowClose.Float64 > t {
-				logrus.Printf("%s %v %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLowClose.Float64)
+				log.Printf("%s %v %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", q.Code, q.Type, q.Date, q.Klid, t, q.LrLowClose.Float64)
 				q.LrLowClose.Float64 = t
 			}
 		}
@@ -508,12 +507,12 @@ func updateVarate(qmap map[string]*model.Quote, tab model.DBTab) {
 	stm, e := dbmap.Prepare(s)
 	defer stm.Close()
 	if e != nil {
-		logrus.Panicf("failed to prepare varate update statement: %+v", e)
+		log.Panicf("failed to prepare varate update statement: %+v", e)
 	}
 	for _, q := range qmap {
 		_, e = stm.Exec(q.Varate, d, t, q.Code, q.Klid)
 		if e != nil {
-			logrus.Panicf("failed to update varate for %s %d %s: %+v", q.Code, q.Klid, q.Date, e)
+			log.Panicf("failed to update varate for %s %d %s: %+v", q.Code, q.Klid, q.Date, e)
 		}
 	}
 }
@@ -628,7 +627,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 			case conf.TENCENT:
 				// _, suc = klineTc(stk, klt, true)
 			default:
-				logrus.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+				log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
 			}
 			if !suc {
 				fail = true
@@ -650,7 +649,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 			tdmap, lkmap, suc = getKlineWht(stk, kltnv, true)
 		case conf.THS:
 			// qmap, lkmap, suc = getKlineThs(stk, kltnv)
-			logrus.Panic("fetching kline from THS is unsupported after database refactoring.")
+			log.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
 			tdmap, lkmap, suc = getKlineTc(stk, kltnv)
 		}
@@ -679,7 +678,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	if !isIndex(stk.Code) {
 		e := calcVarateRglV2(stk, tdmap)
 		if e != nil {
-			logrus.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
+			log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
 			return false
 		}
 	}
@@ -721,10 +720,10 @@ func getMinuteKlines(code string, tab model.DBTab) (klmin []*model.Quote, suc bo
 			return kls, true
 		}
 		if retry && rt+1 < RETRIES {
-			logrus.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
+			log.Printf("%s retrying to get %s [%d]", code, tab, rt+1)
 			continue
 		} else {
-			logrus.Printf("%s failed getting %s", code, tab)
+			log.Printf("%s failed getting %s", code, tab)
 			return klmin, false
 		}
 	}
@@ -754,13 +753,13 @@ func binsert(quotes []*model.Quote, table string, lklid int) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
 		break
 	}
 	if rt >= retry {
-		logrus.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
+		log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
 	}
 	batchSize := 200
 	for idx := 0; idx < len(quotes); idx += batchSize {
@@ -921,12 +920,12 @@ func insertMinibatch(quotes []*model.Quote, table string) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
 		return len(quotes)
 	}
-	logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+	log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	return
 }
 
@@ -941,7 +940,7 @@ func validateKline(stk *model.Stock, t model.DBTab, quotes []*model.Quote, lklid
 	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR:
 		vtab = model.KLINE_MONTH_VLD
 	default:
-		logrus.Warnf("validation not supported for %v", t)
+		log.Warnf("validation not supported for %v", t)
 		return true
 	}
 	ex := make([]string, 0, 16)
@@ -958,7 +957,7 @@ func validateKline(stk *model.Stock, t model.DBTab, quotes []*model.Quote, lklid
 		}
 	}
 	if len(ex) > 0 {
-		logrus.Warnf("%s %v kline validation exception: %+v", stk.Code, t, ex)
+		log.Warnf("%s %v kline validation exception: %+v", stk.Code, t, ex)
 	}
 	return len(ex) == 0
 }
@@ -1098,7 +1097,7 @@ func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 					k.Vol250.Float64 = mavol
 				}
 			default:
-				logrus.Panicf("unsupported MA value: %d", m)
+				log.Panicf("unsupported MA value: %d", m)
 			}
 		}
 	}
@@ -1121,7 +1120,7 @@ func getLatestTradeDataBase(code string, cycle model.CYTP, rtype model.Rtype, of
 		if "sql: no rows in result set" == e.Error() {
 			return nil
 		}
-		logrus.Panicln("failed to run sql", e)
+		log.Panicln("failed to run sql", e)
 	}
 	return
 }
@@ -1140,7 +1139,7 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 			//skip the rest types of kline
 		}
 		if e != nil {
-			logrus.Println(e)
+			log.Println(e)
 			return e
 		}
 		if retTgqs != nil {
@@ -1191,11 +1190,11 @@ func matchSlice(nrqs, tgqs []*model.Quote) (retNrqs, retTgqs []*model.Quote, err
 			}
 			d, e = deleteKlineFromDate(tab, code, date)
 			if e != nil {
-				logrus.Warnf("failed to delete kline for %s %v from date %s: %+v", code, tab, date, e)
+				log.Warnf("failed to delete kline for %s %v from date %s: %+v", code, tab, date, e)
 				return retNrqs, retTgqs, e
 			}
 			if d != 0 {
-				logrus.Warnf("%s inconsistency found in %v. dropping %d, from date %s", code, tab, d, date)
+				log.Warnf("%s inconsistency found in %v. dropping %d, from date %s", code, tab, d, date)
 			}
 		}
 	} else {
@@ -1218,7 +1217,7 @@ func deleteKlineFromDate(kltype model.DBTab, code, date string) (d int64, e erro
 	for ; tried < retry; tried++ {
 		r, e := dbmap.Exec(sql, code, date)
 		if e != nil {
-			logrus.Warnf("%s failed to delete %v from %s, database error:%+v", code, kltype, date, e)
+			log.Warnf("%s failed to delete %v from %s, database error:%+v", code, kltype, date, e)
 			if strings.Contains(e.Error(), "Deadlock") {
 				time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
 				continue
@@ -1250,7 +1249,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) == 0 {
-		logrus.Warnf("%s %v data not available, skipping varate_rgl calculation", stk.Code, tab)
+		log.Warnf("%s %v data not available, skipping varate_rgl calculation", stk.Code, tab)
 		return nil, nil
 	}
 	if !conf.Args.DataSource.DropInconsistent {

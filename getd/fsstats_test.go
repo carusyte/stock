@@ -3,15 +3,13 @@ package getd
 import (
 	"fmt"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestCollectIndicatorStats(t *testing.T) {
 	t.Fail()
 	sqlt, e := dot.Raw("COLLECT_INDICATOR_STANDARDIZATION_STATS")
 	if e != nil {
-		logrus.Printf("failed to get fs_stats sql %+v", e)
+		log.Printf("failed to get fs_stats sql %+v", e)
 		return
 	}
 	tabs := []string{"indicator_d"}
@@ -25,10 +23,10 @@ func TestCollectIndicatorStats(t *testing.T) {
 			usql := fmt.Sprintf(sqlt, t, f)
 			_, e = dbmap.Exec(usql)
 			if e != nil {
-				logrus.Printf("failed to update fs_stats for field %s: %+v", f, e)
+				log.Printf("failed to update fs_stats for field %s: %+v", f, e)
 				continue
 			}
-			logrus.Printf("fs_stats for table %s field %s updated.", t, f)
+			log.Printf("fs_stats for table %s field %s updated.", t, f)
 		}
 	}
 }

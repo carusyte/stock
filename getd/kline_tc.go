@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 )
@@ -24,17 +22,17 @@ func getKlineTc(stk *model.Stock, tabs []model.DBTab) (
 		for rt := 0; rt < RETRIES; rt++ {
 			trdat, lklid, ok, retry := tryKlineTc(stk, klt, incr)
 			if ok {
-				logrus.Infof("%s %v fetched: %d", code, klt, len(trdat.Base))
+				log.Infof("%s %v fetched: %d", code, klt, len(trdat.Base))
 				tdmap[klt] = trdat
 				lkmap[klt] = lklid
 				break
 			} else {
 				if retry && rt+1 < RETRIES {
-					logrus.Printf("%s retrying [%d]", code, rt+1)
+					log.Printf("%s retrying [%d]", code, rt+1)
 					time.Sleep(time.Millisecond * 2500)
 					continue
 				} else {
-					logrus.Printf("%s failed", code)
+					log.Printf("%s failed", code)
 					return tdmap, lkmap, false
 				}
 			}
@@ -69,7 +67,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		qj.Period = "month"
 		cycle = model.MONTH
 	default:
-		logrus.Errorf("unhandled kline type: %v", tab)
+		log.Errorf("unhandled kline type: %v", tab)
 		return
 	}
 	switch tab {
@@ -92,15 +90,15 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 			sklid = ldy.Klid
 			sTime, e := time.Parse("2006-01-02", sDate)
 			if e != nil {
-				logrus.Errorf("failed to parse date: %+v", ldy)
+				log.Errorf("failed to parse date: %+v", ldy)
 				return
 			}
 			nrec = int(time.Since(sTime).Hours()/24) + 1
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, tab)
+		log.Printf("%s %s data will be fully refreshed", code, tab)
 	}
 
 	if tab == model.KLINE_DAY_NR || tab == model.KLINE_WEEK_NR || tab == model.KLINE_MONTH_NR || isIndex(stock.Code) {
@@ -135,12 +133,12 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		//get kline data
 		body, e = util.HttpGetBytes(url)
 		if e != nil {
-			logrus.Printf("%s error visiting %s: \n%+v", code, url, e)
+			log.Printf("%s error visiting %s: \n%+v", code, url, e)
 			return trdat, sklid, false, true
 		}
 		e = json.Unmarshal(body, qj)
 		if e != nil {
-			logrus.Printf("failed to parse json from %s\n%+v", url, e)
+			log.Printf("failed to parse json from %s\n%+v", url, e)
 			return trdat, sklid, false, true
 		}
 		fin := false
@@ -164,7 +162,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		first := qj.TradeData.Base[0]
 		iDate, e := time.Parse("2006-01-02", first.Date)
 		if e != nil {
-			logrus.Printf("invalid date format in %+v", first)
+			log.Printf("invalid date format in %+v", first)
 		}
 		eDate = iDate.AddDate(0, 0, -1).Format("2006-01-02")
 	}

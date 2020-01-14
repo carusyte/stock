@@ -5,6 +5,7 @@ go 1.13
 require (
 	cloud.google.com/go/storage v1.5.0
 	github.com/PuerkitoBio/goquery v1.5.0
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/bitly/go-hostpool v0.1.0
 	github.com/carusyte/rima v0.0.0-20171206152456-a28b79643985
 	github.com/carusyte/roprox v0.0.0-20200110091438-c3572b84d04f
@@ -12,6 +13,7 @@ require (
 	github.com/felixge/tcpkeepalive v0.0.0-20160804073959-5bb0b2dea91e
 	github.com/gchaincl/dotsql v1.0.0
 	github.com/go-gorp/gorp v2.2.0+incompatible // indirect
+	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/mattn/go-colorable v0.1.4 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
@@ -34,5 +36,6 @@ require (
 	golang.org/x/sys v0.0.0-20200107162124-548cf772de50 // indirect
 	golang.org/x/text v0.3.2
 	google.golang.org/api v0.15.0
+	google.golang.org/appengine v1.6.5
 	gopkg.in/gorp.v2 v2.2.0
 )

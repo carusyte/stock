@@ -2,10 +2,10 @@ package conf
 
 import (
 	"go/build"
+	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -49,6 +49,7 @@ type Arguments struct {
 	SQLFileLocation   string   `mapstructure:"sql_file_location"`
 	DeadlockRetry     int      `mapstructure:"deadlock_retry"`
 	DBQueueCapacity   int      `mapstructure:"db_queue_capacity"`
+	LogFile           string   `mapstructure:"log_file"`
 	Database          struct {
 		Host     string `mapstructure:"host"`
 		Port     int    `mapstructure:"port"`
@@ -145,7 +146,6 @@ type Arguments struct {
 		WccMaxShift         int      `mapstructure:"wcc_max_shift"`
 		FeatureCols         []string `mapstructure:"feature_cols"`
 	}
-	//TODO logrus log to file
 }
 
 func init() {
@@ -162,29 +162,13 @@ func init() {
 
 	e := viper.ReadInConfig()
 	if e != nil {
-		logrus.Errorf("config file error: %+v", e)
-		return
+		log.Panicf("config file error: %+v", e)
 	}
 	e = viper.Unmarshal(&Args)
 	if e != nil {
-		logrus.Errorf("config file error: %+v", e)
-		return
+		log.Panicf("config file error: %+v", e)
 	}
-	// logrus.Printf("Configuration: %+v", Args)
-	switch Args.LogLevel {
-	case "debug":
-		logrus.SetLevel(logrus.DebugLevel)
-	case "info":
-		logrus.SetLevel(logrus.InfoLevel)
-	case "warning":
-		logrus.SetLevel(logrus.WarnLevel)
-	case "error":
-		logrus.SetLevel(logrus.ErrorLevel)
-	case "fatal":
-		logrus.SetLevel(logrus.FatalLevel)
-	case "panic":
-		logrus.SetLevel(logrus.PanicLevel)
-	}
+	// log.Printf("Configuration: %+v", Args)
 	//viper.WatchConfig()
 	//viper.OnConfigChange(func(e fsnotify.Event) {
 	//	fmt.Println("Config file changed:", e.Name)
@@ -195,14 +179,14 @@ func init() {
 func checkConfig() {
 	shift := Args.Sampler.XCorlShift
 	if shift < 0 {
-		logrus.Panicf("Sampler.XCorlShift must be >= 0, but is %d", shift)
+		log.Panicf("Sampler.XCorlShift must be >= 0, but is %d", shift)
 	}
 	prior := Args.Sampler.PriorLength
 	if prior < 0 {
-		logrus.Panicf("Sampler.PriorLength must be >= 0, but is %d", prior)
+		log.Panicf("Sampler.PriorLength must be >= 0, but is %d", prior)
 	}
 	if shift > prior {
-		logrus.Panicf(`invalid configuration setting, Sampler.PriorLength (%d) greater than `+
+		log.Panicf(`invalid configuration setting, Sampler.PriorLength (%d) greater than `+
 			`Sampler.XCorlShift (%d)`, prior, shift)
 	}
 }

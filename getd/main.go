@@ -10,6 +10,7 @@ import (
 var (
 	dbmap = global.Dbmap
 	dot   = global.Dot
+	log = global.Log
 )
 
 func init() {

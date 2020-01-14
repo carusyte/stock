@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(logrus.DebugLevel)
 }
 
 func TestDiffStrs(t *testing.T) {

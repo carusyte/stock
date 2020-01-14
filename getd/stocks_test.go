@@ -1,7 +1,6 @@
 package getd
 
 import (
-	"log"
 	"math/rand"
 	"testing"
 

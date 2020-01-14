@@ -10,7 +10,6 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -34,17 +33,17 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 		for rt := 0; rt < RETRIES; rt++ {
 			trdat, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)
 			if suc {
-				logrus.Infof("%s %v fetched: %d", code, klt, trdat.MaxLen())
+				log.Infof("%s %v fetched: %d", code, klt, trdat.MaxLen())
 				tdmap[klt] = trdat
 				lkmap[klt] = lklid
 				break
 			} else {
 				if retry && rt+1 < RETRIES {
-					logrus.Printf("%s retrying [%d]", code, rt+1)
+					log.Printf("%s retrying [%d]", code, rt+1)
 					time.Sleep(time.Millisecond * 2500)
 					continue
 				} else {
-					logrus.Printf("%s failed", code)
+					log.Printf("%s failed", code)
 					return tdmap, lkmap, false
 				}
 			}
@@ -104,16 +103,16 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 			ldate = ldy.Date
 			lklid = ldy.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", codeid, tab)
+			log.Printf("%s latest %s data not found, will be fully refreshed", codeid, tab)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", codeid, tab)
+		log.Printf("%s %s data will be fully refreshed", codeid, tab)
 	}
 	num := "0"
 	if lklid != -1 {
 		ltime, e := time.Parse("2006-01-02", ldate)
 		if e != nil {
-			logrus.Printf("%s %+v failed to parse date value '%s': %+v", stk.Code, tab, ldate, e)
+			log.Printf("%s %+v failed to parse date value '%s': %+v", stk.Code, tab, ldate, e)
 			return nil, lklid, false, false
 		}
 		num = fmt.Sprintf("%d", int(time.Since(ltime).Hours()/24)+1)
@@ -127,16 +126,16 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	}
 	body, e := util.HTTPPostJSON(url, nil, form)
 	if e != nil {
-		logrus.Printf("%s failed to get %v from %s: %+v", stk.Code, tab, url, e)
+		log.Printf("%s failed to get %v from %s: %+v", stk.Code, tab, url, e)
 		return nil, lklid, false, true
 	}
 	data := make([]map[string]interface{}, 0, 16)
 	e = json.Unmarshal(body, &data)
 	if e != nil {
-		logrus.Printf("%s failed to parse json for %v from %s: %+v\return value:%+v", stk.Code, tab, url, e, string(body))
+		log.Printf("%s failed to parse json for %v from %s: %+v\return value:%+v", stk.Code, tab, url, e, string(body))
 		return nil, lklid, false, true
 	}
-	logrus.Debugf("return from wht: %+v", string(body))
+	log.Debugf("return from wht: %+v", string(body))
 	//extract trade data
 	trdat = parseWhtJSONMaps(codeid, ldate, data)
 	return trdat, lklid, true, false
@@ -184,7 +183,7 @@ func parseWhtJSONMaps(codeid, ldate string, data []map[string]interface{}) (trda
 			b.Close == b.Low &&
 			b.Volume.Float64 == 0 &&
 			b.Amount.Float64 == 0 {
-			logrus.Debugf("%s skipping dummy data:%+v", b.Code, m)
+			log.Debugf("%s skipping dummy data:%+v", b.Code, m)
 			continue
 		}
 		trdat.Base = append(trdat.Base, b)
@@ -218,7 +217,7 @@ func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
 	srBase := []model.DBTab{model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F}
 	tgLR := []model.DBTab{model.KLINE_DAY_B_LR, model.KLINE_WEEK_B_LR, model.KLINE_MONTH_B_LR}
 	srLR := []model.DBTab{model.KLINE_DAY_F_LR, model.KLINE_WEEK_F_LR, model.KLINE_MONTH_F_LR}
-	logrus.Printf("post processing klines: %+v, %+v", tgBase, tgLR)
+	log.Printf("post processing klines: %+v, %+v", tgBase, tgLR)
 	for code, s := range stks.Map {
 		suc := true
 		for i, target := range tgBase {
@@ -228,7 +227,7 @@ func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
 				"(t.volume is null or t.amount is null or t.xrate is null)", target, srBase[i])
 			_, e := dbmap.Exec(usql, code)
 			if e != nil {
-				logrus.Printf("%v failed to post process %v:%+v", code, target, e)
+				log.Printf("%v failed to post process %v:%+v", code, target, e)
 				suc = false
 			}
 		}
@@ -238,7 +237,7 @@ func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
 				"(t.lr_vol is null or t.lr_amt is null or t.lr_xr is null)", target, srLR[i])
 			_, e := dbmap.Exec(usql, code)
 			if e != nil {
-				logrus.Printf("%v failed to post process %v:%+v", code, target, e)
+				log.Printf("%v failed to post process %v:%+v", code, target, e)
 				suc = false
 			}
 		}

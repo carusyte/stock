@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
@@ -60,7 +59,7 @@ func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model
 			case *[]*model.TradeDataMovAvgLogRtn:
 				trdat.MovAvgLogRtn = *i.(*[]*model.TradeDataMovAvgLogRtn)
 			default:
-				logrus.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
+				log.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
 			}
 		}
 	}()
@@ -161,7 +160,7 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 			case *[]*model.TradeDataMovAvgLogRtn:
 				trdat.MovAvgLogRtn = *i.(*[]*model.TradeDataMovAvgLogRtn)
 			default:
-				logrus.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
+				log.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
 			}
 		}
 	}()
@@ -189,7 +188,7 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	tables = make(map[string]reflect.Type)
 	//prelim checking
 	if !q.Basic && !q.LogRtn && !q.MovAvg && !q.MovAvgLogRtn {
-		logrus.Panicf("Invalid query parameters. Please specify at least one table to query. Params: %+v", q)
+		log.Panicf("Invalid query parameters. Please specify at least one table to query. Params: %+v", q)
 	}
 	base := "kline_"
 	switch q.Cycle {
@@ -200,7 +199,7 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	case model.MONTH:
 		base += "m_"
 	default:
-		logrus.Panicf("Unsupported cycle type: %v, query param: %+v", q.Cycle, q)
+		log.Panicf("Unsupported cycle type: %v, query param: %+v", q.Cycle, q)
 	}
 	switch q.Reinstate {
 	case model.Backward:
@@ -210,7 +209,7 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	case model.None:
 		base += "n"
 	default:
-		logrus.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
+		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
 	}
 	if q.Basic {
 		tables[base] = reflect.TypeOf(&model.TradeDataBase{})
@@ -242,7 +241,7 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 	case model.MONTH:
 		base += "m_"
 	default:
-		logrus.Panicf("Unsupported cycle type: %v, query param: %+v", td.Cycle, td)
+		log.Panicf("Unsupported cycle type: %v, query param: %+v", td.Cycle, td)
 	}
 	switch td.Reinstatement {
 	case model.Backward:
@@ -252,7 +251,7 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 	case model.None:
 		base += "n"
 	default:
-		logrus.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
+		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
 	}
 	if len(td.Base) > 0 {
 		tabCols[base] = getTableColumns(model.TradeDataBase{})
@@ -354,52 +353,52 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if lr.Lr.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Lr.Float64)
+				log.Printf("%s (%s %s) %s %d lr below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Lr.Float64)
 				lr.Lr.Float64 = b
 			} else if lr.Lr.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Lr.Float64)
+				log.Printf("%s (%s %s) %s %d lr exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Lr.Float64)
 				lr.Lr.Float64 = t
 			}
 			if lr.High.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_h below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.High.Float64)
+				log.Printf("%s (%s %s) %s %d lr_h below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.High.Float64)
 				lr.High.Float64 = b
 			} else if lr.High.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_h exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.High.Float64)
+				log.Printf("%s (%s %s) %s %d lr_h exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.High.Float64)
 				lr.High.Float64 = t
 			}
 			if lr.HighClose.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_h_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.HighClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_h_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.HighClose.Float64)
 				lr.HighClose.Float64 = b
 			} else if lr.HighClose.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.HighClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.HighClose.Float64)
 				lr.HighClose.Float64 = t
 			}
 			if lr.Open.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_o below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Open.Float64)
+				log.Printf("%s (%s %s) %s %d lr_o below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Open.Float64)
 				lr.Open.Float64 = b
 			} else if lr.Open.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_o exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Open.Float64)
+				log.Printf("%s (%s %s) %s %d lr_o exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Open.Float64)
 				lr.Open.Float64 = t
 			}
 			if lr.OpenClose.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_o_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.OpenClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_o_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.OpenClose.Float64)
 				lr.OpenClose.Float64 = b
 			} else if lr.OpenClose.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.OpenClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.OpenClose.Float64)
 				lr.OpenClose.Float64 = t
 			}
 			if lr.Low.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_l below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Low.Float64)
+				log.Printf("%s (%s %s) %s %d lr_l below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Low.Float64)
 				lr.Low.Float64 = b
 			} else if lr.Low.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_l exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Low.Float64)
+				log.Printf("%s (%s %s) %s %d lr_l exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Low.Float64)
 				lr.Low.Float64 = t
 			}
 			if lr.LowClose.Float64 < b {
-				logrus.Printf("%s (%s %s) %s %d lr_l_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.LowClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_l_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.LowClose.Float64)
 				lr.LowClose.Float64 = b
 			} else if lr.LowClose.Float64 > t {
-				logrus.Printf("%s (%s %s) %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.LowClose.Float64)
+				log.Printf("%s (%s %s) %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.LowClose.Float64)
 				lr.LowClose.Float64 = t
 			}
 		}
@@ -684,7 +683,7 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 					tdma.Vol250.Float64 = mavol
 				}
 			default:
-				logrus.Panicf("unsupported MA value: %d", m)
+				log.Panicf("unsupported MA value: %d", m)
 			}
 		}
 	}
@@ -699,28 +698,28 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 		if c == 0 {
 			c = len(trdat.Base)
 		} else if c != 0 && len(trdat.Base) != c {
-			logrus.Panicf("mismatched basic trade data length: %d, vs. %d", len(trdat.Base), c)
+			log.Panicf("mismatched basic trade data length: %d, vs. %d", len(trdat.Base), c)
 		}
 	}
 	if len(trdat.LogRtn) != 0 {
 		if c == 0 {
 			c = len(trdat.LogRtn)
 		} else if c != 0 && len(trdat.LogRtn) != c {
-			logrus.Panicf("mismatched log return trade data length: %d, vs. %d", len(trdat.LogRtn), c)
+			log.Panicf("mismatched log return trade data length: %d, vs. %d", len(trdat.LogRtn), c)
 		}
 	}
 	if len(trdat.MovAvg) != 0 {
 		if c == 0 {
 			c = len(trdat.MovAvg)
 		} else if c != 0 && len(trdat.MovAvg) != c {
-			logrus.Panicf("mismatched moving average trade data length: %d, vs. %d", len(trdat.MovAvg), c)
+			log.Panicf("mismatched moving average trade data length: %d, vs. %d", len(trdat.MovAvg), c)
 		}
 	}
 	if len(trdat.MovAvgLogRtn) != 0 {
 		if c == 0 {
 			c = len(trdat.MovAvgLogRtn)
 		} else if c != 0 && len(trdat.MovAvgLogRtn) != c {
-			logrus.Panicf("mismatched moving average log return trade data length: %d, vs. %d", len(trdat.MovAvgLogRtn), c)
+			log.Panicf("mismatched moving average log return trade data length: %d, vs. %d", len(trdat.MovAvgLogRtn), c)
 		}
 	}
 	retry := conf.Args.DeadlockRetry
@@ -738,13 +737,13 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 				if strings.Contains(e.Error(), "Deadlock") {
 					continue
 				} else {
-					logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+					log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 				}
 			}
 			break
 		}
 		if rt >= retry {
-			logrus.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
+			log.Panicf("%s failed to delete %s where klid > %d", code, table, lklid)
 		}
 	}
 
@@ -799,12 +798,12 @@ func insertMinibatchV2(table string, cols []string, v reflect.Value) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 			}
 		}
 		return rowSize
 	}
-	logrus.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+	log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
 	return
 }
 
@@ -820,7 +819,7 @@ func insertTradeData(table string, cols []string, rows interface{}, wg *sync.Wai
 		c += insertMinibatchV2(table, cols, v.Slice(idx, end))
 	}
 	if len != c {
-		logrus.Panicf("unmatched given records and actual inserted records: %d vs. %d", len, c)
+		log.Panicf("unmatched given records and actual inserted records: %d vs. %d", len, c)
 	}
 }
 
@@ -837,7 +836,7 @@ func calcVarateRglV2(stk *model.Stock, tdmap map[model.DBTab]*model.TradeData) (
 			//skip the rest types of kline
 		}
 		if e != nil {
-			logrus.Println(e)
+			log.Println(e)
 			return e
 		}
 	}
@@ -865,7 +864,7 @@ func inferVarateRglV2(stk *model.Stock, nrtd, tgtd *model.TradeData) (e error) {
 			false)
 	}
 	if len(nrtd.Base) == 0 {
-		logrus.Warnf("%s %v non-reinstated data not available, skipping varate_rgl calculation", stk.Code, tgtd.Cycle)
+		log.Warnf("%s %v non-reinstated data not available, skipping varate_rgl calculation", stk.Code, tgtd.Cycle)
 		return nil
 	}
 	if !conf.Args.DataSource.DropInconsistent {
@@ -926,12 +925,12 @@ func matchSliceV2(nrtd, tgtd *model.TradeData) (err error) {
 			}
 			d, e = deleteTradeDataFromDate(code, date, nrtd.Cycle, nrtd.Reinstatement)
 			if e != nil {
-				logrus.Warnf("failed to delete kline for %s (%v,%v) from date %s: %+v",
+				log.Warnf("failed to delete kline for %s (%v,%v) from date %s: %+v",
 					code, nrtd.Cycle, nrtd.Reinstatement, date, e)
 				return e
 			}
 			if d != 0 {
-				logrus.Warnf("%s inconsistency found in (%v,%v). dropping %d, from date %s",
+				log.Warnf("%s inconsistency found in (%v,%v). dropping %d, from date %s",
 					code, nrtd.Cycle, nrtd.Reinstatement, d, date)
 			}
 		}
@@ -973,7 +972,7 @@ func deleteTradeDataFromDate(code, date string, cycle model.CYTP, rtype model.Rt
 		for ; tried < retry; tried++ {
 			r, e := dbmap.Exec(sql, code, date)
 			if e != nil {
-				logrus.Warnf("%s failed to delete %v for date %s, database error:%+v", code, t, date, e)
+				log.Warnf("%s failed to delete %v for date %s, database error:%+v", code, t, date, e)
 				if strings.Contains(e.Error(), "Deadlock") {
 					time.Sleep(time.Millisecond * time.Duration(100+rand.Intn(900)))
 					continue

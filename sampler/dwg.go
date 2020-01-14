@@ -11,7 +11,6 @@ import (
 	"github.com/montanaflynn/stats"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
 )
 
 // Double Wave grader principal grading policy:
@@ -23,7 +22,7 @@ type dwGrader struct{}
 
 func (g *dwGrader) sample(code string, frame int, klhist []*model.Quote) (kpts []*model.KeyPoint, err error) {
 	if len(klhist) < frame {
-		logrus.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
+		log.Printf("%s insufficient data for key point sampling: %d, minimum %d required",
 			code, len(klhist), frame)
 		return
 	}
@@ -49,7 +48,7 @@ func (g *dwGrader) sample(code string, frame int, klhist []*model.Quote) (kpts [
 		psi = math.Max(-10, math.Min(10, psi))
 		d, t := util.TimeStr()
 		kp := &model.KeyPoint{
-			UUID:     fmt.Sprintf("%s", uuid.Must(uuid.NewV1(),nil)),
+			UUID:     fmt.Sprintf("%s", uuid.Must(uuid.NewV1(), nil)),
 			Code:     code,
 			Klid:     refQt.Klid,
 			Date:     refQt.Date,
@@ -80,7 +79,7 @@ func zeta(af float64) float64 {
 		// return math.Min(3, math.Log(3.876*(af+5.28)))
 		return math.Min(3, 0.15*math.Pow(af+5., math.Log(20.)/math.Log(5.)))
 	}
-	logrus.Printf("error, invalid parameter af: %f, returning 0", af)
+	log.Printf("error, invalid parameter af: %f, returning 0", af)
 	return 0
 }
 
@@ -119,7 +118,7 @@ func calcAFRR(code string, base float64, klhist []*model.Quote,
 					af += cmpQt.Varate.Float64
 				}
 			} else {
-				logrus.Warnf("%s nil varate and varate_rgl, skip this point [%d, %s]",
+				log.Warnf("%s nil varate and varate_rgl, skip this point [%d, %s]",
 					code, cmpQt.Klid, cmpQt.Date)
 				return af, rr, false
 			}

@@ -14,7 +14,6 @@ import (
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Medium to Long term model.
@@ -105,9 +104,9 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 			"klid desc limit 1", ih.Code)
 		if e != nil {
 			if "sql: no rows in result set" == e.Error() {
-				logrus.Warnf("%s lack of kline_d data", item.Code)
+				log.Warnf("%s lack of kline_d data", item.Code)
 			} else {
-				logrus.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
+				log.Panicf("%s failed to query kline_d for latest price\n%+v", item.Code, e)
 			}
 		}
 		ih.Price = lp.Price

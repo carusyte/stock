@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/gorp.v2"
 )
+
+var log = global.Log
 
 type DBTab string
 
@@ -479,7 +481,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case `科目\时间`:
 			//do nothing
 		default:
-			logrus.Printf("%s unidentified finance report item: %s", fin.Code, v)
+			log.Printf("%s unidentified finance report item: %s", fin.Code, v)
 		}
 	}
 	rpt := m["report"].([]interface{})
@@ -534,7 +536,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 					case iItr:
 						fi.Itr = util.Str2Fnull(s)
 					default:
-						logrus.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
+						log.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
 					}
 				}
 			}
@@ -1025,7 +1027,7 @@ func (ka *KlAll) UnmarshalJSON(b []byte) (e error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if er, ok := r.(error); ok {
-				logrus.Printf("%s\n%s", er, string(b))
+				log.Printf("%s\n%s", er, string(b))
 				e = errors.Wrap(er, fmt.Sprintf("failed to unmarshal KlAll json: %s", string(b)))
 			}
 		}
@@ -1134,7 +1136,7 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if er, ok := r.(error); ok {
-				logrus.Printf("%s\n%s", er, string(b))
+				log.Printf("%s\n%s", er, string(b))
 				e = errors.Wrap(er, fmt.Sprintf("failed to unmarshal Ktoday json: %s", string(b)))
 			}
 		}

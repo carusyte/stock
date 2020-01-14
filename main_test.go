@@ -1,13 +1,13 @@
 package main
 
 import (
-	"testing"
 	"fmt"
-	"time"
-	"sync"
 	"math"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/mjanda/go-dtw"
-	"log"
 	"github.com/shirou/gopsutil/cpu"
 )
 
@@ -91,7 +91,7 @@ func TestMap(t *testing.T) {
 }
 
 func modMap(m map[int]byte) {
-	m[1]=0
-	m[2]=0
-	m[3]=0
+	m[1] = 0
+	m[2] = 0
+	m[3] = 0
 }

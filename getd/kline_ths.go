@@ -15,10 +15,9 @@ import (
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
-	"github.com/sirupsen/logrus"
 
-	"github.com/pkg/errors"
 	"github.com/chromedp/chromedp"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -65,7 +64,7 @@ func AppendVarateRgl(stks ...*model.Stock) (e error) {
 				}
 			}
 			ps.Close()
-			logrus.Printf("%s %v (%d) varate_rgl fixed", stk.Code, t, len(qs))
+			log.Printf("%s %v (%d) varate_rgl fixed", stk.Code, t, len(qs))
 		}
 	}
 	return nil
@@ -103,11 +102,11 @@ func getKlineThs(stk *model.Stock, kltype []model.DBTab) (
 					}
 					klts = nklts
 				}
-				logrus.Printf("%s retrying [%d] for %+v", code, rt+1, klts)
+				log.Printf("%s retrying [%d] for %+v", code, rt+1, klts)
 				time.Sleep(time.Millisecond * time.Duration(1500+rand.Intn(2000)))
 				continue
 			} else {
-				logrus.Printf("%s failed", code)
+				log.Printf("%s failed", code)
 				return qmap, lkmap, false
 			}
 		}
@@ -130,12 +129,12 @@ func klineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model.Quo
 			break
 		} else {
 			if retry && rt+1 < RETRIES {
-				logrus.Printf("%s retrying to get %s [%d]", code, klt, rt+1)
+				log.Printf("%s retrying to get %s [%d]", code, klt, rt+1)
 				time.Sleep(time.Millisecond * 2500)
 				continue
 			} else {
 				//FIXME sometimes 10jqk nginx server redirects to the same server and replies empty data no matter how many times you try
-				logrus.Printf("%s failed to get %s", code, klt)
+				log.Printf("%s failed to get %s", code, klt)
 				return quotes, false
 			}
 		}
@@ -195,23 +194,23 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	)
 	e = json.Unmarshal(strip(today), &ktoday)
 	if e != nil {
-		logrus.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(today), e)
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(today), e)
 		return quotes, -1, false, true
 	}
 	if ktoday.Code != "" {
 		quotes = append(quotes, &ktoday.Quote)
 	} else {
-		logrus.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
+		log.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
 	}
 
 	ttd, e := time.Parse("2006-01-02", ktoday.Date)
 	if e != nil {
-		logrus.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, -1, false, true
 	}
 	// If it is an IPO, return immediately
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
-		logrus.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return quotes, -1, true, false
 	}
 	// If in IPO week, skip the rest chores
@@ -221,13 +220,13 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
 			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
 			if e != nil {
-				logrus.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 					code, stk.TimeToMarket.String, e)
 			} else {
 				y1, w1 := ttm.ISOWeek()
 				y2, w2 := ttd.ISOWeek()
 				if y1 == y2 && w1 == w2 {
-					logrus.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
 					return quotes, -1, true, false
 				}
 			}
@@ -237,10 +236,10 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	//get all kline data
 	e = json.Unmarshal(strip(all), &kall)
 	if e != nil {
-		logrus.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(all), e)
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(all), e)
 		return quotes, -1, false, true
 	} else if kall.Price == "" {
-		logrus.Printf("%s %+v empty price data in json response: %s", code, klt, string(all))
+		log.Printf("%s %+v empty price data in json response: %s", code, klt, string(all))
 		return quotes, -1, false, true
 	}
 
@@ -270,15 +269,15 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 			ldate = ldy.Date
 			lklid = ldy.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, klt)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 
 	kls, e := parseThsKlinesV6(code, klt, &kall, ldate)
 	if e != nil {
-		logrus.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, ldate, e, kall)
+		log.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, ldate, e, kall)
 		return quotes, -1, false, true
 	} else if len(kls) == 0 {
 		return quotes, -1, true, false
@@ -295,7 +294,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 		yToday, wToday := ttd.ISOWeek()
 		tHead, e := time.Parse("2006-01-02", kls[0].Date)
 		if e != nil {
-			logrus.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, -1, false, true
 		}
 		yLast, wLast := tHead.ISOWeek()
@@ -339,23 +338,23 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	ktoday = model.Ktoday{}
 	e = json.Unmarshal(strip(today), &ktoday)
 	if e != nil {
-		logrus.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(today), e)
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(today), e)
 		return quotes, false, true
 	}
 	if ktoday.Code != "" {
 		quotes = append(quotes, &ktoday.Quote)
 	} else {
-		logrus.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
+		log.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
 	}
 
 	_, e = time.Parse("2006-01-02", ktoday.Date)
 	if e != nil {
-		logrus.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, false, true
 	}
 	// If it is an IPO, return immediately
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
-		logrus.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return quotes, true, false
 	}
 	// If in IPO week, skip the rest chores
@@ -363,20 +362,20 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
 		ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
 		if e != nil {
-			logrus.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
 		}
 		ttd, e := time.Parse("2006-01-02", ktoday.Date)
 		if e != nil {
-			logrus.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+			log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 				code, ktoday.Date, e)
 			return quotes, false, true
 		}
 		y1, w1 := ttm.ISOWeek()
 		y2, w2 := ttd.ISOWeek()
 		if y1 == y2 && w1 == w2 {
-			logrus.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+			log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
 			return quotes, true, false
 		}
 	}
@@ -385,10 +384,10 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	kall = model.KlAll{}
 	e = json.Unmarshal(strip(all), &kall)
 	if e != nil {
-		logrus.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(all), e)
+		log.Printf("%s error parsing json for %+v: %s\n%+v", code, klt, string(all), e)
 		return quotes, false, true
 	} else if kall.Price == "" {
-		logrus.Printf("%s %+v empty price data in json response: %s", code, klt, string(all))
+		log.Printf("%s %+v empty price data in json response: %s", code, klt, string(all))
 		return quotes, false, true
 	}
 
@@ -413,15 +412,15 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, klt)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 
 	kls, e := parseThsKlinesV6(code, klt, &kall, *ldate)
 	if e != nil {
-		logrus.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, *ldate, e, kall)
+		log.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, *ldate, e, kall)
 		return quotes, false, true
 	} else if len(kls) == 0 {
 		return quotes, true, false
@@ -442,13 +441,13 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		tToday, e := time.Parse("2006-01-02", ktoday.Date)
 		if e != nil {
-			logrus.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
 			return quotes, false, true
 		}
 		yToday, wToday := tToday.ISOWeek()
 		tHead, e := time.Parse("2006-01-02", kls[0].Date)
 		if e != nil {
-			logrus.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, false, true
 		}
 		yLast, wLast := tHead.ISOWeek()
@@ -489,7 +488,7 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 	go func(chr chan bool) {
 		e := chromedp.Run(ctxt, buildBatchActions(code, tabs, tdmap, hismap))
 		if e != nil {
-			logrus.Printf("chrome runner reported error: %+v\n", e)
+			log.Printf("chrome runner reported error: %+v\n", e)
 			chr <- false
 		} else {
 			chr <- true
@@ -500,7 +499,7 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 		return ok, !ok, tdmap, hismap
 	case <-ctxt.Done():
 		if ctxt.Err() != nil {
-			logrus.Printf("%s timeout waiting for chromedp response", code)
+			log.Printf("%s timeout waiting for chromedp response", code)
 			return false, true, tdmap, hismap
 		}
 		return true, false, tdmap, hismap
@@ -522,7 +521,7 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 	// 	runner.ExecPath(conf.Args.ChromeDP.Path),
 	// )
 	// if err != nil {
-	// 	logrus.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
+	// 	log.Printf("%s failed to allocate chrome runner from the pool: %+v\n", code, err)
 	// 	return false, true, today, all
 	// }
 	// defer pr.Release()
@@ -530,7 +529,7 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 	// go func(chr chan bool) {
 	// 	err = pr.Run(ctxt, buildActions(code, tab, &today, &all))
 	// 	if err != nil {
-	// 		logrus.Printf("chrome runner reported error: %+v\n", err)
+	// 		log.Printf("chrome runner reported error: %+v\n", err)
 	// 		chr <- false
 	// 	} else {
 	// 		chr <- true
@@ -541,7 +540,7 @@ func runCdp(code string, tab model.DBTab) (ok, retry bool, today, all []byte) {
 	// 	return ok, !ok, today, all
 	// case <-ctxt.Done():
 	// 	if ctxt.Err() != nil {
-	// 		logrus.Printf("%s timeout waiting for chromedp response", code)
+	// 		log.Printf("%s timeout waiting for chromedp response", code)
 	// 		return false, true, today, all
 	// 	}
 	// 	return true, false, today, all
@@ -569,7 +568,7 @@ func buildBatchActions(code string, tabs []model.DBTab, tdmap, hismap map[model.
 			case model.KLINE_MONTH_NR, model.KLINE_MONTH, model.KLINE_MONTH_B:
 				sel = fmt.Sprintf(sel, "Month")
 			default:
-				logrus.Panicf("unsupported DBTab: %+v", t)
+				log.Panicf("unsupported DBTab: %+v", t)
 			}
 			tasks = append(tasks,
 				chromedp.WaitVisible(sel, chromedp.ByQuery),
@@ -658,7 +657,7 @@ func batchCaptureData(code string, tdmap, hismap map[model.DBTab][]byte, tabs []
 
 		// th, ok := h.(*chromedp.TargetHandler)
 		// if !ok {
-		// 	logrus.Fatal("invalid Executor type")
+		// 	log.Fatal("invalid Executor type")
 		// }
 		// echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
 		// 	cdproto.EventNetworkLoadingFailed)
@@ -737,7 +736,7 @@ func captureData(today, all *[]byte, mcode string, fin chan error) chromedp.Acti
 
 		// th, ok := h.(*chromedp.TargetHandler)
 		// if !ok {
-		// 	logrus.Fatal("invalid Executor type")
+		// 	log.Fatal("invalid Executor type")
 		// }
 		// echan := th.Listen(cdproto.EventNetworkRequestWillBeSent, cdproto.EventNetworkLoadingFinished,
 		// 	cdproto.EventNetworkLoadingFailed)
@@ -825,7 +824,7 @@ func captureData(today, all *[]byte, mcode string, fin chan error) chromedp.Acti
 // 	}
 // 	pool, err = chromedp.NewPool(opt...)
 // 	if err != nil {
-// 		logrus.Fatal(err)
+// 		log.Fatal(err)
 // 	}
 // 	return pool
 // }
@@ -835,7 +834,7 @@ func cleanupTHS() {
 	// 	err := pool.Shutdown()
 	// 	pool = nil
 	// 	if err != nil {
-	// 		logrus.Fatal(err)
+	// 		log.Fatal(err)
 	// 	}
 	// }
 }
@@ -864,7 +863,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	case model.KLINE_DAY_NR:
 		mode = "00"
 	default:
-		logrus.Panicf("unhandled kltype: %s", klt)
+		log.Panicf("unhandled kltype: %s", klt)
 	}
 	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
 	body, e = util.HttpGetBytesUsingHeaders(url_today,
@@ -873,13 +872,13 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_today)
 	if e != nil {
-		logrus.Printf("%s error visiting %s: \n%+v", code, url_today, e)
+		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
 		return kldy, false, false
 	}
 	ktoday = model.Ktoday{}
 	e = json.Unmarshal(strip(body), &ktoday)
 	if e != nil {
-		logrus.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
 		return kldy, false, true
 	}
 	if ktoday.Code != "" {
@@ -887,17 +886,17 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		dkeys = append(dkeys, ktoday.Date)
 		oldest = ktoday.Date
 	} else {
-		logrus.Printf("kline today skipped: %s", url_today)
+		log.Printf("kline today skipped: %s", url_today)
 	}
 
 	// If it is an IPO, return immediately
 	_, e = time.Parse("2006-01-02", ktoday.Date)
 	if e != nil {
-		logrus.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return kldy, false, true
 	}
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
-		logrus.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return append(kldy, &ktoday.Quote), true, false
 	}
 
@@ -909,16 +908,16 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_last)
 	if e != nil {
-		logrus.Printf("%s error visiting %s: \n%+v", code, url_last, e)
+		log.Printf("%s error visiting %s: \n%+v", code, url_last, e)
 		return kldy, false, true
 	}
 	klast = model.Klast{}
 	e = json.Unmarshal(strip(body), &klast)
 	if e != nil {
-		logrus.Printf("%s error parsing json from %s: %s\n%+v", code, url_last, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_last, string(body), e)
 		return kldy, false, true
 	} else if klast.Data == "" {
-		logrus.Printf("%s empty data in json response from %s: %s", code, url_last, string(body))
+		log.Printf("%s empty data in json response from %s: %s", code, url_last, string(body))
 		return kldy, false, true
 	}
 
@@ -945,10 +944,10 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, klt)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 
 	kls, more := parseKlines(code, klast.Data, *ldate, "")
@@ -966,13 +965,13 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	//get hist kline data
 	yr, e := strconv.ParseInt(kls[0].Date[:4], 10, 32)
 	if e != nil {
-		logrus.Printf("failed to parse year for %+v, stop processing. error: %+v",
+		log.Printf("failed to parse year for %+v, stop processing. error: %+v",
 			code, e)
 		return kldy, false, false
 	}
 	start, e := strconv.ParseInt(klast.Start[:4], 10, 32)
 	if e != nil {
-		logrus.Printf("failed to parse json start year for %+v, stop processing. "+
+		log.Printf("failed to parse json start year for %+v, stop processing. "+
 			"string:%s, error: %+v", code, klast.Start, e)
 		return kldy, false, false
 	}
@@ -996,14 +995,14 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 					"Cookie":  conf.Args.DataSource.ThsCookie})
 			//body, e = util.HttpGetBytes(url_hist)
 			if e != nil {
-				logrus.Printf("%s [%d] error visiting %s: \n%+v", code, tries, url_hist, e)
+				log.Printf("%s [%d] error visiting %s: \n%+v", code, tries, url_hist, e)
 				ok = false
 				continue
 			}
 			khist := model.Khist{}
 			e = json.Unmarshal(strip(body), &khist)
 			if e != nil {
-				logrus.Printf("%s [%d], error parsing json from %s: %s\n%+v", code, tries, url_hist, string(body), e)
+				log.Printf("%s [%d], error parsing json from %s: %s\n%+v", code, tries, url_hist, string(body), e)
 				ok = false
 				continue
 			}
@@ -1061,7 +1060,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	case model.KLINE_MONTH:
 		mode = "21"
 	default:
-		logrus.Panicf("unhandled kltype: %s", klt)
+		log.Panicf("unhandled kltype: %s", klt)
 	}
 	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
 	body, e = util.HttpGetBytesUsingHeaders(url_today,
@@ -1069,29 +1068,29 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	if e != nil {
-		logrus.Printf("%s error visiting %s: \n%+v", code, url_today, e)
+		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
 		return quotes, false, false
 	}
 	ktoday = model.Ktoday{}
 	e = json.Unmarshal(strip(body), &ktoday)
 	if e != nil {
-		logrus.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
 		return quotes, false, true
 	}
 	if ktoday.Code != "" {
 		quotes = append(quotes, &ktoday.Quote)
 	} else {
-		logrus.Printf("kline today skipped: %s", url_today)
+		log.Printf("kline today skipped: %s", url_today)
 	}
 
 	_, e = time.Parse("2006-01-02", ktoday.Date)
 	if e != nil {
-		logrus.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
+		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, false, true
 	}
 	// If it is an IPO, return immediately
 	if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 && ktoday.Date == stk.TimeToMarket.String {
-		logrus.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
+		log.Printf("%s IPO day: %s fetch data for today only", code, stk.TimeToMarket.String)
 		return quotes, true, false
 	}
 	// If in IPO week, skip the rest chores
@@ -1099,20 +1098,20 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
 		ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
 		if e != nil {
-			logrus.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
 		} else {
 			ttd, e := time.Parse("2006-01-02", ktoday.Date)
 			if e != nil {
-				logrus.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+				log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 					code, ktoday.Date, e)
 				return quotes, false, true
 			} else {
 				y1, w1 := ttm.ISOWeek()
 				y2, w2 := ttd.ISOWeek()
 				if y1 == y2 && w1 == w2 {
-					logrus.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
 					return quotes, true, false
 				}
 			}
@@ -1128,16 +1127,16 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_all)
 	if e != nil {
-		logrus.Printf("%s error visiting %s: \n%+v", code, url_all, e)
+		log.Printf("%s error visiting %s: \n%+v", code, url_all, e)
 		return quotes, false, true
 	}
 	kall = model.KlAll{}
 	e = json.Unmarshal(strip(body), &kall)
 	if e != nil {
-		logrus.Printf("%s error parsing json from %s: %s\n%+v", code, url_all, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_all, string(body), e)
 		return quotes, false, true
 	} else if kall.Price == "" {
-		logrus.Printf("%s empty data in json response from %s: %s", code, url_all, string(body))
+		log.Printf("%s empty data in json response from %s: %s", code, url_all, string(body))
 		return quotes, false, true
 	}
 
@@ -1162,15 +1161,15 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, klt)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 
 	kls, e := parseThsKlinesV6(code, klt, &kall, *ldate)
 	if e != nil {
-		logrus.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, *ldate, e, kall)
+		log.Printf("failed to parse data, %s, %+v, %+v, %+v\n%+v", code, klt, *ldate, e, kall)
 		return quotes, false, true
 	} else if len(kls) == 0 {
 		return quotes, true, false
@@ -1186,13 +1185,13 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		tToday, e := time.Parse("2006-01-02", ktoday.Date)
 		if e != nil {
-			logrus.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
 			return quotes, false, true
 		}
 		yToday, wToday := tToday.ISOWeek()
 		tHead, e := time.Parse("2006-01-02", kls[0].Date)
 		if e != nil {
-			logrus.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
+			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, false, true
 		}
 		yLast, wLast := tHead.ISOWeek()
@@ -1215,7 +1214,7 @@ func parseThsKlinesV6(code string, klt model.DBTab, data *model.KlAll, ldate str
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok {
-				logrus.Println(err)
+				log.Println(err)
 				e = err
 			}
 		}
@@ -1236,7 +1235,7 @@ func parseThsKlinesV6(code string, klt model.DBTab, data *model.KlAll, ldate str
 		//last year's count might be one more than actually in the data string
 		if y == len(data.SortYear)-1 && data.Total == len(dates)+1 {
 			ynum--
-			logrus.Printf("%s %s %+v %+v data length mismatch, auto corrected", code, data.Name, data.Total, klt)
+			log.Printf("%s %s %+v %+v data length mismatch, auto corrected", code, data.Name, data.Total, klt)
 		}
 		for i := len(dates) - offset - 1; i >= len(dates)-offset-ynum; i-- {
 			// latest in the last
@@ -1283,9 +1282,9 @@ func parseKlines(code, data, ldate, skipto string) (kls []*model.Quote, more boo
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
-				logrus.Println(e)
+				log.Println(e)
 			}
-			logrus.Printf("data:\n%s", data)
+			log.Printf("data:\n%s", data)
 			kls = []*model.Quote{}
 			more = false
 		}
@@ -1350,7 +1349,7 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 	case model.KLINE_MONTH:
 		typ = "21"
 	default:
-		logrus.Panicf("unhandled kltype: %s", klt)
+		log.Panicf("unhandled kltype: %s", klt)
 	}
 
 	switch klt {
@@ -1376,10 +1375,10 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 			ldate = latest.Date
 			lklid = latest.Klid
 		} else {
-			logrus.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, klt)
 		}
 	} else {
-		logrus.Printf("%s %s data will be fully refreshed", code, klt)
+		log.Printf("%s %s data will be fully refreshed", code, klt)
 	}
 	RETRIES := 10
 	url := fmt.Sprintf(urlt, code, typ)
@@ -1387,12 +1386,12 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		ktoday, ok, retry := getToday(code, typ)
 		if !ok {
 			if retry {
-				logrus.Printf("retrying to parse %s json for %s [%d]", klt, code, rt+1)
+				log.Printf("retrying to parse %s json for %s [%d]", klt, code, rt+1)
 				ms := time.Duration(500 + rt*500)
 				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
-				logrus.Printf("stop retrying to parse %s json for %s [%d]", klt, code, rt+1)
+				log.Printf("stop retrying to parse %s json for %s [%d]", klt, code, rt+1)
 				return
 			}
 		}
@@ -1402,18 +1401,18 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
 			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
 			if e != nil {
-				logrus.Printf("%s invalid date format for \"time to market\": %s\n%+v",
+				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 					code, stk.TimeToMarket.String, e)
 			} else {
 				ttd, e := time.Parse("2006-01-02", ktoday.Date)
 				if e != nil {
-					logrus.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+					log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 						code, ktoday.Date, e)
 				} else {
 					y1, w1 := ttm.ISOWeek()
 					y2, w2 := ttd.ISOWeek()
 					if y1 == y2 && w1 == w2 {
-						logrus.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+						log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
 						break
 					}
 				}
@@ -1425,19 +1424,19 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 				"Cookie":  conf.Args.DataSource.ThsCookie})
 		//body, e := util.HttpGetBytes(url)
 		if e != nil {
-			logrus.Printf("can't get %s for %s. please try again later.", klt, code)
+			log.Printf("can't get %s for %s. please try again later.", klt, code)
 			return
 		}
 		khist := model.Khist{}
 		e = json.Unmarshal(strip(body), &khist)
 		if e != nil || khist.Data == "" {
 			if rt+1 < RETRIES {
-				logrus.Printf("retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
+				log.Printf("retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
 				ms := time.Duration(500 + rt*500)
 				time.Sleep(time.Millisecond * ms)
 				continue
 			} else {
-				logrus.Printf("stop retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
+				log.Printf("stop retrying to parse %s json for %s, [%d]: %+v", klt, code, rt+1, e)
 				return
 			}
 		}
@@ -1446,13 +1445,13 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 			// if ktoday and kls[0] in the same week, remove kls[0]
 			tToday, e := time.Parse("2006-01-02", ktoday.Date)
 			if e != nil {
-				logrus.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
+				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue
 			}
 			yToday, wToday := tToday.ISOWeek()
 			tHead, e := time.Parse("2006-01-02", kls[0].Date)
 			if e != nil {
-				logrus.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
+				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue
 			}
 			yLast, wLast := tHead.ISOWeek()
