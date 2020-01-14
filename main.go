@@ -17,13 +17,23 @@ import (
 var log = global.Log
 
 func main() {
-	log.Info("started...")
+	defer func() {
+		//catches error and log the stack trace to facilitate troubleshooting
+		if r := recover(); r != nil {
+			if er, hasError := r.(error); hasError {
+				log.Panicln("caught error:", er)
+			}
+		}
+	}()
+
+	log.Info("Starting...")
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":
 		defer profile.Start().Stop()
 	case "mem":
 		defer profile.Start(profile.MemProfile).Stop()
 	}
+	
 	cmd.Execute()
 }
 
