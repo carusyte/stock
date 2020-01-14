@@ -16,6 +16,8 @@ China A-share analysis tool written in go
 
 - http://10jqka.com.cn
 - http://sse.com.cn
+- http://stock.finance.qq.com
+- etc.
 
 
 ## Dependencies
@@ -23,6 +25,7 @@ China A-share analysis tool written in go
 [golang](https://golang.org/) version >= 1.13.6
 
 github.com
+- [carustye/roprox](https://github.com/carusyte/roprox) for rotating proxy
 - [sirupsen/logrus](https://github.com/sirupsen/logrus) for logging
 - [spf13/cobra](https://github.com/spf13/cobra") for cli interfaces
 
@@ -48,14 +51,31 @@ golang.org
     git revert 336cf8d       
 
     cd %GOPATH%\src\github.com\carusyte\stock
-    go build
+    go install
 
 
 ### Run
 
-    go run main.go
+1. Before running the program, copy the `stock.sample.toml` config file template to `$GOPATH/bin`,
+and rename to `stock.toml`. 
     
-    # there are still some config parse problem, instruction required
+2. Customize/Localize the 'stock.toml' file accordingly.
+
+3. If you have your executable search path environment variable properly set, you should
+be able to run the following command directly. This command will list out all sub-commands
+and its usage.
+    ```
+    stock help
+    ```
+
+4. You might need [carustye/roprox](https://github.com/carusyte/roprox) to run in parallel in order to fetch publicly available proxy servers. 
+
+5. To start fetching A-share market data: 
+    ```
+    stock get
+    ```
+    
+*there are still some config parse problem, instruction required*
                       
 
 ## FAQ
