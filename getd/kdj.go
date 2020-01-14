@@ -16,7 +16,6 @@ import (
 	"github.com/carusyte/stock/rpc"
 	"github.com/carusyte/stock/util"
 	uuid "github.com/satori/go.uuid"
-	logr "github.com/sirupsen/logrus"
 )
 
 const (
@@ -54,7 +53,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 		}
 		if e != nil {
 			if "sql: no rows in result set" == e.Error() {
-				logr.Warnf("%s, %s, %d: %+v", code, tab, retro, e.Error())
+				log.Warnf("%s, %s, %d: %+v", code, tab, retro, e.Error())
 				return
 			}
 			log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
@@ -70,7 +69,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 		}
 		if e != nil {
 			if "sql: no rows in result set" == e.Error() {
-				logr.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
+				log.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
 				return
 			} else {
 				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
@@ -92,7 +91,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			_, e = dbmap.Select(&oqs, sql, code, toDate)
 			if e != nil {
 				if "sql: no rows in result set" == e.Error() {
-					logr.Warnf("%s, %s, sql: %s, %s: %+v, ", code, tab, toDate, sql, e.Error())
+					log.Warnf("%s, %s, sql: %s, %s: %+v, ", code, tab, toDate, sql, e.Error())
 					return
 				}
 				log.Panicf("%s failed to query kline, sql: %s, \n%+v", code, sql, e)
@@ -414,7 +413,7 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 		log.Fatal(err)
 	}
 	kdjFdrMap[mk] = fdvs
-	logr.Debugf("query kdj_feat_dat_raw(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
+	log.Debugf("query kdj_feat_dat_raw(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
 	return fdvs
 }
 
@@ -464,7 +463,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 		log.Panicln("failed to query kdj feat dat.", err)
 	}
 	kdjFdMap[mk] = fdvs
-	logr.Debugf("query kdj_feat_dat(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
+	log.Debugf("query kdj_feat_dat(%s,%s,%d): %.2f", cytp, bysl, num, time.Since(start).Seconds())
 	return fdvs
 }
 
@@ -519,7 +518,7 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 	if err := rows.Err(); err != nil {
 		log.Panicln("failed to query kdj feat dat.", err)
 	}
-	logr.Debugf("query all kdj_feat_dat: %d, mk: %d,  time: %.2f", count, len(kdjFdMap), time.Since(start).Seconds())
+	log.Debugf("query all kdj_feat_dat: %d, mk: %d,  time: %.2f", count, len(kdjFdMap), time.Since(start).Seconds())
 	return kdjFdMap, count
 }
 
@@ -630,7 +629,7 @@ func saveIndcFt(code string, cytp model.CYTP, feats []*model.IndcFeatRaw, kfds [
 //PruneKdjFeatDat Merge similar kdj feature data based on devia
 func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 	st := time.Now()
-	logr.Debugf("Pruning KDJ feature data. precision:%.3f, prune rate:%.2f, resume: %t", prec, pruneRate, resume)
+	log.Debugf("Pruning KDJ feature data. precision:%.3f, prune rate:%.2f, resume: %t", prec, pruneRate, resume)
 	var fdks []*fdKey
 	var e error
 	if resume {
@@ -713,7 +712,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, prun
 		fdrvs := GetKdjFeatDatRaw(model.CYTP(fdk.Cytp), fdk.Bysl == "BY", fdk.SmpNum)
 		nprec := prec * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(fdk.SmpNum-2),
 			1+1./(math.Sqrt2*math.Pi)))
-		logr.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
+		log.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 		fdvs := convert2Fdvs(fdk, fdrvs)
 		fdvs = smartPruneKdjFeatDat(fdk, fdvs, nprec, pruneRate, runMode)
 		for _, fdv := range fdvs {
@@ -721,7 +720,7 @@ func doPruneKdjFeatDat(chfdk chan *fdKey, wg *sync.WaitGroup, prec float64, prun
 		}
 		saveKdjFd(fdvs)
 		prate := float64(fdk.Count-len(fdvs)) / float64(fdk.Count) * 100
-		logr.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
+		log.Debugf("%s pruned and saved, before: %d, after: %d, rate: %.2f%%    time: %.2f",
 			fdk.ID(), fdk.Count, len(fdvs), prate, time.Since(st).Seconds())
 	}
 }
@@ -745,13 +744,13 @@ func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64,
 			if h > 0 {
 				fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 			} else {
-				logr.Warn("no available rpc servers, using local power")
+				log.Warn("no available rpc servers, using local power")
 				fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.9)
 			}
 		}
 	}
 	if e != nil {
-		logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
+		log.Warnf("remote processing failed, fall back to local power\n%+v", e)
 		fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.8)
 	}
 	return fdvs
@@ -769,7 +768,7 @@ func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, p
 	}
 	fdvs = rep.Data
 	prate := float64(bfc-len(fdvs)) / float64(bfc) * 100
-	logr.Debugf("%s pruned(remote), before: %d, after: %d, rate: %.2f%% time: %.2f",
+	log.Debugf("%s pruned(remote), before: %d, after: %d, rate: %.2f%% time: %.2f",
 		fdk.ID(), bfc, len(fdvs), prate, time.Since(stp).Seconds())
 	return fdvs, nil
 }
@@ -780,7 +779,7 @@ func pruneKdjFeatDatLocal(fdk *fdKey, fdvs []*model.KDJfdView, nprec, pruneRate,
 		bfc := len(fdvs)
 		fdvs = passKdjFeatDatPrune(fdvs, nprec, cpuPower)
 		prate = float64(bfc-len(fdvs)) / float64(bfc)
-		logr.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
+		log.Debugf("%s pass %d, before: %d, after: %d, rate: %.2f%% time: %.2f",
 			fdk.ID(), p, bfc, len(fdvs), prate*100, time.Since(stp).Seconds())
 	}
 	return fdvs
@@ -894,8 +893,8 @@ func passKdjFdSingle(fdvs []*model.KDJfdView, prec float64) []*model.KDJfdView {
 				j++
 			}
 		}
-		//logr.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
-		logr.Debugf("%d #cdd: %+v", i, cdd)
+		//log.Debugf("%s-%s-%d found %d similar", fdk.Cytp, fdk.Bysl, fdk.SmpNum, len(pend))
+		log.Debugf("%d #cdd: %+v", i, cdd)
 		for _, p := range pend {
 			mergeKdjFd(f1, p)
 		}
@@ -931,7 +930,7 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 		if r := recover(); r != nil {
 			buf := make([]byte, 1<<16)
 			runtime.Stack(buf, false)
-			logr.Errorf("i=%d recover from cleanKdjFD() is not nil \n %+v \n %+v", i,
+			log.Errorf("i=%d recover from cleanKdjFD() is not nil \n %+v \n %+v", i,
 				r, string(bytes.Trim(buf, "\x00")))
 		}
 	}()
@@ -941,7 +940,7 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 			wmap[k] = v
 		}
 		for list, ok := wmap[i]; ok; list, ok = wmap[i] {
-			//logr.Debugf("reducing %d", i)
+			//log.Debugf("reducing %d", i)
 			if _, ok := ptags.Load(i); !ok {
 				f1 := fdvs[i]
 				c := 0
@@ -952,7 +951,7 @@ func reduceKdjFD(fdvs []*model.KDJfdView, ptags *sync.Map, chcdd chan map[int][]
 					}
 				}
 				if c > 0 {
-					logr.Debugf("reduced %d, #cdd: %d", i, c)
+					log.Debugf("reduced %d, #cdd: %d", i, c)
 				}
 			}
 			delete(wmap, i)

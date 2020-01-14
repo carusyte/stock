@@ -6,17 +6,12 @@ import (
 	"github.com/carusyte/stock/cmd"
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
+	"github.com/carusyte/stock/util"
 	"github.com/pkg/profile"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/score"
-	"github.com/carusyte/stock/util"
-)
-
-const (
-	//LOGFILE the path for the global log file
-	LOGFILE = "stock.log"
 )
 
 var log = global.Log

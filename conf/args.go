@@ -214,4 +214,5 @@ func setDefaults() {
 	Args.Sampler.Sample = true
 	Args.Sampler.TestSetBatchSize = 3000
 	Args.Sampler.TrainSetBatchSize = 200
+	Args.LogFile = "stock.log"
 }
