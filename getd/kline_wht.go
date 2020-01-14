@@ -138,11 +138,13 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	log.Debugf("return from wht: %+v", string(body))
 	//extract trade data
 	trdat = parseWhtJSONMaps(codeid, ldate, data)
+	trdat.Cycle = cycle
+	trdat.Reinstatement = rtype
 	return trdat, lklid, true, false
 }
 
 func parseWhtJSONMaps(codeid, ldate string, data []map[string]interface{}) (trdat *model.TradeData) {
-	trdat = &model.TradeData{}
+	trdat = &model.TradeData{Code: codeid}
 	for _, m := range data {
 		date := m["date"].(string)[:8]
 		date = date[:4] + "-" + date[4:6] + "-" + date[6:]

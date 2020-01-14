@@ -17,15 +17,6 @@ import (
 var log = global.Log
 
 func main() {
-	defer func() {
-		//catches error and log the stack trace to facilitate troubleshooting
-		if r := recover(); r != nil {
-			if er, hasError := r.(error); hasError {
-				log.Panicln("caught error:", er)
-			}
-		}
-	}()
-
 	log.Info("Starting...")
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":
