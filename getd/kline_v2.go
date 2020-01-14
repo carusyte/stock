@@ -106,7 +106,7 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 		e      error
 	)
 	args = append(args, code)
-	if cond1 != "" {
+	if len(cond1) > 0 {
 		op := ">"
 		if strings.HasPrefix(cond1, "[") {
 			op += "="
@@ -121,11 +121,13 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 		}
 		args = append(args, v1)
 	}
-	if cond2 != "" {
+	if len(cond2) > 0 {
 		op := "<"
 		if strings.HasSuffix(cond2, "]") {
 			op += "="
 			v2 = cond2[:len(cond2)-1]
+		} else {
+			v2 = cond2
 		}
 		cond2 = fmt.Sprintf("and %s %s ?", field, op)
 		if Klid == field {
