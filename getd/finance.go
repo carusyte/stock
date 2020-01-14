@@ -23,6 +23,8 @@ import (
 	"golang.org/x/text/transform"
 )
 
+var unmappedField = make(map[string]int)
+
 type xdxrDBJob struct {
 	stock *model.Stock
 	xdxr  []*model.Xdxr
@@ -839,11 +841,11 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		return false, true
 	}
 
-	fr := &model.FinReport{Code: code}
+	fr := &model.FinReport{Code: code, UnmappedField: unmappedField}
 	jsonStr := doc.Find("#main").Text()
 	if e = json.Unmarshal([]byte(jsonStr), fr); e != nil {
 		jsonStr = doc.Find(".main").Text()
-		fr = &model.FinReport{Code: code}
+		fr = &model.FinReport{Code: code, UnmappedField: unmappedField}
 		if e = json.Unmarshal([]byte(jsonStr), fr); e != nil {
 			log.Printf("%s failed to parse json, retrying...\n%s", code, url)
 			return false, true
