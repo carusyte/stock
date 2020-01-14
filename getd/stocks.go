@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,10 @@ import (
 	"github.com/carusyte/stock/util"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
+)
+
+var (
+	xqCookies []*http.Cookie
 )
 
 //StocksDb loads all stocks from basics table.
@@ -152,6 +157,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 
 func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 	defer wg.Done()
+	var e error
 	RETRIES := conf.Args.DefaultRetry
 	for stock := range chstk {
 		var ok, r bool
@@ -160,11 +166,11 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			if ok {
 				chrstk <- stock
 			} else if r {
-				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Infof("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
 				continue
 			} else {
-				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Warnf("%s retried %d, giving up. ", stock.Code, rtCount+1)
 			}
 			break
 		}
@@ -173,7 +179,14 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 		}
 		log.Printf("%s switching to secondary source xueqiu.com", stock.Code)
 		for rtCount := 0; rtCount <= RETRIES; rtCount++ {
-			ok, r = xqShares(stock)
+			if len(xqCookies) == 0 {
+				xqCookies, e = getXqCookies()
+				if e != nil {
+					log.Printf("%s failed to get cookies: %+v, retrying %d...", stock.Code, e, rtCount+1)
+					continue
+				}
+			}
+			ok, r = xqShares(stock, xqCookies)
 			if ok {
 				chrstk <- stock
 			} else if r {
@@ -181,11 +194,19 @@ func doGetShares(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 				time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(1000)))
 				continue
 			} else {
-				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Warnf("%s retried %d, giving up. restart the program to recover missing data", stock.Code, rtCount+1)
 			}
 			break
 		}
 	}
+}
+
+func getXqCookies() (cookies []*http.Cookie, e error) {
+	res, e := util.HTTPGetResponse(`https://xueqiu.com/`, nil, false, true, true)
+	if e != nil {
+		return
+	}
+	return res.Cookies(), nil
 }
 
 func thsShares(stock *model.Stock) (ok, retry bool) {
@@ -276,12 +297,12 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 	return
 }
 
-func xqShares(stock *model.Stock) (ok, retry bool) {
+func xqShares(stock *model.Stock, cookies []*http.Cookie) (ok, retry bool) {
 	//TODO get share info from xueqiu.com
 	// https://xueqiu.com/snowman/S/SH601598/detail#/GBJG
 	// https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=SH601598&count=100&extend=true
 	url := fmt.Sprintf(`https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=%s%s&count=1000&extend=true`, stock.Market.String, stock.Code)
-	res, e := util.HTTPGetResponse(url, nil, false, true, true)
+	res, e := util.HTTPGetResponse(url, nil, false, true, true, cookies...)
 	if e != nil {
 		log.Printf("%s, http failed %s", stock.Code, url)
 		return false, true
@@ -292,6 +313,13 @@ func xqShares(stock *model.Stock) (ok, retry bool) {
 		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
+	} else if strings.Contains(string(body), `"error_code": "400016"`) {
+		// cookie timeout, refresh cookies
+		xqCookies, e = getXqCookies()
+		if e != nil {
+			log.Errorf("%s failed to get cookies: %+v", stock.Code, e)
+			return false, true
+		}
 	} else if e = json.Unmarshal(body, &xqshare); e != nil {
 		log.Printf("[%s,%s] failed to parse json body, retrying...", stock.Code,
 			stock.Name)

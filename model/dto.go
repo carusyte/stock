@@ -387,8 +387,9 @@ type Finance struct {
 }
 
 type FinReport struct {
-	Code  string
-	Items []*Finance
+	Code          string
+	Items         []*Finance
+	UnmappedField map[string]int
 }
 
 func (fin *FinReport) SetCode(code string) {
@@ -481,7 +482,10 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case `科目\时间`:
 			//do nothing
 		default:
-			log.Printf("%s unidentified finance report item: %s", fin.Code, v)
+			if _, ok := fin.UnmappedField[v]; !ok {
+				log.Printf("%s unidentified finance report item: %s", fin.Code, v)
+				fin.UnmappedField[v] = i
+			}
 		}
 	}
 	rpt := m["report"].([]interface{})
@@ -536,7 +540,8 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 					case iItr:
 						fi.Itr = util.Str2Fnull(s)
 					default:
-						log.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
+						// log.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
+						// do nothing
 					}
 				}
 			}

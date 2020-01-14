@@ -840,7 +840,11 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 	}
 
 	fr := &model.FinReport{Code: code}
-	e = json.Unmarshal([]byte(doc.Find("#main").Text()), fr)
+	jsonStr := doc.Find("#main").Text()
+	if len(doc.Find(".main").Text()) > len(jsonStr) {
+		jsonStr = doc.Find("#main").Text()
+	}
+	e = json.Unmarshal([]byte(jsonStr), fr)
 	if e != nil {
 		log.Printf("%s failed to parse json, retrying...\n%s", code, url)
 		return false, true

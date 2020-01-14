@@ -25,7 +25,8 @@ var PART_PROXY float64
 var PROXY_ADDR string
 
 //HTTPGetResponse initiates HTTP get request and returns its response
-func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rotateProxy, rotateAgent bool) (res *http.Response, e error) {
+func HTTPGetResponse(link string, headers map[string]string,
+	useMasterProxy, rotateProxy, rotateAgent bool, cookies... *http.Cookie) (res *http.Response, e error) {
 	if useMasterProxy && rotateProxy {
 		log.Panic("can't useMasterProxy and rotateProxy at the same time.")
 	}
@@ -130,6 +131,10 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 			}
 		}
 
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+
 		res, err = client.Do(req)
 		if err != nil {
 			//handle "read: connection reset by peer" error by retrying
@@ -143,7 +148,7 @@ func HTTPGetResponse(link string, headers map[string]string, useMasterProxy, rot
 				e = err
 				return
 			}
-			log.Printf("http communication error.%s url=%s, retrying %d ...\n%+v", proxyStr, link, i+1, err)
+			log.Debugf("http communication error.%s url=%s, retrying %d ...\n%+v", proxyStr, link, i+1, err)
 			if res != nil {
 				res.Body.Close()
 			}

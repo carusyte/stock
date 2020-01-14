@@ -12,14 +12,6 @@ China A-share analysis tool written in go
 - methods and functions apply on offline data for regression
 
 
-## Data Source
-
-- http://10jqka.com.cn
-- http://sse.com.cn
-- http://stock.finance.qq.com
-- etc.
-
-
 ## Dependencies
 
 [golang](https://golang.org/) version >= 1.13.6
