@@ -400,6 +400,9 @@ func (fin *FinReport) SetCode(code string) {
 }
 
 func (fin *FinReport) UnmarshalJSON(b []byte) error {
+	if fin.UnmappedField == nil {
+		fin.UnmappedField = make(map[string]int)
+	}
 	var f interface{}
 	json.Unmarshal(b, &f)
 	m := f.(map[string]interface{})

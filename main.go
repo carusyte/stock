@@ -33,7 +33,7 @@ func main() {
 	case "mem":
 		defer profile.Start(profile.MemProfile).Stop()
 	}
-	
+
 	cmd.Execute()
 }
 
