@@ -146,6 +146,12 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 	//A slice of trading data of arbitrary kind
 	ochan := make(chan interface{}, 4)
 
+	trdat = &model.TradeData{
+		Code:          code,
+		Cycle:         qry.Cycle,
+		Reinstatement: qry.Reinstate,
+	}
+
 	//Collect and merge query results
 	wgr.Add(1)
 	go func() {
@@ -169,15 +175,15 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 
 	for table, typ := range tables {
 		wg.Add(1)
-		go func() {
+		go func(table string, typ reflect.Type) {
 			defer wg.Done()
 			intf := reflect.New(reflect.SliceOf(typ)).Interface()
 			sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
 				table, cond1, cond2, d)
 			_, e := dbmap.Select(intf, sql, args...)
-			util.CheckErr(e, "failed to query "+string(table)+" for "+code)
+			util.CheckErr(e, "failed to query "+table+" for "+code)
 			ochan <- intf
-		}()
+		}(table, typ)
 	}
 	wg.Wait()
 	close(ochan)

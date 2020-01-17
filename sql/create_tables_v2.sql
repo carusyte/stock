@@ -122,7 +122,7 @@ CREATE TABLE `fs_stats` (
   `vmax` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`method`, `fields`, `tab`)
+  PRIMARY KEY (`method`,`fields`,`tab`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Feature Scaling Statistics';
 
 CREATE TABLE `grader_stats` (
@@ -1918,6 +1918,22 @@ CREATE TABLE `tradecal` (
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   KEY `ix_tradecal_index` (`index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `user_agents` (
+  `id` int(11) NOT NULL,
+  `user_agent` varchar(512) DEFAULT NULL,
+  `times_seen` int(11) DEFAULT NULL,
+  `simple_software_string` varchar(100) DEFAULT NULL,
+  `software_name` varchar(45) DEFAULT NULL,
+  `software_version` varchar(30) DEFAULT NULL,
+  `software_type` varchar(20) DEFAULT NULL,
+  `software_sub_type` varchar(20) DEFAULT NULL,
+  `hardware_type` varchar(20) DEFAULT NULL,
+  `first_seen_at` varchar(30) DEFAULT NULL,
+  `last_seen_at` varchar(30) DEFAULT NULL,
+  `updated_at` varchar(30) DEFAULT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `worst_rec` (
