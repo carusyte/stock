@@ -818,9 +818,8 @@ func insertMinibatchV2(table string, cols []string, v reflect.Value) (c int) {
 
 func insertTradeData(table string, cols []string, rows interface{}, wg *sync.WaitGroup) {
 	defer wg.Done()
-	t := reflect.TypeOf(rows)
 	v := reflect.ValueOf(rows)
-	len := t.Len()
+	len := v.Len()
 	batchSize := 1000
 	c := 0
 	for idx := 0; idx < len; idx += batchSize {
