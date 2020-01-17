@@ -768,7 +768,7 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 func insertMinibatchV2(table string, cols []string, v reflect.Value) (c int) {
 	//v is a slice of trade data of some kind
 	rowSize := v.Len()
-	elem := v.Index(0)
+	elem := reflect.Indirect(v.Index(0))
 	numFields := len(cols)
 	retry := conf.Args.DeadlockRetry
 	rt := 0
