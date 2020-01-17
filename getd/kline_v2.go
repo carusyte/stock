@@ -362,52 +362,52 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
 			if lr.Lr.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Lr.Float64)
+				log.Debugf("%s (%s %s) %s %d lr below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Lr.Float64)
 				lr.Lr.Float64 = b
 			} else if lr.Lr.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Lr.Float64)
+				log.Debugf("%s (%s %s) %s %d lr exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Lr.Float64)
 				lr.Lr.Float64 = t
 			}
 			if lr.High.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_h below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.High.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_h below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.High.Float64)
 				lr.High.Float64 = b
 			} else if lr.High.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_h exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.High.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_h exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.High.Float64)
 				lr.High.Float64 = t
 			}
 			if lr.HighClose.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_h_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.HighClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_h_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.HighClose.Float64)
 				lr.HighClose.Float64 = b
 			} else if lr.HighClose.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.HighClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_h_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.HighClose.Float64)
 				lr.HighClose.Float64 = t
 			}
 			if lr.Open.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_o below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Open.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_o below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Open.Float64)
 				lr.Open.Float64 = b
 			} else if lr.Open.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_o exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Open.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_o exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Open.Float64)
 				lr.Open.Float64 = t
 			}
 			if lr.OpenClose.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_o_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.OpenClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_o_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.OpenClose.Float64)
 				lr.OpenClose.Float64 = b
 			} else if lr.OpenClose.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.OpenClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_o_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.OpenClose.Float64)
 				lr.OpenClose.Float64 = t
 			}
 			if lr.Low.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_l below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Low.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_l below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Low.Float64)
 				lr.Low.Float64 = b
 			} else if lr.Low.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_l exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Low.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_l exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Low.Float64)
 				lr.Low.Float64 = t
 			}
 			if lr.LowClose.Float64 < b {
-				log.Printf("%s (%s %s) %s %d lr_l_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.LowClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_l_c below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.LowClose.Float64)
 				lr.LowClose.Float64 = b
 			} else if lr.LowClose.Float64 > t {
-				log.Printf("%s (%s %s) %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.LowClose.Float64)
+				log.Debugf("%s (%s %s) %s %d lr_l_c exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.LowClose.Float64)
 				lr.LowClose.Float64 = t
 			}
 		}
