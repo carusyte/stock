@@ -699,7 +699,7 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 }
 
 func binsertV2(trdat *model.TradeData, lklid int) (c int) {
-	if trdat.Empty() {
+	if trdat == nil || trdat.Empty() {
 		return 0
 	}
 	c = 0

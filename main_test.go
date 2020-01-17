@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/carusyte/stock/model"
 	"github.com/mjanda/go-dtw"
 	"github.com/shirou/gopsutil/cpu"
 )
@@ -94,4 +95,10 @@ func modMap(m map[int]byte) {
 	m[1] = 0
 	m[2] = 0
 	m[3] = 0
+}
+
+func TestNilPointer(t *testing.T) {
+	var s []*model.TradeDataBase
+	log.Printf("len: %d", len(s))
+	t.Fail()
 }

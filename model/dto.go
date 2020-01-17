@@ -708,6 +708,9 @@ func (td *TradeData) Empty() bool {
 
 //MaxLen returns the maximum length of slice in all types of trade data within the instance.
 func (td *TradeData) MaxLen() (maxlen int) {
+	if td == nil {
+		return
+	}
 	if maxlen = 0; len(td.Base) > maxlen {
 		maxlen = len(td.Base)
 	}
