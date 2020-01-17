@@ -639,37 +639,37 @@ type TradeDataMovAvgLogRtn struct {
 	Date      string
 	Klid      int
 	Ma5       sql.NullFloat64
-	Ma5Open   sql.NullFloat64
-	Ma5High   sql.NullFloat64
-	Ma5Low    sql.NullFloat64
+	Ma5Open   sql.NullFloat64 `db:"ma5_o"`
+	Ma5High   sql.NullFloat64 `db:"ma5_h"`
+	Ma5Low    sql.NullFloat64 `db:"ma5_l"`
 	Ma10      sql.NullFloat64
-	Ma10Open  sql.NullFloat64
-	Ma10High  sql.NullFloat64
-	Ma10Low   sql.NullFloat64
+	Ma10Open  sql.NullFloat64 `db:"ma10_o"`
+	Ma10High  sql.NullFloat64 `db:"ma10_h"`
+	Ma10Low   sql.NullFloat64 `db:"ma10_l"`
 	Ma20      sql.NullFloat64
-	Ma20Open  sql.NullFloat64
-	Ma20High  sql.NullFloat64
-	Ma20Low   sql.NullFloat64
+	Ma20Open  sql.NullFloat64 `db:"ma20_o"`
+	Ma20High  sql.NullFloat64 `db:"ma20_h"`
+	Ma20Low   sql.NullFloat64 `db:"ma20_l"`
 	Ma30      sql.NullFloat64
-	Ma30Open  sql.NullFloat64
-	Ma30High  sql.NullFloat64
-	Ma30Low   sql.NullFloat64
+	Ma30Open  sql.NullFloat64 `db:"ma30_o"`
+	Ma30High  sql.NullFloat64 `db:"ma30_h"`
+	Ma30Low   sql.NullFloat64 `db:"ma30_l"`
 	Ma60      sql.NullFloat64
-	Ma60Open  sql.NullFloat64
-	Ma60High  sql.NullFloat64
-	Ma60Low   sql.NullFloat64
+	Ma60Open  sql.NullFloat64 `db:"ma60_o"`
+	Ma60High  sql.NullFloat64 `db:"ma60_h"`
+	Ma60Low   sql.NullFloat64 `db:"ma60_l"`
 	Ma120     sql.NullFloat64
-	Ma120Open sql.NullFloat64
-	Ma120High sql.NullFloat64
-	Ma120Low  sql.NullFloat64
+	Ma120Open sql.NullFloat64 `db:"ma120_o"`
+	Ma120High sql.NullFloat64 `db:"ma120_h"`
+	Ma120Low  sql.NullFloat64 `db:"ma120_l"`
 	Ma200     sql.NullFloat64
-	Ma200Open sql.NullFloat64
-	Ma200High sql.NullFloat64
-	Ma200Low  sql.NullFloat64
+	Ma200Open sql.NullFloat64 `db:"ma200_o"`
+	Ma200High sql.NullFloat64 `db:"ma200_h"`
+	Ma200Low  sql.NullFloat64 `db:"ma200_l"`
 	Ma250     sql.NullFloat64
-	Ma250Open sql.NullFloat64
-	Ma250High sql.NullFloat64
-	Ma250Low  sql.NullFloat64
+	Ma250Open sql.NullFloat64 `db:"ma250_o"`
+	Ma250High sql.NullFloat64 `db:"ma250_h"`
+	Ma250Low  sql.NullFloat64 `db:"ma250_l"`
 	Vol5      sql.NullFloat64
 	Vol10     sql.NullFloat64
 	Vol20     sql.NullFloat64
