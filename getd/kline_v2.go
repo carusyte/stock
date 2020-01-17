@@ -790,7 +790,7 @@ func insertMinibatchV2(table string, cols []string, v reflect.Value) (c int) {
 	}
 
 	for i := 0; i < rowSize; i++ {
-		elem := v.Index(i)
+		elem := reflect.Indirect(v.Index(i))
 		valueStrings = append(valueStrings, holderString)
 		for j := 0; j < numFields; j++ {
 			valueArgs = append(valueArgs, elem.Field(j).Interface())
