@@ -240,6 +240,7 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 		return
 	}
 	tabCols = make(map[string][]string)
+	tabData = make(map[string]interface{})
 	base := "kline_"
 	switch td.Cycle {
 	case model.DAY:
