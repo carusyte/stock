@@ -1988,6 +1988,7 @@ CREATE TABLE `xdxr` (
   `payout_date` varchar(10) DEFAULT NULL COMMENT '股息到帐日',
   `progress` varchar(45) DEFAULT NULL COMMENT '方案进度',
   `divi_target` varchar(45) DEFAULT NULL COMMENT '分红对象',
+  `divi_amt` double DEFAULT NULL COMMENT '分红总额（亿）',
   `shares_base` bigint(20) DEFAULT NULL COMMENT '派息股本基数',
   `end_trddate` varchar(10) DEFAULT NULL COMMENT '最后交易日',
   `xprice` varchar(1) DEFAULT NULL COMMENT '是否已更新过前复权价格信息',
@@ -1996,3 +1997,4 @@ CREATE TABLE `xdxr` (
   PRIMARY KEY (`code`,`idx`),
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+

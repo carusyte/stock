@@ -273,6 +273,7 @@ func (l *Stocks) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+//Xdxr represents the exclude-dividend & exclude-right data
 type Xdxr struct {
 	Code string
 	Name string
@@ -317,6 +318,8 @@ type Xdxr struct {
 	PayoutDate sql.NullString `db:"payout_date"`
 	//最后交易日
 	EndTrdDate sql.NullString
+	//分红总额(亿)
+	DiviAmt sql.NullFloat64 `db:"divi_amt"`
 	//方案进度
 	Progress sql.NullString `db:"progress"`
 	//股利支付率 Dividend Payout Ratio

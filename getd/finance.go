@@ -164,8 +164,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 	}
 
 	//parse column index
-	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRegDate, iXdxrDate, iProgress, iPayoutRatio,
-		iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+	iReportYear, iBoardDate, iGmsDate, iImplDate, iPlan, iRegDate, iXdxrDate, iDiviAmt, iProgress, iPayoutRatio,
+		iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	doc.Find(`#bonus_table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
 			v := s2.Text()
@@ -179,6 +179,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 			case "股东大会预案公告日期":
 				iGmsDate = j
 			case "实施日期":
+			case "实施公告日":
 				iImplDate = j
 			case "分红方案说明":
 				iPlan = j
@@ -188,14 +189,16 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 				iXdxrDate = j
 			case "A股派息日":
 				iPayoutDate = j
+			case "分红总额":
+				iDiviAmt = j
 			case "方案进度":
 				iProgress = j
 			case "股利支付率(%)":
 				fallthrough
 			case "股利支付率":
 				iPayoutRatio = j
+			case "税前分红率":
 			case "分红率(%)":
-				fallthrough
 			case "分红率":
 				iDivRate = j
 			default:
@@ -227,6 +230,8 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 					xdxr.XdxrDate = util.Str2Snull(v)
 				case iPayoutDate:
 					xdxr.PayoutDate = util.Str2Snull(v)
+				case iDiviAmt:
+					xdxr.DiviAmt = util.Str2FBil(v)
 				case iProgress:
 					xdxr.Progress = util.Str2Snull(v)
 				case iPayoutRatio:
@@ -348,7 +353,7 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 	valueArgs := make([]interface{}, 0, len(xdxrs)*27)
 	for _, e := range xdxrs {
 		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-			"?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			"?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs, e.Code)
 		valueArgs = append(valueArgs, e.Name)
 		valueArgs = append(valueArgs, e.Idx)
@@ -368,6 +373,7 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 		valueArgs = append(valueArgs, e.RegDate)
 		valueArgs = append(valueArgs, e.XdxrDate)
 		valueArgs = append(valueArgs, e.PayoutDate)
+		valueArgs = append(valueArgs, e.DiviAmt)
 		valueArgs = append(valueArgs, e.Progress)
 		valueArgs = append(valueArgs, e.Dpr)
 		valueArgs = append(valueArgs, e.Dyr)
@@ -379,7 +385,7 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 	}
 	stmt := fmt.Sprintf("INSERT INTO xdxr (code,name,idx,notice_date,report_year,board_date,"+
 		"gms_date,impl_date,plan,divi,divi_atx,divi_end_date,shares_allot,shares_allot_date,shares_cvt,"+
-		"shares_cvt_date,reg_date,xdxr_date,payout_date,progress,dpr,"+
+		"shares_cvt_date,reg_date,xdxr_date,payout_date,divi_amt,progress,dpr,"+
 		"dyr,divi_target,shares_base,end_trddate,udate,utime) VALUES %s "+
 		"on duplicate key update name=values(name),notice_date=values(notice_date),report_year=values"+
 		"(report_year),board_date=values"+
@@ -388,8 +394,8 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 		"(divi_end_date),shares_allot=values(shares_allot),shares_allot_date=values"+
 		"(shares_allot_date),shares_cvt=values"+
 		"(shares_cvt),shares_cvt_date=values(shares_cvt_date),reg_date=values(reg_date),"+
-		"xdxr_date=values"+
-		"(xdxr_date),payout_date=values(payout_date),progress=values(progress),dpr=values"+
+		"xdxr_date=values(xdxr_date),payout_date=values(payout_date),divi_amt=values(divi_amt),"+
+		"progress=values(progress),dpr=values"+
 		"(dpr),dyr=values(dyr),divi_target=values(divi_target),"+
 		"shares_base=values(shares_base),end_trddate=values(end_trddate),udate=values(udate),utime=values(utime)",
 		strings.Join(valueStrings, ","))
