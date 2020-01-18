@@ -565,7 +565,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 }
 
 func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry bool) {
-	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p`).Text()) {
+	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p.tip.clearfix`).Text()) {
 		// log.Debugf("%s no prediction", code)
 		return true, false
 	}
@@ -592,6 +592,7 @@ func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry b
 			}
 		})
 	})
+	//FIXME this error occurs
 	if iNum == -1 {
 		log.Printf("%s unable to parse eps prediction table", url)
 		return false, true
