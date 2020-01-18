@@ -30,8 +30,10 @@ type xdxrDBJob struct {
 	xdxr  []*model.Xdxr
 }
 
+//GetXDXRs fetches XDXR info from the web
 func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting XDXR info...")
+	unmappedField = make(map[string]int)
 	var wg sync.WaitGroup
 	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
 	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
@@ -168,18 +170,15 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		iDivRate, iPayoutDate := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	doc.Find(`#bonus_table thead tr`).Each(func(i int, s *goquery.Selection) {
 		s.Find("th").Each(func(j int, s2 *goquery.Selection) {
-			v := s2.Text()
+			v := strings.TrimSpace(s2.Text())
 			switch v {
 			case "报告期":
 				iReportYear = j
 			case "董事会日期":
 				iBoardDate = j
-			case "股东大会日期":
-				fallthrough
-			case "股东大会预案公告日期":
+			case "股东大会日期", "股东大会预案公告日期":
 				iGmsDate = j
-			case "实施日期":
-			case "实施公告日":
+			case "实施日期", "实施公告日":
 				iImplDate = j
 			case "分红方案说明":
 				iPlan = j
@@ -189,20 +188,19 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 				iXdxrDate = j
 			case "A股派息日":
 				iPayoutDate = j
-			case "分红总额":
+			case "分红总额", "AH分红总额":
 				iDiviAmt = j
 			case "方案进度":
 				iProgress = j
-			case "股利支付率(%)":
-				fallthrough
-			case "股利支付率":
+			case "股利支付率(%)", "股利支付率":
 				iPayoutRatio = j
-			case "税前分红率":
-			case "分红率(%)":
-			case "分红率":
+			case "税前分红率", "分红率(%)", "分红率":
 				iDivRate = j
 			default:
-				log.Printf("unidentified column header in bonus page %s : %s", url, v)
+				if _, exists := unmappedField[v]; !exists {
+					unmappedField[v] = j
+					log.Warnf("unidentified column header in bonus page %s : %s", url, v)
+				}
 			}
 		})
 	})
@@ -243,7 +241,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 					//xdxr.Dyr = util.Str2Fnull(strings.TrimSpace(strings.TrimSuffix(v,
 					//	"%")))
 				default:
-					log.Printf("unidentified column value in bonus page %s : %s", url, v)
+					log.Warnf("unidentified column value in bonus page %s : %s", url, v)
 				}
 			}
 		})
