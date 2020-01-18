@@ -757,6 +757,7 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 	}
 
 	var wg sync.WaitGroup
+	//FIXME relevant table inserts should be grouped into a transaction
 	for table, cols := range tables {
 		wg.Add(1)
 		go insertTradeData(table, cols, data[table], &wg)

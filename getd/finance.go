@@ -513,8 +513,8 @@ func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 
 func parseFinPredictPage(chstk chan *model.Stock, wg *sync.WaitGroup, chrstk chan *model.Stock) {
 	defer wg.Done()
-	// urlt := `http://basic.10jqka.com.cn/%s/worth.html`
-	urlt := `http://stockpage.10jqka.com.cn/%s/worth`
+	urlt := `http://basic.10jqka.com.cn/%s/worth.html`
+	// urlt := `http://stockpage.10jqka.com.cn/%s/worth`
 	RETRIES := conf.Args.DataSource.KlineFailureRetry
 	for stock := range chstk {
 		wait := 1000
@@ -550,9 +550,9 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 	}
 	defer res.Body.Close()
 	// Convert the designated charset HTML to utf-8 encoded HTML.
-	// utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
+	utfBody := transform.NewReader(res.Body, simplifiedchinese.GBK.NewDecoder())
 	// parse body using goquery
-	doc, e = goquery.NewDocumentFromReader(res.Body)
+	doc, e = goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
@@ -566,7 +566,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 
 func parseFinPredictTables(doc *goquery.Document, url, code string) (ok, retry bool) {
 	if `本年度暂无机构做出业绩预测` == strings.TrimSpace(doc.Find(`#forecast div.bd p.tip.clearfix`).Text()) {
-		// log.Debugf("%s no prediction", code)
+		log.Debugf("%s no finance prediction found in %s", code, url)
 		return true, false
 	}
 	//parse column index

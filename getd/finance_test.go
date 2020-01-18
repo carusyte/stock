@@ -36,7 +36,7 @@ func TestGetPerfPrediction(t *testing.T) {
 	stk.Name = "金地集团"
 	s := &model.Stocks{}
 	s.Add(stk)
-
+	
 	tests := []struct {
 		name      string
 		args      *model.Stocks
