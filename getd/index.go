@@ -159,13 +159,13 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 		cycle   model.CYTP
 	)
 	switch tab {
-	case model.KLINE_MONTH:
+	case model.KLINE_MONTH_F:
 		per = "1month"
 		cycle = model.MONTH
-	case model.KLINE_WEEK:
+	case model.KLINE_WEEK_F:
 		per = "1week"
 		cycle = model.WEEK
-	case model.KLINE_DAY:
+	case model.KLINE_DAY_F:
 		per = "1day"
 		cycle = model.DAY
 	default:

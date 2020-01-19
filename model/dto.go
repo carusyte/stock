@@ -41,8 +41,6 @@ const (
 	INDICATOR_DAY   DBTab = "indicator_d"
 	INDICATOR_WEEK  DBTab = "indicator_w"
 	INDICATOR_MONTH DBTab = "indicator_m"
-	//KLINE_DAY obsolete, use KLINE_DAY_F instead
-	KLINE_DAY          DBTab = "kline_d"
 	KLINE_DAY_F        DBTab = "kline_d_f"
 	KLINE_DAY_F_LR     DBTab = "kline_d_f_lr"
 	KLINE_DAY_F_MA     DBTab = "kline_d_f_ma"
@@ -56,8 +54,6 @@ const (
 	KLINE_DAY_B_LR     DBTab = "kline_d_b_lr"
 	KLINE_DAY_B_MA     DBTab = "kline_d_b_ma"
 	KLINE_DAY_B_MA_LR  DBTab = "kline_d_b_ma_lr"
-	//KLINE_WEEK obsolete, use KLINE_WEEK_F instead
-	KLINE_WEEK          DBTab = "kline_w"
 	KLINE_WEEK_F        DBTab = "kline_w_f"
 	KLINE_WEEK_F_LR     DBTab = "kline_w_f_lr"
 	KLINE_WEEK_F_MA     DBTab = "kline_w_f_ma"
@@ -71,8 +67,6 @@ const (
 	KLINE_WEEK_B_LR     DBTab = "kline_w_b_lr"
 	KLINE_WEEK_B_MA     DBTab = "kline_w_b_ma"
 	KLINE_WEEK_B_MA_LR  DBTab = "kline_w_b_ma_lr"
-	//KLINE_MONTH obsolete, use KLINE_MONTH_F instead
-	KLINE_MONTH          DBTab = "kline_m"
 	KLINE_MONTH_F        DBTab = "kline_m_f"
 	KLINE_MONTH_F_LR     DBTab = "kline_m_f_lr"
 	KLINE_MONTH_F_MA     DBTab = "kline_m_f_ma"

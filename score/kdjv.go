@@ -303,7 +303,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 	mxhold := 3
 	retro := conf.Args.Kdjv.StatsRetroSpan
 	kps := new(model.KDJVStat)
-	klhist := getd.GetKlineDb(code, model.KLINE_DAY, retro, false)
+	klhist := getd.GetKlineDb(code, model.KLINE_DAY_F, retro, false)
 	if len(klhist) < retro {
 		log.Printf("%s insufficient data to collect kdjv stats: %d", code, len(klhist))
 		chkps <- nil

@@ -835,11 +835,11 @@ func insertTradeData(table string, cols []string, rows interface{}, wg *sync.Wai
 func calcVarateRglV2(stk *model.Stock, tdmap map[model.DBTab]*model.TradeData) (e error) {
 	for t, td := range tdmap {
 		switch t {
-		case model.KLINE_DAY, model.KLINE_DAY_F:
+		case model.KLINE_DAY_F:
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_DAY_NR], td)
-		case model.KLINE_WEEK, model.KLINE_WEEK_F:
+		case model.KLINE_WEEK_F:
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_WEEK_NR], td)
-		case model.KLINE_MONTH, model.KLINE_MONTH_F:
+		case  model.KLINE_MONTH_F:
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_MONTH_NR], td)
 		default:
 			//skip the rest types of kline

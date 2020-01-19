@@ -57,13 +57,13 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 	trdat = new(model.TradeData)
 	qj := &model.QQJson{}
 	switch tab {
-	case model.KLINE_DAY, model.KLINE_DAY_F, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
+	case model.KLINE_DAY_F, model.KLINE_DAY_NR, model.KLINE_DAY_B, model.KLINE_DAY_VLD:
 		qj.Period = "day"
 		cycle = model.DAY
-	case model.KLINE_WEEK, model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
+	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B, model.KLINE_WEEK_VLD:
 		qj.Period = "week"
 		cycle = model.WEEK
-	case model.KLINE_MONTH, model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
+	case model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B, model.KLINE_MONTH_VLD:
 		qj.Period = "month"
 		cycle = model.MONTH
 	default:

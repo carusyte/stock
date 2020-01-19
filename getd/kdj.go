@@ -139,15 +139,15 @@ func SmpKdjFeat(code string, cytp model.CYTP, expvr, mxrt float64, mxhold int) {
 	switch cytp {
 	case model.DAY:
 		itab = model.INDICATOR_DAY
-		ktab = model.KLINE_DAY
+		ktab = model.KLINE_DAY_F
 		minSize = 200
 	case model.WEEK:
 		itab = model.INDICATOR_WEEK
-		ktab = model.KLINE_WEEK
+		ktab = model.KLINE_WEEK_F
 		minSize = 30
 	case model.MONTH:
 		itab = model.INDICATOR_MONTH
-		ktab = model.KLINE_MONTH
+		ktab = model.KLINE_MONTH_F
 		minSize = 15
 	default:
 		log.Panicf("not supported cycle type: %+v", cytp)

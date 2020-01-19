@@ -69,18 +69,18 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	rtype := model.None
 	var cycle model.CYTP
 	switch tab {
-	case model.KLINE_DAY, model.KLINE_DAY_NR, model.KLINE_DAY_B:
+	case model.KLINE_DAY_F, model.KLINE_DAY_NR, model.KLINE_DAY_B:
 		klt = "day"
 		cycle = model.DAY
-	case model.KLINE_WEEK, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
+	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		klt = "week"
 		cycle = model.WEEK
-	case model.KLINE_MONTH, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
+	case model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
 		klt = "month"
 		cycle = model.MONTH
 	}
 	switch tab {
-	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+	case model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F:
 		xdrType = "pre"
 		rtype = model.Forward
 	}
@@ -92,7 +92,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	}
 	incr := true
 	switch tab {
-	case model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH:
+	case model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F:
 		incr = xdxr == nil
 	}
 	lklid = -1

@@ -51,9 +51,9 @@ func test() {
 	stocks := new(model.Stocks)
 	stocks.Add(allstk...)
 	getd.GetKlines(stocks,
-		model.KLINE_WEEK,
-		model.KLINE_MONTH,
-		model.KLINE_DAY,
+		model.KLINE_WEEK_F,
+		model.KLINE_MONTH_F,
+		model.KLINE_DAY_F,
 		model.KLINE_DAY_NR,
 		model.KLINE_WEEK_NR,
 		model.KLINE_MONTH_NR)

@@ -221,7 +221,7 @@ func GetKlBtwn(code string, tab model.DBTab, dt1, dt2 string, desc bool) (hist [
 
 //FixVarate fixes stock varate inaccurate issue caused by 0 close price introduced in reinstate process.
 func FixVarate() {
-	tabs := []model.DBTab{model.KLINE_DAY, model.KLINE_WEEK, model.KLINE_MONTH}
+	tabs := []model.DBTab{model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F}
 	for _, t := range tabs {
 		qry := fmt.Sprintf(`select * from %v where close = 0 order by code, klid`, t)
 		var qs []*model.Quote
@@ -326,7 +326,7 @@ func CalLogReturns(qs []*model.Quote) {
 		q.LrLow = sql.NullFloat64{Float64: math.Log(vlw/100. + 1.), Valid: true}
 		q.LrLowClose = sql.NullFloat64{Float64: util.LogReturn(q.Close, q.Low, bias), Valid: true}
 
-		if (q.Type == model.KLINE_DAY || q.Type == model.KLINE_DAY_B || q.Type == model.KLINE_DAY_NR || q.Type == model.KLINE_DAY_VLD) &&
+		if (q.Type == model.KLINE_DAY_F || q.Type == model.KLINE_DAY_B || q.Type == model.KLINE_DAY_NR || q.Type == model.KLINE_DAY_VLD) &&
 			len(conf.Args.DataSource.LimitPriceDayLr) > 0 {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
@@ -933,11 +933,11 @@ func insertMinibatch(quotes []*model.Quote, table string) (c int) {
 func validateKline(stk *model.Stock, t model.DBTab, quotes []*model.Quote, lklid int) bool {
 	var vtab model.DBTab
 	switch t {
-	case model.KLINE_DAY, model.KLINE_DAY_B, model.KLINE_DAY_NR:
+	case model.KLINE_DAY_F, model.KLINE_DAY_B, model.KLINE_DAY_NR:
 		vtab = model.KLINE_DAY_VLD
-	case model.KLINE_WEEK, model.KLINE_WEEK_B, model.KLINE_WEEK_NR:
+	case model.KLINE_WEEK_F, model.KLINE_WEEK_B, model.KLINE_WEEK_NR:
 		vtab = model.KLINE_WEEK_VLD
-	case model.KLINE_MONTH, model.KLINE_MONTH_B, model.KLINE_MONTH_NR:
+	case model.KLINE_MONTH_F, model.KLINE_MONTH_B, model.KLINE_MONTH_NR:
 		vtab = model.KLINE_MONTH_VLD
 	default:
 		log.Warnf("validation not supported for %v", t)
@@ -1129,11 +1129,11 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 	for t, qs := range qmap {
 		var retTgqs []*model.Quote
 		switch t {
-		case model.KLINE_DAY:
+		case model.KLINE_DAY_F:
 			retTgqs, e = inferVarateRgl(stk, model.KLINE_DAY_NR, qmap[model.KLINE_DAY_NR], qs)
-		case model.KLINE_WEEK:
+		case model.KLINE_WEEK_F:
 			retTgqs, e = inferVarateRgl(stk, model.KLINE_WEEK_NR, qmap[model.KLINE_WEEK_NR], qs)
-		case model.KLINE_MONTH:
+		case model.KLINE_MONTH_F:
 			retTgqs, e = inferVarateRgl(stk, model.KLINE_MONTH_NR, qmap[model.KLINE_MONTH_NR], qs)
 		default:
 			//skip the rest types of kline

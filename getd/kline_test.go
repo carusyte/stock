@@ -54,7 +54,7 @@ func TestGetKlinesFromWht(t *testing.T) {
 	s.Code = "000585"
 	s.Name = "东北电气"
 	s.Market = sql.NullString{String: "SZ", Valid: true}
-	getKlineWht(s, []model.DBTab{model.KLINE_DAY, model.KLINE_DAY_NR}, true)
+	getKlineWht(s, []model.DBTab{model.KLINE_DAY_F, model.KLINE_DAY_NR}, true)
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,
 	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
