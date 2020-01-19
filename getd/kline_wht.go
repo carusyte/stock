@@ -236,8 +236,8 @@ func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
 		}
 		for i, target := range tgLR {
 			usql := fmt.Sprintf("update %v t inner join %v s using(code, date) set "+
-				"t.lr_vol = s.lr_vol, t.lr_amt = s.lr_amt, t.lr_xr = s.lr_xr where t.code = ? and "+
-				"(t.lr_vol is null or t.lr_amt is null or t.lr_xr is null)", target, srLR[i])
+				"t.volume = s.volume, t.amount = s.amount, t.xrate = s.xrate where t.code = ? and "+
+				"(t.volume is null or t.amount is null or t.xrate is null)", target, srLR[i])
 			_, e := dbmap.Exec(usql, code)
 			if e != nil {
 				log.Printf("%v failed to post process %v:%+v", code, target, e)
