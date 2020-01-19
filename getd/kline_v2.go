@@ -350,7 +350,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 			trdat.MovAvgLogRtn = append(trdat.MovAvgLogRtn, malr)
 		}
 		bias := .01
-		lr.Lr = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
+		lr.Close = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
 		lr.High = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
 		lr.HighClose = sql.NullFloat64{Float64: util.LogReturn(b.Close, b.High, bias), Valid: true}
 		lr.Open = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
@@ -361,12 +361,12 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 		if (trdat.Cycle == model.DAY) && len(conf.Args.DataSource.LimitPriceDayLr) > 0 {
 			limit := conf.Args.DataSource.LimitPriceDayLr
 			b, t := limit[0], limit[1]
-			if lr.Lr.Float64 < b {
-				log.Debugf("%s (%s %s) %s %d lr below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Lr.Float64)
-				lr.Lr.Float64 = b
-			} else if lr.Lr.Float64 > t {
-				log.Debugf("%s (%s %s) %s %d lr exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Lr.Float64)
-				lr.Lr.Float64 = t
+			if lr.Close.Float64 < b {
+				log.Debugf("%s (%s %s) %s %d lr close below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.Close.Float64)
+				lr.Close.Float64 = b
+			} else if lr.Close.Float64 > t {
+				log.Debugf("%s (%s %s) %s %d lr close exceeds upper limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, t, lr.Close.Float64)
+				lr.Close.Float64 = t
 			}
 			if lr.High.Float64 < b {
 				log.Debugf("%s (%s %s) %s %d lr_h below lower limit %f: %.5f, clipped", lr.Code, trdat.Cycle, trdat.Reinstatement, lr.Date, lr.Klid, b, lr.High.Float64)

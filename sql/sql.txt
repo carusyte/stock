@@ -259,11 +259,11 @@ UPDATE basics b
     (SELECT
         p1.code, p1.close
     FROM
-        kline_d p1
+        kline_d_f p1
     INNER JOIN (SELECT
         code, MAX(klid) klid
     FROM
-        kline_d
+        kline_d_f
     GROUP BY code) p2 USING (code , klid)) p USING (code)
 SET
     b.pe = ROUND(p.close / f.eps, 2),
