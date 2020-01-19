@@ -19,6 +19,7 @@ import (
 	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
+	"github.com/ssgreg/repeat"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -144,11 +145,11 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 			if ok {
 				chrstk <- stock
 			} else if r {
-				log.Printf("%s retrying %d...", stock.Code, rtCount+1)
+				log.Infof("%s retrying %d...", stock.Code, rtCount+1)
 				time.Sleep(time.Millisecond * time.Duration(1000+rand.Intn(1000)))
 				continue
 			} else {
-				log.Printf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
+				log.Warnf("%s retried %d, giving up. restart the program to recover", stock.Code, rtCount+1)
 			}
 			break
 		}
@@ -436,15 +437,20 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	// parse body using goquery
 	doc, e := goquery.NewDocumentFromReader(utfBody)
 	if e != nil {
-		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
+		log.Debugf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
 		return false, true
 	}
 
 	log.Debugf("%s returns: \n %s", url, doc.Text())
 
+	if len(doc.Find(`#fieldstatus div.bd.pr div.field_wraper p`).Text()) == 0 {
+		log.Debugf("[%s,%s] industry info not detected, retrying...", stock.Code, stock.Name)
+		return false, true
+	}
+
 	//parse industry value
-	sel := `#fieldstatus div.bd.pr div:nth-child(1) p span`
+	sel := `#fieldstatus div.bd.pr div.field_wraper p span`
 	val := doc.Find(sel).Text()
 	if len(val) == 0 {
 		return true, false
@@ -452,7 +458,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sep := " -- "
 	idx := strings.Index(val, sep)
 	if idx <= 0 {
-		log.Printf("%s no industry lv1 data. value: %s, source: %s", stock.Code, val, url)
+		log.Warnf("%s no industry lv1 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv1.Valid = true
@@ -460,7 +466,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sval := val[idx+4:]
 	idx = strings.Index(sval, sep)
 	if idx <= 0 {
-		log.Printf("%s no industry lv2 data. value: %s, source: %s", stock.Code, val, url)
+		log.Warnf("%s no industry lv2 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv2.Valid = true
@@ -468,7 +474,7 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	sval = sval[idx+4:]
 	idx = strings.Index(sval, " ")
 	if idx <= 0 {
-		log.Printf("%s no industry lv3 data. value: %s, source: %s", stock.Code, val, url)
+		log.Warnf("%s no industry lv3 data. value: %s, source: %s", stock.Code, val, url)
 		return true, false
 	}
 	stock.IndLv3.Valid = true
@@ -547,22 +553,83 @@ func getSZSE() (list []*model.Stock) {
 func getSSE() *model.Stocks {
 	log.Println("Fetching Shanghai A-Share list...")
 
-	url_sh := `http://query.sse.com.cn/security/stock/getStockListData2.do` +
+	url := `http://query.sse.com.cn/security/stock/getStockListData2.do` +
 		`?&isPagination=false&stockType=1&pageHelp.pageSize=9999`
-	d, e := util.HttpGetBytesUsingHeaders(url_sh, map[string]string{"Referer": "http://www.sse.com" +
-		".cn/assortment/stock/list/share/"})
+	ref := `http://www.sse.com.cn/assortment/stock/list/share/`
+	d, e := util.HttpGetBytesUsingHeaders(url, map[string]string{"Referer": ref})
 	util.CheckErr(e, "failed to get Shanghai A-share list")
 	list := &model.Stocks{}
 	e = json.Unmarshal(d, list)
 	if e != nil {
-		log.Panicf("failed to parse json from %s\n%+v", url_sh, e)
+		log.Panicf("failed to parse json from %s\n%+v", url, e)
 	}
-	//TODO supplement shares info from the following
-	// http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback5040&isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000&_=1578668181485
-	// http://query.sse.com.cn/commonQuery.do?isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000
-	// Referer: http://www.sse.com.cn/assortment/stock/list/share/
+	// var wg, wgr sync.WaitGroup
+	// // supplement shares info from the following
+	// // http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback5040&isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000&_=1578668181485
+	// urlt := `http://query.sse.com.cn/commonQuery.do?isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=%s`
+	// ichan := make(chan string, global.JOB_CAPACITY)
+	// ochan := make(chan *model.SseShareJson, global.JOB_CAPACITY)
+	// wgr.Add(1)
+	// go func() {
+	// 	defer wgr.Done()
+	// 	mod := 0.0001
+	// 	for s := range ochan {
+	// 		stk := list.Map[s.Code]
+	// 		stk.Outstanding = util.Str2FBilMod(s.UnlimitedShares, mod)
+	// 		stk.Totals = util.Str2FBilMod(s.DomesticShares, mod)
+	// 	}
+	// }()
+	// for i := 0; i < conf.Args.Concurrency; i++ {
+	// 	wg.Add(1)
+	// 	go getSseShareInfo(&wg, ichan, ochan, urlt, ref)
+	// }
+	// close(ichan)
+	// wg.Wait()
+	// close(ochan)
+	// wgr.Wait()
+
 	list.SetMarket("SH")
 	return list
+}
+
+func getSseShareInfo(wg *sync.WaitGroup, cin chan string, cout chan *model.SseShareJson, urlt, ref string) {
+	defer wg.Done()
+	for code := range cin {
+		url := fmt.Sprintf(urlt, code)
+		op := func(c int) (e error) {
+			res, e := util.HTTPGetResponse(url, map[string]string{"Referer": ref}, false, true, true)
+			if e != nil {
+				log.Debugf("failed to get share info from %s\n%+v", url, e)
+				return
+			}
+			defer res.Body.Close()
+			payload, e := ioutil.ReadAll(res.Body)
+			if e != nil {
+				log.Debugf("failed to http body from %s\n%+v", url, e)
+				return
+			}
+			sseJson := &model.SseShareJson{Code: code}
+			e = json.Unmarshal(payload, sseJson)
+			if e != nil {
+				log.Debugf("failed to parse json from %s\n%+v", url, e)
+				return
+			}
+			cout <- sseJson
+			return
+		}
+		e := repeat.Repeat(
+			repeat.FnWithCounter(op),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DefaultRetry),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+			),
+		)
+		if e != nil {
+			log.Warnf("failed to get industry info for issuer %s, "+
+				"may rerun the program and try to recover data: %+v", code, e)
+		}
+	}
 }
 
 //overwrite to database

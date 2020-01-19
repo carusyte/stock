@@ -18,7 +18,7 @@ func TestGetFromExchanges(t *testing.T) {
 
 func TestThsIndustry(t *testing.T) {
 	s := &model.Stock{
-		Code: "600104",
+		Code: "000411",
 	}
 	thsIndustry(s)
 	t.Errorf("%+v", s)

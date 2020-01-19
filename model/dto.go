@@ -1332,6 +1332,48 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 	}
 }
 
+type SseShareJson struct {
+	Code              string
+	RealDate          string
+	UnlimitedShares   string
+	BShares           string
+	LimitedShares     string
+	DomesticShares    string
+	UnlimitedAShares  string
+	ListingVoteShares string
+}
+
+func (j *SseShareJson) UnmarshalJSON(b []byte) error {
+	var (
+		s  []interface{}
+		f  interface{}
+		m  map[string]interface{}
+		r  map[string]string
+		ok bool
+		e  error
+	)
+	e = json.Unmarshal(b, &f)
+	if e != nil {
+		return errors.Wrap(e, "failed to unmarshal json data")
+	}
+	if m, ok = f.(map[string]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
+	}
+	s = m["result"].([]interface{})
+	if len(s) != 1 {
+		return errors.Errorf(`unsupported length of "result": %d`, len(s))
+	}
+	r = s[0].(map[string]string)
+	j.RealDate = r["REAL_DATE"]
+	j.UnlimitedShares = r["UNLIMITED_SHARES"]
+	j.BShares = r["B_SHARES"]
+	j.LimitedShares = r["LIMITED_SHARES"]
+	j.DomesticShares = r["DOMESTIC_SHARES"]
+	j.UnlimitedAShares = r["UNLIMITED_A_SHARES"]
+	j.ListingVoteShares = r["LISTING_VOTE_SHARES"]
+	return nil
+}
+
 //QQJson represents data structure fetched from QQ fincance. Must set Code and Period before unmarshalling json data
 type QQJson struct {
 	Fcode, Code, Period, Reinstate string
