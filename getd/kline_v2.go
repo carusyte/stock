@@ -839,7 +839,7 @@ func calcVarateRglV2(stk *model.Stock, tdmap map[model.DBTab]*model.TradeData) (
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_DAY_NR], td)
 		case model.KLINE_WEEK_F:
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_WEEK_NR], td)
-		case  model.KLINE_MONTH_F:
+		case model.KLINE_MONTH_F:
 			e = inferVarateRglV2(stk, tdmap[model.KLINE_MONTH_NR], td)
 		default:
 			//skip the rest types of kline
@@ -958,6 +958,7 @@ func matchSliceV2(nrtd, tgtd *model.TradeData) (err error) {
 
 //hash maps each element in data slice to its position, using hash function to generate the hash table key.
 func hash(hashFunc func(el interface{}) (hashKey interface{}), array interface{}) (hashTable map[interface{}]int) {
+	hashTable = make(map[interface{}]int)
 	av := reflect.ValueOf(array)
 	for i := 0; i < av.Len(); i++ {
 		hashTable[hashFunc(av.Index(i).Interface())] = i
