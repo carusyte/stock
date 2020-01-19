@@ -445,6 +445,12 @@ func thsIndustry(stock *model.Stock) (ok, retry bool) {
 	log.Debugf("%s returns: \n %s", url, doc.Text())
 
 	if len(doc.Find(`#fieldstatus div.bd.pr div.field_wraper p`).Text()) == 0 {
+		text := doc.Find(`body div.wrapper div.header div.bd.clear div.code.fl div:nth-child(2) h1`).Text()
+		text = strings.TrimSpace(text)
+		if text == stock.Code {
+			log.Warnf("[%s, %s] no industry info", stock.Code, stock.Name)
+			return true, false
+		}
 		log.Debugf("[%s,%s] industry info not detected, retrying...", stock.Code, stock.Name)
 		return false, true
 	}

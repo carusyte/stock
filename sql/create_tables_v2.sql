@@ -1,5 +1,7 @@
 CREATE DATABASE IF NOT EXISTS `secu` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */;
 
+USE `secu`;
+
 CREATE TABLE `basics` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
   `name` varchar(10) DEFAULT NULL COMMENT '名称',

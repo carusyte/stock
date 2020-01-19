@@ -623,15 +623,15 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		switch klt {
 		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
 			panic("validation data is not supported yet.")
-			switch conf.Args.DataSource.KlineValidateSource {
-			case conf.TENCENT:
-				// _, suc = klineTc(stk, klt, true)
-			default:
-				log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
-			}
-			if !suc {
-				fail = true
-			}
+			// switch conf.Args.DataSource.KlineValidateSource {
+			// case conf.TENCENT:
+			// 	// _, suc = klineTc(stk, klt, true)
+			// default:
+			// 	log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+			// }
+			// if !suc {
+			// 	fail = true
+			// }
 		default:
 			kltnv = append(kltnv, klt)
 		}
