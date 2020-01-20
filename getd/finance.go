@@ -927,12 +927,6 @@ func organize(fins []*model.Finance) []*model.Finance {
 			break
 		}
 
-		d, t := util.TimeStr()
-		f.Udate.Valid = true
-		f.Utime.Valid = true
-		f.Udate.String = d
-		f.Utime.String = t
-
 		y := f.Year[:4]
 		py, e := strconv.ParseInt(y, 10, 32)
 		util.CheckErr(e, "unable to parse year\n"+fmt.Sprintf("%+v", f))
