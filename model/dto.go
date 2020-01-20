@@ -383,12 +383,14 @@ type Finance struct {
 	Utime sql.NullString
 }
 
+//FinReport represents the finance report page data
 type FinReport struct {
 	Code          string
 	Items         []*Finance
 	UnmappedField map[string]int
 }
 
+//SetCode sets the stock code in this financial report and every item within.
 func (fin *FinReport) SetCode(code string) {
 	fin.Code = code
 	for _, f := range fin.Items {
@@ -396,6 +398,7 @@ func (fin *FinReport) SetCode(code string) {
 	}
 }
 
+//UnmarshalJSON unmarshals JSON data
 func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	if fin.UnmappedField == nil {
 		fin.UnmappedField = make(map[string]int)
@@ -493,8 +496,7 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		if i == 0 {
 			//parse year
 			for _, iy := range r.([]interface{}) {
-				fi := &Finance{}
-				fi.Year = iy.(string)
+				fi := &Finance{Year: iy.(string)}
 				fin.Items = append(fin.Items, fi)
 			}
 		} else {

@@ -622,7 +622,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	for _, klt := range kltype {
 		switch klt {
 		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
-			panic("validation data is not supported yet.")
+			log.Warnf("Validation data is not supported yet: %s", klt)
 			// switch conf.Args.DataSource.KlineValidateSource {
 			// case conf.TENCENT:
 			// 	// _, suc = klineTc(stk, klt, true)
