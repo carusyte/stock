@@ -17,6 +17,7 @@ import (
 	"github.com/carusyte/roprox/data"
 	"github.com/carusyte/roprox/types"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/ssgreg/repeat"
 )
 
@@ -24,8 +25,6 @@ var (
 	agentPool []string
 	uaLock    = sync.RWMutex{}
 )
-
-const DateTimeFormat = "2006-01-02 15:04:05"
 
 //PickUserAgent picks a user agent string from the pool randomly.
 //if the pool is not populated, it will trigger the initialization process
@@ -42,7 +41,7 @@ func PickUserAgent() (ua string, e error) {
 	refresh := false
 	if len(agents) != 0 {
 		var latest time.Time
-		latest, e = time.Parse(DateTimeFormat, agents[0].UpdatedAt)
+		latest, e = time.Parse(global.DateTimeFormat, agents[0].UpdatedAt)
 		if e != nil {
 			return
 		}
@@ -214,7 +213,7 @@ func readCSV(src string) (agents []*types.UserAgent, err error) {
 				HardWareType:         ln[25],
 				FirstSeenAt:          ln[35],
 				LastSeenAt:           ln[36],
-				UpdatedAt:            time.Now().Format(DateTimeFormat),
+				UpdatedAt:            time.Now().Format(global.DateTimeFormat),
 			})
 		}
 		break
@@ -235,7 +234,7 @@ func downloadFile(filepath string, url string) (err error) {
 	var resp *http.Response
 	op := func(c int) error {
 		resp, err = http.Get(url)
-		return err
+		return repeat.HintTemporary(err)
 	}
 	err = repeat.Repeat(
 		repeat.FnWithCounter(op),

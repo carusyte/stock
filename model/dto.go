@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -330,6 +331,7 @@ func (x *Xdxr) String() string {
 	return toJSONString(x)
 }
 
+//Finance represents the finance report for a given stock
 type Finance struct {
 	Code string
 	Year string
@@ -341,12 +343,12 @@ type Finance struct {
 	Np sql.NullFloat64
 	//Net Profit Growth Rate Year-on-Year 净利润同比增长率
 	NpYoy sql.NullFloat64 `db:"np_yoy"`
-	//Net Profit Ring Growth 净利润环比增长率
-	NpRg sql.NullFloat64 `db:"np_rg"`
 	//Net Profit After Deduction of Non-profits 扣除非经常性损益后的净利润
 	NpAdn sql.NullFloat64 `db:"np_adn"`
 	//Net Profit After Deduction of Non-profits Growth Rate Year-on-Year 扣非净利润同比增长率
 	NpAdnYoy sql.NullFloat64 `db:"np_adn_yoy"`
+	//BusiCycle Business Cycle 营业周期(天)
+	BusiCycle sql.NullFloat64 `db:"busi_cycle"`
 	//Gross Revenue (1/10 Billion) 营业总收入（亿）
 	Gr sql.NullFloat64
 	//Gross Revenue Growth Rate Year-on-Year 营业总收入同比增长率
@@ -365,7 +367,7 @@ type Finance struct {
 	Crps sql.NullFloat64
 	//Undistributed Profit Per Share 每股未分配利润
 	Udpps sql.NullFloat64
-	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比���������������������长率
+	// UDPPS Growth Rate Year-on-Year 每股未分配利润同比增长率
 	UdppsYoy sql.NullFloat64 `db:"udpps_yoy"`
 	//Operational Cash Flow Per Share 每股经营现金流
 	Ocfps sql.NullFloat64
@@ -377,6 +379,18 @@ type Finance struct {
 	Npm sql.NullFloat64
 	//Inventory Turnover Ratio 存货周转率
 	Itr sql.NullFloat64
+	//InvTurnoverDays inventory turnover in days 存货周转天数(天)
+	InvTurnoverDays sql.NullFloat64 `db:"inv_turnover_days"`
+	//ArTurnoverDays Accounts Receivable Turnover in Days 应收账款周转天数(天)
+	ArTurnoverDays sql.NullFloat64 `db:"ar_turnover_days"`
+	//CurRatio Current Ratio 流动比率
+	CurRatio sql.NullFloat64 `db:"cur_ratio"`
+	//QuickRatio 速动比率
+	QuickRatio sql.NullFloat64 `db:"quick_ratio"`
+	//ConsQuickRatio Conservative Quick Ratio 保守速动比率
+	ConsQuickRatio sql.NullFloat64 `db:"cons_quick_ratio"`
+	//EquityRatio 产权比率
+	EquityRatio sql.NullFloat64 `db:"equity_ratio"`
 	//最后更新日期
 	Udate sql.NullString
 	//最后更新时间
@@ -407,8 +421,9 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	json.Unmarshal(b, &f)
 	m := f.(map[string]interface{})
 	titles := m["title"].([]interface{})
-	iEps, iNp, iNpYoy, iNpRg, iNpAdn, iNpAdnYoy, iGr, iGrYoy, iNavps, iRoe, iRoeDlt, iAlr, iCrps, iUdpps, iOcfps,
-		iGpm, iNpm, iItr := -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+	iEps, iNp, iNpYoy, iNpAdn, iNpAdnYoy, iBusiCycle, iGr, iGrYoy, iNavps, iRoe,
+		iRoeDlt, iAlr, iCrps, iUdpps, iOcfps, iGpm, iNpm, iItr, iItd, iAtd, iCr, iQr, iCqr, iEr :=
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 	mNp, mNpAdn, mGr := .1, .1, .1
 	for i, t := range titles {
 		var v string
@@ -432,10 +447,6 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "净利润同比增长率 %":
 		case "净利润同比增长率":
 			iNpYoy = i
-		case "净利润环比增长率 %":
-			fallthrough
-		case "净利润环比增长率":
-			iNpRg = i
 		case "扣非净利润 万元":
 			mNpAdn = 0.0001
 			fallthrough
@@ -444,6 +455,8 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "扣非净利润同比增长率 %":
 		case "扣非净利润同比增长率":
 			iNpAdnYoy = i
+		case "营业周期 天":
+			iBusiCycle = i
 		case "营业总收入 万元":
 			mGr = 0.0001
 			fallthrough
@@ -476,17 +489,29 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 		case "销售毛利率 %":
 		case "销售毛利率":
 			iGpm = i
-		case "存货周转率":
+		case "存货周转率", "存货周转率 次":
 			iItr = i
+		case "存货周转天数 天":
+			iItd = i
 		case "销售净利率 %":
 			fallthrough
 		case "销售净利率":
 			iNpm = i
+		case "应收账款周转天数 天":
+			iAtd = i
+		case "流动比率":
+			iCr = i
+		case "速动比率":
+			iQr = i
+		case "保守速动比率":
+			iCqr = i
+		case "产权比率":
+			iEr = i
 		case `科目\时间`:
 			//do nothing
 		default:
 			if _, ok := fin.UnmappedField[v]; !ok {
-				log.Printf("%s unidentified finance report item: %s", fin.Code, v)
+				log.Warnf("%s unidentified finance report item: %s", fin.Code, v)
 				fin.UnmappedField[v] = i
 			}
 		}
@@ -511,12 +536,12 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 						fi.Np = util.Str2FBilMod(s, mNp)
 					case iNpYoy:
 						fi.NpYoy = util.Pct2Fnull(s)
-					case iNpRg:
-						fi.NpRg = util.Pct2Fnull(s)
 					case iNpAdn:
 						fi.NpAdn = util.Str2FBilMod(s, mNpAdn)
 					case iNpAdnYoy:
 						fi.NpAdnYoy = util.Pct2Fnull(s)
+					case iBusiCycle:
+						fi.BusiCycle = util.Str2Fnull(s)
 					case iGr:
 						fi.Gr = util.Str2FBilMod(s, mGr)
 					case iGrYoy:
@@ -541,8 +566,20 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 						fi.Npm = util.Pct2Fnull(s)
 					case iItr:
 						fi.Itr = util.Str2Fnull(s)
+					case iItd:
+						fi.InvTurnoverDays = util.Str2Fnull(s)
+					case iAtd:
+						fi.ArTurnoverDays = util.Str2Fnull(s)
+					case iCr:
+						fi.CurRatio = util.Str2Fnull(s)
+					case iQr:
+						fi.QuickRatio = util.Str2Fnull(s)
+					case iCqr:
+						fi.ConsQuickRatio = util.Str2Fnull(s)
+					case iEr:
+						fi.EquityRatio = util.Str2Fnull(s)
 					default:
-						// log.Printf("%s unidentified row index %d, %+v", fin.Code, i, y)
+						log.Debugf("%s unidentified row index %d, value: %+v", fin.Code, i, y)
 						// do nothing
 					}
 				}
@@ -552,8 +589,8 @@ func (fin *FinReport) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-//TradeDataBase models the basic trading data such as OHLCV etc.
-type TradeDataBase struct {
+//TradeDataBasic models the basic trading data such as OHLCV etc.
+type TradeDataBasic struct {
 	Code          string
 	Date          string
 	Klid          int
@@ -576,7 +613,7 @@ type TradeDataBase struct {
 	Utime         sql.NullString
 }
 
-func (d *TradeDataBase) String() string {
+func (d *TradeDataBasic) String() string {
 	return toJSONString(d)
 }
 
@@ -690,7 +727,7 @@ type TradeData struct {
 	Code          string
 	Cycle         CYTP
 	Reinstatement Rtype
-	Base          []*TradeDataBase
+	Base          []*TradeDataBasic
 	LogRtn        []*TradeDataLogRtn
 	MovAvg        []*TradeDataMovAvg
 	MovAvgLogRtn  []*TradeDataMovAvgLogRtn
@@ -738,7 +775,7 @@ func (td *TradeData) Remove(positions ...int) {
 		}
 	}
 	if len(td.Base) > 0 {
-		var newArray []*TradeDataBase
+		var newArray []*TradeDataBasic
 		for i, d := range td.Base {
 			if _, ok := set[i]; !ok {
 				newArray = append(newArray, d)
@@ -779,7 +816,7 @@ func (td *TradeData) Remove(positions ...int) {
 //***Warning***: Calling Keep with empty array will remove all elements.
 func (td *TradeData) Keep(positions ...int) {
 	if len(positions) == 0 {
-		td.Base = make([]*TradeDataBase, 0, 16)
+		td.Base = make([]*TradeDataBasic, 0, 16)
 		td.MovAvg = make([]*TradeDataMovAvg, 0, 16)
 		td.MovAvgLogRtn = make([]*TradeDataMovAvgLogRtn, 0, 16)
 		td.LogRtn = make([]*TradeDataLogRtn, 0, 16)
@@ -793,7 +830,7 @@ func (td *TradeData) Keep(positions ...int) {
 		}
 	}
 	if len(td.Base) > 0 {
-		var newArray []*TradeDataBase
+		var newArray []*TradeDataBasic
 		for i, d := range td.Base {
 			if _, ok := set[i]; ok {
 				newArray = append(newArray, d)
@@ -1284,6 +1321,169 @@ type KDJVStat struct {
 	Scnt, Bcnt                                  int
 }
 
+//XQKline represents kline data from xueqiu.com
+type XQKline struct {
+	Code  string
+	Data  map[string]*TradeDataBasic
+	Dates []string
+}
+
+//creates a map for column name -> value
+func (x *XQKline) c2vMap() map[string]interface{} {
+	return map[string]interface{}{
+		"timestamp": nil,
+		"volume":    nil, //成交量
+		"open":      nil,
+		"high":      nil,
+		"low":       nil,
+		"close":     nil,
+		// "chg":          nil, //涨跌额
+		// "percent":      nil, //涨跌幅
+		"turnoverrate": nil, //换手率
+		"amount":       nil, //成交额
+	}
+}
+
+//converts the map to TradeDataBasic structure
+func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) {
+	var sec int64
+	var ok bool
+	var v float64
+	if sec, ok = m["timestamp"].(int64); !ok {
+		return b, errors.Errorf("invalid format of 'timestamp': %+v", m)
+	}
+	b = &TradeDataBasic{
+		Code: x.Code,
+		Date: time.Unix(sec, 0).Format(global.DateFormat),
+	}
+	if v, ok = m["volume"].(float64); ok {
+		b.Volume = sql.NullFloat64{Float64: v, Valid: true}
+	} else {
+		log.Warnf("unable to parse volume for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["open"].(float64); ok {
+		b.Open = v
+	} else {
+		log.Warnf("unable to parse open for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["high"].(float64); ok {
+		b.High = v
+	} else {
+		log.Warnf("unable to parse high for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["low"].(float64); ok {
+		b.Low = v
+	} else {
+		log.Warnf("unable to parse low for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["close"].(float64); ok {
+		b.Close = v
+	} else {
+		log.Warnf("unable to parse close for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["turnoverrate"].(float64); ok {
+		b.Xrate = sql.NullFloat64{Float64: v, Valid: true}
+	} else {
+		log.Warnf("unable to parse turnoverrate for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if v, ok = m["amount"].(float64); ok {
+		b.Amount = sql.NullFloat64{Float64: v, Valid: true}
+	} else {
+		log.Warnf("unable to parse amount for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	return
+}
+
+//GetData returns the underlying TradeDataBasic slice in specified date order
+func (x *XQKline) GetData(desc bool) (data []*TradeDataBasic) {
+	if len(x.Dates) == 0 || x.Data == nil {
+		return
+	}
+	var ss sort.StringSlice
+	for _, d := range x.Dates {
+		ss = append(ss, d)
+	}
+	if desc {
+		sort.Sort(sort.Reverse(ss))
+	} else {
+		sort.Sort(ss)
+	}
+	for _, d := range ss {
+		data = append(data, x.Data[d])
+	}
+	return
+}
+
+//UnmarshalJSON unmarshals JSON payload
+func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
+	var (
+		s  []interface{}
+		f  interface{}
+		m  map[string]interface{}
+		ok bool
+	)
+	e = json.Unmarshal(b, &f)
+	if e != nil {
+		return errors.Wrap(e, "failed to unmarshal json data")
+	}
+	if m, ok = f.(map[string]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
+	}
+	ecode := m["error_code"].(int)
+	if ecode != 0 {
+		desc := m["error_description"].(string)
+		return errors.Errorf("error_code from remote: %s, error_description: %s", ecode, desc)
+	}
+	if m, ok = m["data"].(map[string]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast 'data' to map: %+v", m)
+	}
+	c2v := x.c2vMap()
+	i2c := make(map[int]string)
+	var cols []string
+	if cols, ok = m["column"].([]string); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast 'column' to []string: %+v", m)
+	}
+	for i, c := range cols {
+		if _, ok = c2v[c]; ok {
+			i2c[i] = c
+		}
+	}
+	if s, ok = m["item"].([]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast 'item' to []interface{}: %+v", m)
+	}
+	if len(s) == 0 {
+		log.Debugf("no item data for %s", x.Code)
+		return
+	}
+	var vals []interface{}
+	if x.Data == nil {
+		x.Data = make(map[string]*TradeDataBasic)
+	}
+	for _, items := range s {
+		if vals, ok = items.([]interface{}); !ok {
+			return errors.Errorf("unrecognized data structure, cant't cast 'item' element to []interface{}: %+v", m)
+		}
+		c2v = x.c2vMap()
+		for i, v := range vals {
+			if c, ok := i2c[i]; ok {
+				c2v[c] = v
+			}
+		}
+		var base *TradeDataBasic
+		base, e = x.m2base(c2v)
+		if e != nil {
+			return
+		}
+		//omit duplicates
+		if _, ok = x.Data[base.Date]; !ok {
+			x.Dates = append(x.Dates, base.Date)
+			x.Data[base.Date] = base
+		}
+	}
+	return nil
+}
+
+//XQJson represents index data from xueqiu.com
 type XQJson struct {
 	Stock struct {
 		Symbol string
@@ -1298,6 +1498,7 @@ type XQJson struct {
 	}
 }
 
+//Save data to database.
 func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 	if len(xqj.Chartlist) > 0 {
 		valueStrings := make([]string, 0, len(xqj.Chartlist))
@@ -1308,7 +1509,7 @@ func (xqj *XQJson) Save(dbmap *gorp.DbMap, sklid int, table string) {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, round(?,3), ?, ?)")
 			valueArgs = append(valueArgs, xqj.Stock)
 			valueArgs = append(valueArgs,
-				time.Unix(q.Timestamp/int64(time.Microsecond), 0).Format("2006-01-02"))
+				time.Unix(q.Timestamp/int64(time.Microsecond), 0).Format(global.DateFormat))
 			valueArgs = append(valueArgs, klid)
 			valueArgs = append(valueArgs, q.Open)
 			valueArgs = append(valueArgs, q.High)
@@ -1423,7 +1624,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	qj.TradeData = new(TradeData)
 	for i, pd := range ps {
 		pa := pd.([]interface{})
-		q := new(TradeDataBase)
+		q := new(TradeDataBasic)
 		q.Code = qj.Code
 		q.Date = pa[0].(string)
 		q.Open, e = strconv.ParseFloat(pa[1].(string), 64)

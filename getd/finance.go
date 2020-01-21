@@ -281,7 +281,7 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 	for _, x := range xdxrs {
 		if x.Divi.Valid && x.Divi.Float64 > 0 {
 			price := math.NaN()
-			date := time.Now().Format("2006-01-02")
+			date := time.Now().Format(global.DateFormat)
 			// use normal price at reg_date or impl_date, if not found, use the day before that day
 			if x.RegDate.Valid {
 				date = x.RegDate.String
@@ -866,13 +866,14 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		ud, ut := util.TimeStr()
 		for _, f := range fins {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?)")
+				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, f.Code)
 			valueArgs = append(valueArgs, f.Dar)
 			valueArgs = append(valueArgs, f.Crps)
 			valueArgs = append(valueArgs, f.Eps)
 			valueArgs = append(valueArgs, f.EpsYoy)
 			valueArgs = append(valueArgs, f.Gpm)
+			valueArgs = append(valueArgs, f.BusiCycle)
 			valueArgs = append(valueArgs, f.Gr)
 			valueArgs = append(valueArgs, f.GrYoy)
 			valueArgs = append(valueArgs, f.Itr)
@@ -881,7 +882,6 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			valueArgs = append(valueArgs, f.NpAdn)
 			valueArgs = append(valueArgs, f.NpAdnYoy)
 			valueArgs = append(valueArgs, f.Npm)
-			valueArgs = append(valueArgs, f.NpRg)
 			valueArgs = append(valueArgs, f.NpYoy)
 			valueArgs = append(valueArgs, f.Ocfps)
 			valueArgs = append(valueArgs, f.OcfpsYoy)
@@ -891,19 +891,30 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			valueArgs = append(valueArgs, f.Udpps)
 			valueArgs = append(valueArgs, f.UdppsYoy)
 			valueArgs = append(valueArgs, f.Year)
+			valueArgs = append(valueArgs, f.InvTurnoverDays)
+			valueArgs = append(valueArgs, f.ArTurnoverDays)
+			valueArgs = append(valueArgs, f.CurRatio)
+			valueArgs = append(valueArgs, f.QuickRatio)
+			valueArgs = append(valueArgs, f.ConsQuickRatio)
+			valueArgs = append(valueArgs, f.EquityRatio)
 			valueArgs = append(valueArgs, ud)
 			valueArgs = append(valueArgs, ut)
 		}
-		stmt := fmt.Sprintf("INSERT INTO finance (code,dar,crps,eps,eps_yoy,gpm,gr,gr_yoy,itr,navps,np,np_adn,"+
-			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,udate,utime) VALUES"+
+		stmt := fmt.Sprintf("INSERT INTO finance (code,dar,crps,eps,eps_yoy,gpm,busi_cycle,gr,gr_yoy,itr,navps,np,np_adn,"+
+			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,"+
+			"inv_turnover_days,ar_turnover_days,cur_ratio,quick_ratio,cons_quick_ratio,equity_ratio,udate,utime) VALUES"+
 			" %s"+
 			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
-			"(eps_yoy),gpm=values(gpm),"+
+			"(eps_yoy),gpm=values(gpm),busi_cycle=values(busi_cycle)"+
 			"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
 			"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
 			"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
 			"roe_yoy=values(roe_yoy),roe_dlt=values(roe_dlt),"+
-			"udpps=values(udpps),udpps_yoy=values(udpps_yoy),udate=values(udate),utime=values(utime)",
+			"udpps=values(udpps),udpps_yoy=values(udpps_yoy),"+
+			"inv_turnover_days=values(inv_turnover_days),ar_turnover_days=values(ar_turnover_days),"+
+			"cur_ratio=values(cur_ratio),quick_ratio=values(quick_ratio),"+
+			"cons_quick_ratio=values(cons_quick_ratio),equity_ratio=values(equity_ratio),"+
+			"udate=values(udate),utime=values(utime)",
 			strings.Join(valueStrings, ","))
 		_, err := global.Dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, code+": failed to bulk update finance")

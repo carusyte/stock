@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 )
@@ -84,11 +85,11 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 
 	sklid = -1
 	if incr {
-		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) // plus one for varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) // plus one for varate calculation
 		if ldy != nil {
 			sDate = ldy.Date
 			sklid = ldy.Klid
-			sTime, e := time.Parse("2006-01-02", sDate)
+			sTime, e := time.Parse(global.DateFormat, sDate)
 			if e != nil {
 				log.Errorf("failed to parse date: %+v", ldy)
 				return
@@ -115,7 +116,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 	// [6]: number of records to return
 	// [7]: for forward reinstatement, use 'qfq', for backward reinstatement, use 'hfq'
 	urlt := `http://web.ifzq.gtimg.cn/appstock/app/%[1]s?param=%[2]s,%[3]s,%[4]s,%[5]s,%[6]d,%[7]s`
-	eDate = time.Now().Format("2006-01-02")
+	eDate = time.Now().Format(global.DateFormat)
 	action := ""
 
 	trdat.Code = code
@@ -160,11 +161,11 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 		}
 		// need to fetch more
 		first := qj.TradeData.Base[0]
-		iDate, e := time.Parse("2006-01-02", first.Date)
+		iDate, e := time.Parse(global.DateFormat, first.Date)
 		if e != nil {
 			log.Printf("invalid date format in %+v", first)
 		}
-		eDate = iDate.AddDate(0, 0, -1).Format("2006-01-02")
+		eDate = iDate.AddDate(0, 0, -1).Format(global.DateFormat)
 	}
 	//reverse, into ascending order
 	for i, j := 0, len(trdat.Base)-1; i < j; i, j = i+1, j-1 {

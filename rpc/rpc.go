@@ -9,15 +9,16 @@ import (
 
 	"github.com/bitly/go-hostpool"
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 
 	"github.com/pkg/errors"
-	logr "github.com/sirupsen/logrus"
 )
 
-	// "github.com/felixge/tcpkeepalive"
+// "github.com/felixge/tcpkeepalive"
 
 var (
-	hp = hostpool.New(conf.Args.RPCServers)
+	hp  = hostpool.New(conf.Args.RPCServers)
+	log = global.Log
 	//lock                   = sync.RWMutex{}
 )
 
@@ -30,15 +31,15 @@ func Pub(service string, request interface{}, reply interface{}, retry int) (e [
 		go func(wg *sync.WaitGroup, cherr chan error) {
 			defer wg.Done()
 			for i := 0; i < retry; i++ {
-				logr.Debugf("rpc call start, server: %s, service: %s", srv, service)
+				log.Debugf("rpc call start, server: %s, service: %s", srv, service)
 				err := tryRpcCall(srv, service, request, reply)
 				if err == nil {
 					return
 				} else if i+1 < retry {
-					logr.Warnf("retrying to call rpc service: %d\n, %s", i+1, fmt.Sprintln(err))
+					log.Warnf("retrying to call rpc service: %d\n, %s", i+1, fmt.Sprintln(err))
 					time.Sleep(time.Millisecond * time.Duration(500+500*i))
 				} else {
-					logr.Errorf("failed to call rpc service\n%s", fmt.Sprintln(err))
+					log.Errorf("failed to call rpc service\n%s", fmt.Sprintln(err))
 					cherr <- err
 				}
 			}
@@ -56,17 +57,17 @@ func Call(service string, request interface{}, reply interface{}, retry int) (e 
 	for i := 0; i < retry; i++ {
 		hpr := hp.Get()
 		serverAddress := hpr.Host()
-		logr.Debugf("rpc call start, server: %s, service: %s", serverAddress, service)
+		log.Debugf("rpc call start, server: %s, service: %s", serverAddress, service)
 		err := tryRpcCall(serverAddress, service, request, reply)
 		if err == nil {
 			hpr.Mark(nil)
 			return nil
 		} else if i+1 < retry {
 			hpr.Mark(err)
-			logr.Warnf("retrying to call rpc service: %d\n, %s", i+1, fmt.Sprintln(err))
+			log.Warnf("retrying to call rpc service: %d\n, %s", i+1, fmt.Sprintln(err))
 		} else {
 			hpr.Mark(err)
-			logr.Errorf("failed to call rpc service\n%s", fmt.Sprintln(err))
+			log.Errorf("failed to call rpc service\n%s", fmt.Sprintln(err))
 			return err
 		}
 	}
@@ -84,7 +85,7 @@ func tryRpcCall(serverAddress, service string, request interface{}, reply interf
 	// if err != nil {
 	// 	return errors.Wrapf(err, "failed to set tcp keep-alive for connection to %s", serverAddress)
 	// }
-	
+
 	client := rpc.NewClient(conn)
 	defer client.Close()
 	err = client.Call(service, request, reply)
@@ -110,9 +111,9 @@ func Available(filter bool) (c int, healthy float64) {
 			c++
 			i++
 		} else {
-			logr.Warnf("rpc server %s is inaccessible", srv)
+			log.Warnf("rpc server %s is inaccessible", srv)
 			if filter {
-				logr.Printf("removing rpc server %s from the host pool", srv)
+				log.Printf("removing rpc server %s from the host pool", srv)
 				if i+1 < len(srvs) {
 					srvs = append(srvs[:i], srvs[i+1:]...)
 				} else {

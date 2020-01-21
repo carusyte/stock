@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/errors"
@@ -117,7 +118,7 @@ func doGetIndex(idx *model.IdxLst, wg *sync.WaitGroup, chidx chan *model.IdxLst)
 // 		panic("Unsupported period: " + tab)
 // 	}
 // 	// check history from db
-// 	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5+1) // plus one for varate calculation
+// 	lq := getLatestTradeDataBasic(code, cycle, model.Forward, 5+1) // plus one for varate calculation
 // 	if lq != nil {
 // 		sklid = lq.Klid
 // 		ldate = lq.Date
@@ -172,9 +173,9 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 		panic("Unsupported period: " + tab)
 	}
 	// check history from db
-	lq := getLatestTradeDataBase(code, cycle, model.Forward, 5)
+	lq := getLatestTradeDataBasic(code, cycle, model.Forward, 5)
 	if lq != nil {
-		tm, e := time.Parse("2006-01-02", lq.Date)
+		tm, e := time.Parse(global.DateFormat, lq.Date)
 		util.CheckErr(e, fmt.Sprintf("%s[%s] failed to parse date", code, tab))
 		bg = fmt.Sprintf("&begin=%d", tm.UnixNano()/int64(time.Millisecond))
 		sklid = lq.Klid

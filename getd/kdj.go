@@ -87,7 +87,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			case model.INDICATOR_MONTH:
 				sql = "select * from kline_m_f where code = ? and date < ? order by klid"
 			}
-			var oqs []*model.TradeDataBase
+			var oqs []*model.TradeDataBasic
 			_, e = dbmap.Select(&oqs, sql, code, toDate)
 			if e != nil {
 				if "sql: no rows in result set" == e.Error() {
@@ -123,7 +123,7 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			toDate+"]",
 			false)
 		nq := ToOne(qsdy.Base[1:], qsdy.Base[0].Close, -1)
-		nidcs := indc.DeftKDJ([]*model.TradeDataBase{nq})
+		nidcs := indc.DeftKDJ([]*model.TradeDataBasic{nq})
 		return nidcs
 	}
 	return

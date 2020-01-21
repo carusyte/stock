@@ -20,7 +20,7 @@ import (
 
 var (
 	proxyPool map[string]bool
-	proxyList []Proxy
+	proxyList []*Proxy
 	luProxy   time.Time
 	pxLock    = sync.RWMutex{}
 )
@@ -67,13 +67,14 @@ func PickProxyDirect() (httpProxy string, e error) {
 }
 
 //PickProxy randomly chooses a proxy from database.
-func PickProxy() (proxy Proxy, e error) {
+//The queried proxy will be cached for conf.Args.Network.RotateProxyRefreshInterval
+func PickProxy() (proxy *Proxy, e error) {
 	pxLock.Lock()
 	defer pxLock.Unlock()
 	if len(proxyList) > 0 && time.Since(luProxy).Minutes() < conf.Args.Network.RotateProxyRefreshInterval {
 		return proxyList[rand.Intn(len(proxyList))], nil
 	}
-	proxyList = make([]Proxy, 0, 64)
+	proxyList = make([]*Proxy, 0, 64)
 	query := `
 		SELECT 
 			*
@@ -92,7 +93,7 @@ func PickProxy() (proxy Proxy, e error) {
 }
 
 //MarkProxyFailure increases failure counter for the specified proxy.
-func MarkProxyFailure(p Proxy) {
+func MarkProxyFailure(p *Proxy) {
 	_, e := global.Dbmap.Exec(`update proxy_list set fail = fail + 1 where host = ? and port = ?`, p.Host, p.Port)
 	if e != nil {
 		log.Printf("failed to increase fail counter for proxy %+v", p)

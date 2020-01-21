@@ -7,7 +7,7 @@ import (
 )
 
 //BIAS calculates BIAS Indicator for the given parameters
-func BIAS(src []*model.TradeDataBase, n1, n2, n3 int) []*model.Indicator {
+func BIAS(src []*model.TradeDataBasic, n1, n2, n3 int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	ma1 := make([]float64, len(src))
 	ma2 := make([]float64, len(src))
@@ -39,7 +39,7 @@ func BIAS(src []*model.TradeDataBase, n1, n2, n3 int) []*model.Indicator {
 	return r
 }
 
-func calcMA(src []*model.TradeDataBase, curIdx, n int) float64 {
+func calcMA(src []*model.TradeDataBasic, curIdx, n int) float64 {
 	if curIdx >= len(src) {
 		log.Panicf("invalid curIdx:%d, maximum:%d", curIdx, len(src)-1)
 	}
@@ -51,6 +51,6 @@ func calcMA(src []*model.TradeDataBase, curIdx, n int) float64 {
 }
 
 //DeftBIAS calculates BIAS indicator using default parameters (6,12,24)
-func DeftBIAS(src []*model.TradeDataBase) []*model.Indicator {
+func DeftBIAS(src []*model.TradeDataBasic) []*model.Indicator {
 	return BIAS(src, 6, 12, 24)
 }

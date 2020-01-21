@@ -2,11 +2,13 @@ package util
 
 import (
 	"database/sql"
+	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
-	"fmt"
-	"math"
+
+	"github.com/carusyte/stock/global"
 	"github.com/pkg/errors"
 )
 
@@ -127,8 +129,8 @@ func Str2FBilMod(s string, mod float64) (f sql.NullFloat64) {
 
 func TimeStr() (d, t string) {
 	now := time.Now()
-	d = now.Format("2006-01-02")
-	t = now.Format("15:04:05")
+	d = now.Format(global.DateFormat)
+	t = now.Format(global.TimeFormat)
 	return
 }
 
@@ -191,7 +193,7 @@ func Devi(a, b []float64) (float64, error) {
 }
 
 func DaysSince(then string) (float64, error) {
-	t, err := time.Parse("2006-01-02", then)
+	t, err := time.Parse(global.DateFormat, then)
 	if err != nil {
 		return 0, err
 	} else {
@@ -221,4 +223,3 @@ func DiffStrings(str1 []string, str2 []string) (equal bool, dif1, dif2 []string)
 	}
 	return
 }
-

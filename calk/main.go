@@ -40,8 +40,8 @@ func init() {
 func main() {
 	start := time.Now()
 	defer func() {
-		ss := start.Format("2006-01-02 15:04:05")
-		end := time.Now().Format("2006-01-02 15:04:05")
+		ss := start.Format(global.DateTimeFormat)
+		end := time.Now().Format(global.DateTimeFormat)
 		dur := time.Since(start).Seconds()
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
 			" on duplicate key update start=?, end=?, dur=?", "CALK_TOTAL", ss, end, dur, ss, end, dur)
@@ -112,8 +112,8 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 	start := time.Now()
 	defer func() {
 		wg.Done()
-		ss := start.Format("2006-01-02 15:04:05")
-		end := time.Now().Format("2006-01-02 15:04:05")
+		ss := start.Format(global.DateTimeFormat)
+		end := time.Now().Format(global.DateTimeFormat)
 		dur := time.Since(start).Seconds()
 		dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?)"+
 			" on duplicate key update start=?, end=?, dur=?", s.Code, ss, end, dur, ss, end, dur)
@@ -140,7 +140,7 @@ func caljob(wg *sync.WaitGroup, s model.Stock) {
 		q[i] = &k.Quote
 		t, err := time.Parse("2006-01-02T00:00:00-07:00", k.Date)
 		checkErr(err, "failed to parse date from kline_d "+k.Date)
-		tw, err := time.Parse("2006-01-02", klw.Date)
+		tw, err := time.Parse(global.DateFormat, klw.Date)
 		checkErr(err, "failed to parse date in KlineW "+klw.Date)
 
 		if (int(t.Weekday()) <= lastWeekDay || t.Add(-1*time.Duration(7)*time.Hour*24).After(tw)) &&

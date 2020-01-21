@@ -40,7 +40,7 @@ func (g *GCSClient) Get() (c *storage.Client, e error) {
 		if g.useProxy {
 			// gcs api doesn't support proxy setting very well for now,
 			// setting the environment variables as a workaround
-			proxy := conf.Args.Network.MasterHttpProxy
+			proxy := conf.Args.Network.MasterHTTPProxy
 			if v, ok := os.LookupEnv("http_proxy"); ok {
 				if v != proxy {
 					g.origHTTPProxy = v

@@ -28,6 +28,7 @@ const (
 
 //Data sources
 const (
+	XQ           string = "xq"
 	THS          string = "ths"
 	THS_CDP      string = "ths.cdp"
 	TENCENT      string = "tencent"
@@ -59,12 +60,14 @@ type Arguments struct {
 	}
 	Network struct {
 		MasterProxyAddr            string  `mapstructure:"master_proxy_addr"`
-		MasterHttpProxy            string  `mapstructure:"master_http_proxy"`
+		MasterHTTPProxy            string  `mapstructure:"master_http_proxy"`
 		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`
 		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
+		DefaultUserAgent           string  `mapstructure:"default_user_agent"`
 		UserAgents                 string  `mapstructure:"user_agents"`
 		UserAgentLifespan          int     `mapstructure:"user_agent_lifespan"`
+		HTTPTimeout                int     `mapstructure:"http_timeout"`
 	}
 	GCS struct {
 		Connection  int    `mapstructure:"connection"`
@@ -198,6 +201,7 @@ func setDefaults() {
 	Args.CPUUsageThreshold = 40
 	Args.Kdjv.SampleSizeMin = 5
 	Args.Kdjv.StatsRetroSpan = 600
+	Args.Network.HTTPTimeout = 60
 	Args.DataSource.Kline = THS
 	Args.DataSource.Index = TENCENT
 	Args.DataSource.Industry = TENCENT_CSRC

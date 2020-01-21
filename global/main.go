@@ -27,6 +27,9 @@ const (
 
 	MAX_CONCURRENCY = 16
 	JOB_CAPACITY    = 512
+	DateFormat      = "2006-01-02"
+	TimeFormat      = "15:04:05"
+	DateTimeFormat  = "2006-01-02 15:04:05"
 )
 
 func init() {
@@ -61,7 +64,7 @@ func init() {
 	}
 
 	Log.SetFormatter(&prefixed.TextFormatter{
-		TimestampFormat: "2006-01-02 15:04:05",
+		TimestampFormat: DateTimeFormat,
 		FullTimestamp:   true,
 		ForceFormatting: true,
 		// ForceColors:     true,

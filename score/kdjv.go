@@ -13,13 +13,13 @@ import (
 	rm "github.com/carusyte/rima/model"
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/getd"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/rpc"
 	"github.com/carusyte/stock/util"
 	"github.com/montanaflynn/stats"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	logr "github.com/sirupsen/logrus"
 )
 
 // Medium to Long term model.
@@ -124,7 +124,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 		pl = int(float64(runtime.NumCPU()) * 0.7)
 	case conf.AUTO:
 		rs, h := rpc.Available(true)
-		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
+		log.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
 			pl = rs
 		} else {
@@ -133,7 +133,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	default:
 		pl = conf.Args.Concurrency
 	}
-	logr.Debugf("Parallel Level: %d", pl)
+	log.Debugf("Parallel Level: %d", pl)
 	var wg sync.WaitGroup
 	chitm := make(chan *Item, len(items))
 	for i := 0; i < pl; i++ {
@@ -183,8 +183,8 @@ func (k *KdjV) RenewStats(useRaw bool, code ...string) {
 		codes = append(codes, idx.Code)
 	}
 	pl = getParallelLevel()
-	logr.Debugf("Parallel Level: %d", pl)
-	logr.Debugf("#Stocks: %d", len(codes))
+	log.Debugf("Parallel Level: %d", pl)
+	log.Debugf("#Stocks: %d", len(codes))
 	chcde := make(chan string, pl)
 	chkps := make(chan *model.KDJVStat, JobCapacity)
 	wgr.Add(1)
@@ -196,7 +196,7 @@ func (k *KdjV) RenewStats(useRaw bool, code ...string) {
 			if kps != nil {
 				saveKps(kps)
 			}
-			logr.Debugf("KDJ stats renew progress: %d/%d, %.2f%%",
+			log.Debugf("KDJ stats renew progress: %d/%d, %.2f%%",
 				c, len(codes), 100*float64(c)/float64(len(codes)))
 		}
 	}(&wgr)
@@ -220,7 +220,7 @@ func getParallelLevel() (pl int) {
 		pl = int(float64(runtime.NumCPU()) * 0.7)
 	case conf.AUTO:
 		rs, h := rpc.Available(true)
-		logr.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
+		log.Debugf("available rpc servers: %d, %.2f%%", rs, h*100)
 		if rs > 0 {
 			pl = int(float64(conf.Args.Concurrency) * h)
 		} else {
@@ -234,19 +234,19 @@ func getParallelLevel() (pl int) {
 
 func (k *KdjV) SyncKdjFeatDat() bool {
 	st := time.Now()
-	logr.Debug("Getting all kdj feature data...")
+	log.Debug("Getting all kdj feature data...")
 	fdMap, count := getd.GetAllKdjFeatDat()
 	var suc bool
 	//e := util.Call(global.RPC_SERVER_ADDRESS, "IndcScorer.InitKdjFeatDat", fdMap, &suc)
 	es := rpc.Pub("DataSync.SyncKdjFd", fdMap, &suc, 3)
 	if es != nil && len(es) > 0 {
-		logr.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
+		log.Debugf("%d KDJ feature data synchronization failed. time: %.2f", count, time.Since(st).Seconds())
 		for _, e := range es {
-			logr.Error(e)
+			log.Error(e)
 		}
 		return false
 	} else {
-		logr.Debugf("%d KDJ feature data has been publish to remote rpc server. time: %.2f",
+		log.Debugf("%d KDJ feature data has been publish to remote rpc server. time: %.2f",
 			count, time.Since(st).Seconds())
 		return true
 	}
@@ -285,7 +285,7 @@ func saveKps(kps ...*model.KDJVStat) {
 			strings.Join(valueStrings, ","))
 		_, err := dbmap.Exec(stmt, valueArgs...)
 		util.CheckErr(err, "failed to bulk update kdjv_stats")
-		logr.Debugf("%d kdjv_stats updated", len(kps))
+		log.Debugf("%d kdjv_stats updated", len(kps))
 	}
 }
 
@@ -325,7 +325,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	}
 	if e != nil {
-		logr.Warn(e)
+		log.Warn(e)
 		return
 	}
 	sort.Float64s(buys)
@@ -387,7 +387,7 @@ func renewKdjStats(code string, useRaw bool, wg *sync.WaitGroup, chcde chan stri
 	} else {
 		kps.Dod = 100
 	}
-	logr.Debugf("%s kdjv DOD: %.2f, time: %.2f", code, kps.Dod, time.Since(start).Seconds())
+	log.Debugf("%s kdjv DOD: %.2f, time: %.2f", code, kps.Dod, time.Since(start).Seconds())
 	chkps <- kps
 }
 
@@ -395,23 +395,23 @@ func kdjScoresAuto(code string, klhist []*model.Quote, expvr, mxrt float64, mxho
 	buys, sells []float64, e error) {
 	ars, _ := rpc.Available(false)
 	if ars == 0 {
-		logr.Debugf("%s: no available rpc servers, use local power", code)
+		log.Debugf("%s: no available rpc servers, use local power", code)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 		return
 	}
 	cpu, e := util.CPUUsage()
 	if e != nil {
-		logr.Warnf("%s failed to get cpu usage: %+v", code, e)
+		log.Warnf("%s failed to get cpu usage: %+v", code, e)
 	}
 	if cpu < conf.Args.CPUUsageThreshold && e == nil {
-		logr.Debugf("%s current %%cpu: %.2f use local power", code, cpu)
+		log.Debugf("%s current %%cpu: %.2f use local power", code, cpu)
 		buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 	} else {
-		logr.Debugf("%s current %%cpu: %.2f using remote service", code, cpu)
+		log.Debugf("%s current %%cpu: %.2f using remote service", code, cpu)
 		buys, sells, e = kdjScoresRemote(code, klhist, expvr, mxrt, mxhold)
 		if e != nil {
 			//try one more time with local power
-			logr.Warnf("remote processing failed, retry with local power\n%+v", e)
+			log.Warnf("remote processing failed, retry with local power\n%+v", e)
 			buys, sells, e = kdjScoresLocal(code, klhist, expvr, mxrt, mxhold, useRaw)
 		}
 	}
@@ -423,31 +423,31 @@ func kdjScoresLocal(code string, klhist []*model.Quote, expvr, mxrt float64, mxh
 	st := time.Now()
 	buys = getKdjBuyScores(code, klhist, expvr, mxrt, mxhold, useRaw)
 	dur := time.Since(st).Seconds()
-	logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
+	log.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
 	st = time.Now()
 	sells = getKdjSellScores(code, klhist, expvr, mxrt, mxhold, useRaw)
 	dur = time.Since(st).Seconds()
-	logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
+	log.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
 	return
 }
 
 func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mxhold int) (
 	buys, sells []float64, e error) {
 	st := time.Now()
-	logr.Debugf("%s connecting rpc server for kdj score calculation...", code)
+	log.Debugf("%s connecting rpc server for kdj score calculation...", code)
 	_, buys, _, e = fetchKdjScores(getKdjBuySeries(code, klhist, expvr, mxrt, mxhold))
 	if e != nil {
 		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj buy scores.", code)
 	}
 	dur := time.Since(st).Seconds()
-	logr.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
+	log.Debugf("%s buy points: %d, time: %.2f, %.2f/p", code, len(buys), dur, dur/float64(len(buys)))
 	st = time.Now()
 	_, sells, _, e = fetchKdjScores(getKdjSellSeries(code, klhist, expvr, mxrt, mxhold))
 	if e != nil {
 		return buys, sells, errors.Wrapf(e, "%s failed to fetch kdj sell scores.", code)
 	}
 	dur = time.Since(st).Seconds()
-	logr.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
+	log.Debugf("%s sell points: %d, time: %.2f, %.2f/p", code, len(sells), dur, dur/float64(len(sells)))
 	return
 }
 
@@ -531,7 +531,7 @@ func getKdjBuySeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		i += tspan
 	}
-	logr.Debugf("%s kdj buy series: %d", code, len(s))
+	log.Debugf("%s kdj buy series: %d", code, len(s))
 	return s
 }
 
@@ -591,7 +591,7 @@ func getKdjSellSeries(code string, klhist []*model.Quote, expvr, mxrt float64,
 		}
 		i += tspan
 	}
-	logr.Debugf("%s kdj sell series: %d", code, len(s))
+	log.Debugf("%s kdj sell series: %d", code, len(s))
 	return s
 }
 
@@ -719,7 +719,7 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, total int) {
 	defer wg.Done()
 	ars, _ := rpc.Available(false)
 	if ars == 0 {
-		logr.Warn("no available rpc servers, use local power")
+		log.Warn("no available rpc servers, use local power")
 		for item := range chitm {
 			scoreKdjLocal(item)
 		}
@@ -734,7 +734,7 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, total int) {
 				e := scoreKdjRemote(iBuf)
 				if e != nil {
 					// fall back to local power
-					logr.Warnf("remote processing failed, retry with local power\n%+v", e)
+					log.Warnf("remote processing failed, retry with local power\n%+v", e)
 					for _, bitm := range iBuf {
 						scoreKdjLocal(bitm)
 					}
@@ -747,7 +747,7 @@ func scoreKdjRoutine(wg *sync.WaitGroup, chitm chan *Item, total int) {
 			e := scoreKdjRemote(iBuf)
 			if e != nil {
 				// fall back to local power
-				logr.Warnf("remote processing failed, fall back to local power\n%+v", e)
+				log.Warnf("remote processing failed, fall back to local power\n%+v", e)
 				for _, bitm := range iBuf {
 					scoreKdjLocal(bitm)
 				}
@@ -781,7 +781,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 		k.KdjMo, fmo = getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
 		kdjv.Len = fmt.Sprintf("%d/%d/%d", len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
 		if len(k.KdjDy) == 0 || len(k.KdjWk) == 0 || len(k.KdjMo) == 0 || !fdy || !fwk || !fmo {
-			logr.Warnf("%s len(%d,%d,%d) disqualified for kdjv score calculation", item.Code,
+			log.Warnf("%s len(%d,%d,%d) disqualified for kdjv score calculation", item.Code,
 				len(k.KdjDy), len(k.KdjWk), len(k.KdjMo))
 			continue
 		}
@@ -803,7 +803,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 		}
 		itmMap[k.RowId] = item
 	}
-	logr.Debugf("ready to call rpc service, input size: %d", len(ks))
+	log.Debugf("ready to call rpc service, input size: %d", len(ks))
 	ids, ss, dets, e := fetchKdjScores(ks)
 	if e != nil {
 		return errors.Wrapf(e, "%d failed to calculate kdj scores", len(items))
@@ -823,14 +823,14 @@ func scoreKdjRemote(items []*Item) (e error) {
 			d["M.bhdr"], d["M.bpdr"], d["M.bmpd"], d["M.bdi"], d["M.shdr"], d["M.spdr"], d["M.smpd"], d["M.sdi"])
 	}
 	tt := time.Since(start).Seconds()
-	logr.Debugf("%d kdj scores calculated using rpc service, time: %.2f, %.2f/stk",
+	log.Debugf("%d kdj scores calculated using rpc service, time: %.2f, %.2f/stk",
 		len(items), tt, tt/float64(len(items)))
 	return nil
 }
 
 func scoreKdjLocal(item *Item) {
 	start := time.Now()
-	logr.Debugf("calculating %s...", item.Code)
+	log.Debugf("calculating %s...", item.Code)
 	kdjv := new(KdjV)
 	kdjv.Code = item.Code
 	kdjv.Name = item.Name
@@ -875,7 +875,7 @@ func scoreKdjLocal(item *Item) {
 		kdjv.Dod = stat.Dod
 	}
 
-	logr.Debugf("%s %s kdjv: %.2f, time: %.2f", item.Code, item.Name, ip.Score, time.Since(start).Seconds())
+	log.Debugf("%s %s kdjv: %.2f, time: %.2f", item.Code, item.Name, ip.Score, time.Since(start).Seconds())
 }
 
 func wgtKdjScoreRaw(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
@@ -1036,7 +1036,7 @@ func calcKdjDIRaw(hist []*model.Indicator, fdvs []*model.KDJfdrView) (hdr, pdr, 
 			continue
 		}
 		mod := 1.0
-		tsmp, e := time.Parse("2006-01-02", fd.SmpDate)
+		tsmp, e := time.Parse(global.DateFormat, fd.SmpDate)
 		util.CheckErr(e, "failed to parse sample date: "+fd.SmpDate)
 		days := time.Now().Sub(tsmp).Hours() / 24.0
 		if days > 800 {

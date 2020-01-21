@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 
@@ -23,13 +24,13 @@ import (
 var (
 	dt2mc = map[model.DBTab]string{
 		model.KLINE_DAY_NR:   "00",
-		model.KLINE_DAY_F:      "01",
+		model.KLINE_DAY_F:    "01",
 		model.KLINE_DAY_B:    "02",
 		model.KLINE_WEEK_NR:  "10",
-		model.KLINE_WEEK_F:     "11",
+		model.KLINE_WEEK_F:   "11",
 		model.KLINE_WEEK_B:   "12",
 		model.KLINE_MONTH_NR: "20",
-		model.KLINE_MONTH_F:    "21",
+		model.KLINE_MONTH_F:  "21",
 		model.KLINE_MONTH_B:  "22",
 	}
 )
@@ -203,7 +204,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 		log.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
 	}
 
-	ttd, e := time.Parse("2006-01-02", ktoday.Date)
+	ttd, e := time.Parse(global.DateFormat, ktoday.Date)
 	if e != nil {
 		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, -1, false, true
@@ -218,7 +219,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B,
 		model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
 		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
-			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+			ttm, e := time.Parse(global.DateFormat, stk.TimeToMarket.String)
 			if e != nil {
 				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 					code, stk.TimeToMarket.String, e)
@@ -264,7 +265,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	}
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
@@ -292,7 +293,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		// if ktoday and kls[0] in the same week, remove kls[0]
 		yToday, wToday := ttd.ISOWeek()
-		tHead, e := time.Parse("2006-01-02", kls[0].Date)
+		tHead, e := time.Parse(global.DateFormat, kls[0].Date)
 		if e != nil {
 			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, -1, false, true
@@ -347,7 +348,7 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		log.Printf("%s %+v kline today skipped: %s", klt, code, string(today))
 	}
 
-	_, e = time.Parse("2006-01-02", ktoday.Date)
+	_, e = time.Parse(global.DateFormat, ktoday.Date)
 	if e != nil {
 		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, false, true
@@ -360,13 +361,13 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	// If in IPO week, skip the rest chores
 	if (klt == model.KLINE_WEEK_F || klt == model.KLINE_MONTH_F) &&
 		stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
-		ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+		ttm, e := time.Parse(global.DateFormat, stk.TimeToMarket.String)
 		if e != nil {
 			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
 		}
-		ttd, e := time.Parse("2006-01-02", ktoday.Date)
+		ttd, e := time.Parse(global.DateFormat, ktoday.Date)
 		if e != nil {
 			log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 				code, ktoday.Date, e)
@@ -407,7 +408,7 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	}
 
 	if incr {
-		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -439,13 +440,13 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		}
 	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
 		// if ktoday and kls[0] in the same week, remove kls[0]
-		tToday, e := time.Parse("2006-01-02", ktoday.Date)
+		tToday, e := time.Parse(global.DateFormat, ktoday.Date)
 		if e != nil {
 			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
 			return quotes, false, true
 		}
 		yToday, wToday := tToday.ISOWeek()
-		tHead, e := time.Parse("2006-01-02", kls[0].Date)
+		tHead, e := time.Parse(global.DateFormat, kls[0].Date)
 		if e != nil {
 			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, false, true
@@ -890,7 +891,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	}
 
 	// If it is an IPO, return immediately
-	_, e = time.Parse("2006-01-02", ktoday.Date)
+	_, e = time.Parse(global.DateFormat, ktoday.Date)
 	if e != nil {
 		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return kldy, false, true
@@ -924,7 +925,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	switch klt {
 	case model.KLINE_DAY_B, model.KLINE_DAY_NR, model.KLINE_DAY_F:
 		cycle = model.DAY
-	case  model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
+	case model.KLINE_WEEK_B, model.KLINE_WEEK_NR, model.KLINE_WEEK_F:
 		cycle = model.WEEK
 	case model.KLINE_MONTH_B, model.KLINE_MONTH_NR, model.KLINE_MONTH_F:
 		cycle = model.MONTH
@@ -939,7 +940,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	*ldate = ""
 	*lklid = -1
 	if incr {
-		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -1083,7 +1084,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		log.Printf("kline today skipped: %s", url_today)
 	}
 
-	_, e = time.Parse("2006-01-02", ktoday.Date)
+	_, e = time.Parse(global.DateFormat, ktoday.Date)
 	if e != nil {
 		log.Printf("%s invalid date format today: %s\n%+v", code, ktoday.Date, e)
 		return quotes, false, true
@@ -1096,13 +1097,13 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	// If in IPO week, skip the rest chores
 	if (klt == model.KLINE_WEEK_F || klt == model.KLINE_MONTH_F) &&
 		stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
-		ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+		ttm, e := time.Parse(global.DateFormat, stk.TimeToMarket.String)
 		if e != nil {
 			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
 		} else {
-			ttd, e := time.Parse("2006-01-02", ktoday.Date)
+			ttd, e := time.Parse(global.DateFormat, ktoday.Date)
 			if e != nil {
 				log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 					code, ktoday.Date, e)
@@ -1156,7 +1157,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	}
 
 	if incr {
-		ldy := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -1183,13 +1184,13 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 		kls = kls[1:]
 	} else if klt == model.KLINE_WEEK_F {
 		// if ktoday and kls[0] in the same week, remove kls[0]
-		tToday, e := time.Parse("2006-01-02", ktoday.Date)
+		tToday, e := time.Parse(global.DateFormat, ktoday.Date)
 		if e != nil {
 			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, ktoday.Date, e)
 			return quotes, false, true
 		}
 		yToday, wToday := tToday.ISOWeek()
-		tHead, e := time.Parse("2006-01-02", kls[0].Date)
+		tHead, e := time.Parse(global.DateFormat, kls[0].Date)
 		if e != nil {
 			log.Printf("%s %s invalid date format: %+v \n %+v", code, klt, kls[0].Date, e)
 			return quotes, false, true
@@ -1370,7 +1371,7 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestTradeDataBase(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		latest := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid
@@ -1399,12 +1400,12 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		dkeys = append(dkeys, ktoday.Date)
 		// If in IPO week, skip the rest chores
 		if stk.TimeToMarket.Valid && len(stk.TimeToMarket.String) == 10 {
-			ttm, e := time.Parse("2006-01-02", stk.TimeToMarket.String)
+			ttm, e := time.Parse(global.DateFormat, stk.TimeToMarket.String)
 			if e != nil {
 				log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 					code, stk.TimeToMarket.String, e)
 			} else {
-				ttd, e := time.Parse("2006-01-02", ktoday.Date)
+				ttd, e := time.Parse(global.DateFormat, ktoday.Date)
 				if e != nil {
 					log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
 						code, ktoday.Date, e)
@@ -1443,13 +1444,13 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 		kls, _ := parseKlines(code, khist.Data, ldate, "")
 		if len(kls) > 0 {
 			// if ktoday and kls[0] in the same week, remove kls[0]
-			tToday, e := time.Parse("2006-01-02", ktoday.Date)
+			tToday, e := time.Parse(global.DateFormat, ktoday.Date)
 			if e != nil {
 				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue
 			}
 			yToday, wToday := tToday.ISOWeek()
-			tHead, e := time.Parse("2006-01-02", kls[0].Date)
+			tHead, e := time.Parse(global.DateFormat, kls[0].Date)
 			if e != nil {
 				log.Printf("%s %s [%d] invalid date format %+v", code, klt, rt+1, e)
 				continue

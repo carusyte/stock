@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 )
@@ -16,7 +17,7 @@ var (
 	idxList []*model.IdxLst
 )
 
-func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
+func getKlineWht(stk *model.Stock, kltype []model.DBTab) (
 	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
 	RETRIES := 20
 	tdmap = make(map[model.DBTab]*model.TradeData)
@@ -32,7 +33,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 			continue
 		}
 		for rt := 0; rt < RETRIES; rt++ {
-			trdat, lklid, suc, retry := whtKline(stk, klt, xdxr, persist)
+			trdat, lklid, suc, retry := whtKline(stk, klt, xdxr)
 			if suc {
 				log.Infof("%s %v fetched: %d", code, klt, trdat.MaxLen())
 				tdmap[klt] = trdat
@@ -62,7 +63,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab, persist bool) (
 	return tdmap, lkmap, true
 }
 
-func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool) (
+func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	trdat *model.TradeData, lklid int, suc, retry bool) {
 	url := conf.Args.DataSource.WhtURL + "/hq/hiskline"
 	klt := ""
@@ -99,7 +100,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	lklid = -1
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBase(codeid, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(codeid, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
@@ -111,7 +112,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr, persist bool)
 	}
 	num := "0"
 	if lklid != -1 {
-		ltime, e := time.Parse("2006-01-02", ldate)
+		ltime, e := time.Parse(global.DateFormat, ldate)
 		if e != nil {
 			log.Printf("%s %+v failed to parse date value '%s': %+v", stk.Code, tab, ldate, e)
 			return nil, lklid, false, false
@@ -153,7 +154,7 @@ func parseWhtJSONMaps(codeid, ldate string, data []map[string]interface{}) (trda
 			continue
 		}
 		a := new(model.TradeDataMovAvg)
-		b := new(model.TradeDataBase)
+		b := new(model.TradeDataBasic)
 		a.Code, b.Code = codeid, codeid
 		a.Date, b.Date = date, date
 		b.Open = m["open"].(float64)
@@ -206,7 +207,7 @@ func isIndex(code string) bool {
 		}
 	}
 	for _, index := range idxList {
-		if index.Code == code {
+		if strings.EqualFold(index.Code, code) {
 			return true
 		}
 	}
@@ -215,7 +216,8 @@ func isIndex(code string) bool {
 
 // recover volume, amount and xrate related values in backward reinstated table
 func whtPostProcessKline(stks *model.Stocks) (rstks *model.Stocks) {
-	//FIXME: resolve inconsistency
+	//FIXME: resolve inconsistency, try to fix at data source level.
+	// Otherwise, use goroutine to run sql in parallel
 	rstks = new(model.Stocks)
 	tgBase := []model.DBTab{model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B}
 	srBase := []model.DBTab{model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F}

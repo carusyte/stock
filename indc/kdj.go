@@ -7,7 +7,7 @@ import (
 )
 
 //KDJ calculates KDJ indicator for the given parameters
-func KDJ(src []*model.TradeDataBase, n, m1, m2 int) []*model.Indicator {
+func KDJ(src []*model.TradeDataBasic, n, m1, m2 int) []*model.Indicator {
 	r := make([]*model.Indicator, len(src))
 	rsv := make([]float64, len(src))
 	for i, s := range src {
@@ -35,12 +35,12 @@ func KDJ(src []*model.TradeDataBase, n, m1, m2 int) []*model.Indicator {
 }
 
 //DeftKDJ calculates KDJ indicator using default parameters (9,3,3)
-func DeftKDJ(src []*model.TradeDataBase) []*model.Indicator {
+func DeftKDJ(src []*model.TradeDataBasic) []*model.Indicator {
 	return KDJ(src, 9, 3, 3)
 }
 
 //DeftKDJ_W calculates weekly KDJ indicator using default parameters (9,3,3)
-func DeftKDJ_W(src []*model.TradeDataBase) []*model.IndicatorW {
+func DeftKDJ_W(src []*model.TradeDataBasic) []*model.IndicatorW {
 	kdj := DeftKDJ(src)
 	r := make([]*model.IndicatorW, len(kdj))
 	for i := range r {
@@ -50,7 +50,7 @@ func DeftKDJ_W(src []*model.TradeDataBase) []*model.IndicatorW {
 }
 
 //DeftKDJ_M calculates monthly KDJ indicator using default parameters (9,3,3)
-func DeftKDJ_M(src []*model.TradeDataBase) []*model.IndicatorM {
+func DeftKDJ_M(src []*model.TradeDataBasic) []*model.IndicatorM {
 	kdj := DeftKDJ(src)
 	r := make([]*model.IndicatorM, len(kdj))
 	for i := range r {

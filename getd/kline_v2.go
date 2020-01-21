@@ -50,8 +50,8 @@ func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model
 		for i := range ochan {
 			//merge into model.TradeData slice
 			switch i.(type) {
-			case *[]*model.TradeDataBase:
-				trdat.Base = *i.(*[]*model.TradeDataBase)
+			case *[]*model.TradeDataBasic:
+				trdat.Base = *i.(*[]*model.TradeDataBasic)
 			case *[]*model.TradeDataLogRtn:
 				trdat.LogRtn = *i.(*[]*model.TradeDataLogRtn)
 			case *[]*model.TradeDataMovAvg:
@@ -159,8 +159,8 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 		for i := range ochan {
 			//merge into model.TradeData slice
 			switch i.(type) {
-			case *[]*model.TradeDataBase:
-				trdat.Base = *i.(*[]*model.TradeDataBase)
+			case *[]*model.TradeDataBasic:
+				trdat.Base = *i.(*[]*model.TradeDataBasic)
 			case *[]*model.TradeDataLogRtn:
 				trdat.LogRtn = *i.(*[]*model.TradeDataLogRtn)
 			case *[]*model.TradeDataMovAvg:
@@ -220,7 +220,7 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
 	}
 	if q.Basic {
-		tables[base] = reflect.TypeOf(&model.TradeDataBase{})
+		tables[base] = reflect.TypeOf(&model.TradeDataBasic{})
 	}
 	if q.LogRtn {
 		tables[base+"_lr"] = reflect.TypeOf(&model.TradeDataLogRtn{})
@@ -263,7 +263,7 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
 	}
 	if len(td.Base) > 0 {
-		tabCols[base] = getTableColumns(model.TradeDataBase{})
+		tabCols[base] = getTableColumns(model.TradeDataBasic{})
 		tabData[base] = td.Base
 	}
 	if len(td.LogRtn) > 0 {
@@ -543,7 +543,7 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 	preclose, prehigh, preopen, prelow := math.NaN(), math.NaN(), math.NaN(), math.NaN()
 	mas := []int{5, 10, 20, 30, 60, 120, 200, 250}
 	size := len(trdat.Base)
-	maSrc := make([]*model.TradeDataBase, size)
+	maSrc := make([]*model.TradeDataBasic, size)
 	for i := range maSrc {
 		maSrc[i] = trdat.Base[len(maSrc)-1-i]
 	}
@@ -908,7 +908,7 @@ func matchSliceV2(nrtd, tgtd *model.TradeData) (err error) {
 	}
 	//use map (hash function, specifically) to find the intersection and prune all types of trade data within tgtd
 	bHashFunc := func(el interface{}) interface{} {
-		b := el.(*model.TradeDataBase)
+		b := el.(*model.TradeDataBasic)
 		return fmt.Sprintf("%s_%d", b.Date, b.Klid)
 	}
 	nrbHash := hash(bHashFunc, nrtd.Base)
@@ -1000,12 +1000,12 @@ func deleteTradeDataFromDate(code, date string, cycle model.CYTP, rtype model.Rt
 	return
 }
 
-func transferVarateRglV2(code string, cycle model.CYTP, rtype model.Rtype, nrbase, tgbase []*model.TradeDataBase, xemap map[string]*model.Xdxr) (e error) {
+func transferVarateRglV2(code string, cycle model.CYTP, rtype model.Rtype, nrbase, tgbase []*model.TradeDataBasic, xemap map[string]*model.Xdxr) (e error) {
 	for i := 0; i < len(tgbase); i++ {
 		nrq := nrbase[i]
 		tgq := tgbase[i]
 		if nrq.Code != tgq.Code || nrq.Date != tgq.Date || nrq.Klid != tgq.Klid {
-			return fmt.Errorf("%s unable to infer varate rgl from (%v,%v). unmatched nrq & tgq at %d: %+v : %+v",
+			return fmt.Errorf("%s unable to infer varate rgl from (%v,%v). unmatched nrq & tgq at %d: %+v vs. %+v",
 				code, cycle, rtype, i, nrq, tgq)
 		}
 		tvar := nrq.Varate.Float64

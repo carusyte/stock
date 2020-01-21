@@ -86,7 +86,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qw []*model.TradeDataBase
+	var qw []*model.TradeDataBasic
 	_, err = dbmap.Select(&qw, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate "+
 		"from %s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
@@ -155,7 +155,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qm []*model.TradeDataBase
+	var qm []*model.TradeDataBasic
 	_, err = dbmap.Select(&qm, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate "+
 		"from %s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))
@@ -224,7 +224,7 @@ func calcDay(stk *model.Stock, offset int64) {
 		}
 	}
 
-	var qd []*model.TradeDataBase
+	var qd []*model.TradeDataBasic
 	_, err = dbmap.Select(&qd, fmt.Sprintf("select code,date,klid,open,high,close,low,volume,amount,xrate from "+
 		"%s where code = ? order by klid", tab), code)
 	util.CheckErr(err, fmt.Sprintf("Failed to query %s for %s", tab, code))

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/carusyte/stock/conf"
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
 	"github.com/mjanda/go-dtw"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/ssgreg/repeat"
 )
 
 func TestCpu(t *testing.T) {
@@ -68,10 +72,10 @@ func TestDTW(t *testing.T) {
 }
 
 func TestISOWeek(t *testing.T) {
-	tToday, _ := time.Parse("2006-01-02", "2017-09-04")
+	tToday, _ := time.Parse(global.DateFormat, "2017-09-04")
 	y, w := tToday.ISOWeek()
 	fmt.Println(y, w)
-	tToday, _ = time.Parse("2006-01-02", "2017-09-05")
+	tToday, _ = time.Parse(global.DateFormat, "2017-09-05")
 	y, w = tToday.ISOWeek()
 	fmt.Println(y, w)
 }
@@ -98,7 +102,32 @@ func modMap(m map[int]byte) {
 }
 
 func TestNilPointer(t *testing.T) {
-	var s []*model.TradeDataBase
+	var s []*model.TradeDataBasic
 	log.Printf("len: %d", len(s))
 	t.Fail()
+}
+
+func TestMapNil(t *testing.T) {
+	m := map[string]interface{}{
+		"a": nil,
+		"b": 0,
+	}
+	if x, ok := m["a"]; ok {
+		log.Debugf("map to nil is ok: %+v", x)
+	}
+}
+
+func TestRepeat(t *testing.T) {
+	op := func(c int) error {
+		log.Debugf("retrying: %d", c+1)
+		return repeat.HintTemporary(errors.New("dumb error"))
+	}
+	repeat.Repeat(
+		repeat.FnWithCounter(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+		repeat.WithDelay(
+			repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+		),
+	)
 }

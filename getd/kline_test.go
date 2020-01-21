@@ -54,17 +54,20 @@ func TestGetKlinesFromWht(t *testing.T) {
 	s.Code = "000585"
 	s.Name = "东北电气"
 	s.Market = sql.NullString{String: "SZ", Valid: true}
-	getKlineWht(s, []model.DBTab{model.KLINE_DAY_F, model.KLINE_DAY_NR}, true)
+	tdmap, _, _ := getKlineWht(s, []model.DBTab{model.KLINE_DAY_F, model.KLINE_DAY_NR})
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,
 	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
+	for _, td := range tdmap {
+		log.Debugln(td.Base)
+	}
 	t.Fail()
 }
 
 func TestKlineDayNRFromWht(t *testing.T) {
 	stks := StocksDb()
 	for _, s := range stks {
-		getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR}, true)
+		getKlineWht(s, []model.DBTab{model.KLINE_DAY_NR})
 	}
 	t.Fail()
 }

@@ -35,7 +35,7 @@ func TestThsShares(t *testing.T) {
 func TestXQShares(t *testing.T) {
 	allstk := StocksDb()
 	s := allstk[rand.Intn(len(allstk))]
-	xqShares(s, nil)
+	xqShares(s, nil, nil, nil)
 	log.Printf("%+v", s)
 	t.Fail()
 }

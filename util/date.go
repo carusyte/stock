@@ -3,16 +3,14 @@ package util
 import (
 	"fmt"
 	"time"
-)
 
-const (
-	deftDateFormat = "2006-01-02"
+	"github.com/carusyte/stock/global"
 )
 
 //SameWeek checks if two dates denoted by respective strings are in the same week.
 // if arg format is not supplied, default format "2006-01-02" will be used.
 func SameWeek(d1, d2, format string) (yes bool, e error) {
-	dfmt := deftDateFormat
+	dfmt := global.DateFormat
 	if format != "" {
 		dfmt = format
 	}

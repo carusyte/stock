@@ -37,10 +37,9 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 	defer Cleanup()
 	log.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
 	var wg sync.WaitGroup
-	parallel := conf.Args.ChromeDP.PoolSize
-	switch conf.Args.DataSource.Kline {
-	case conf.TENCENT:
-		parallel = conf.Args.Concurrency
+	parallel := conf.Args.Concurrency
+	if conf.THS == conf.Args.DataSource.Kline {
+		parallel = conf.Args.ChromeDP.PoolSize
 	}
 	wf := make(chan int, parallel)
 	outstks := make(chan *model.Stock, JOB_CAPACITY)
@@ -537,8 +536,8 @@ func Reinstate(p float64, x *model.Xdxr) float64 {
 }
 
 // ToOne merges qs into one quote, such as merging daily quotes into weekly quote or month quote
-func ToOne(qs []*model.TradeDataBase, preClose float64, preKlid int) *model.TradeDataBase {
-	oq := new(model.TradeDataBase)
+func ToOne(qs []*model.TradeDataBasic, preClose float64, preKlid int) *model.TradeDataBasic {
+	oq := new(model.TradeDataBasic)
 	if len(qs) == 0 {
 		return nil
 	} else if len(qs) == 1 {
@@ -646,12 +645,14 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		}
 		switch src {
 		case conf.WHT:
-			tdmap, lkmap, suc = getKlineWht(stk, kltnv, true)
+			tdmap, lkmap, suc = getKlineWht(stk, kltnv)
 		case conf.THS:
 			// qmap, lkmap, suc = getKlineThs(stk, kltnv)
 			log.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
 			tdmap, lkmap, suc = getKlineTc(stk, kltnv)
+		case conf.XQ:
+			tdmap, lkmap, suc = getKlineXQ(stk, kltnv)
 		}
 	}
 	if !suc {
@@ -1103,7 +1104,7 @@ func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 	}
 }
 
-func getLatestTradeDataBase(code string, cycle model.CYTP, rtype model.Rtype, offset int) (b *model.TradeDataBase) {
+func getLatestTradeDataBasic(code string, cycle model.CYTP, rtype model.Rtype, offset int) (b *model.TradeDataBasic) {
 	var table string
 	for k := range resolveTables(TrDataQry{
 		Basic:     true,

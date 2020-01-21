@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/indc"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -151,7 +152,7 @@ func scoreRegDate(ih *HiD, item *Item, m float64) (s float64) {
 		var base float64
 		if x.RegDate.Valid {
 			ih.RegDate = ih.RegDate + x.RegDate.String[5:]
-			treg, e := time.Parse("2006-01-02", x.RegDate.String)
+			treg, e := time.Parse(global.DateFormat, x.RegDate.String)
 			util.CheckErr(e, "failed to parse registration date: "+x.RegDate.String)
 			days := int(math.Ceil(treg.Sub(time.Now()).Hours() / 24))
 			if -3 < days && days < 10 {

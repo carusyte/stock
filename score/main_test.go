@@ -1,11 +1,12 @@
 package score
 
 import (
-	"testing"
-	"github.com/montanaflynn/stats"
 	"math"
+	"testing"
 	"time"
-	logr "github.com/sirupsen/logrus"
+
+	"github.com/montanaflynn/stats"
+	"github.com/sirupsen/logrus"
 )
 
 func TestCombineResults(t *testing.T) {
@@ -38,8 +39,8 @@ func TestKdjVAllStock(t *testing.T) {
 }
 
 func initLog() {
-	//logr.SetOutput(os.Stdout)
-	logr.SetLevel(logr.DebugLevel)
+	//log.SetOutput(os.Stdout)
+	log.SetLevel(logrus.DebugLevel)
 }
 
 func TestCorrelation(t *testing.T) {
