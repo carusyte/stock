@@ -866,7 +866,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		ud, ut := util.TimeStr()
 		for _, f := range fins {
 			valueStrings = append(valueStrings, "(?, ?, ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "+
-				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?)")
+				"round(?,2), ?, round(?,2), ?, ?, round(?,2), ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			valueArgs = append(valueArgs, f.Code)
 			valueArgs = append(valueArgs, f.Dar)
 			valueArgs = append(valueArgs, f.Crps)
