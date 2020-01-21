@@ -129,7 +129,25 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 
 	//use util.HTTPGet to get cookie and data (twice gets)
 	//first get the cookies from home page
-	cookies, px, headers, e := xqCookie()
+	var cookies []*http.Cookie
+	var px *util.Proxy
+	var headers map[string]string
+	op := func() error {
+		cookies, px, headers, e = xqCookie()
+		if e != nil {
+			return repeat.HintTemporary(e)
+		}
+		return nil
+	}
+	e = repeat.Repeat(
+		repeat.Fn(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(conf.Args.DefaultRetry),
+	)
+	if e != nil {
+		log.Warnf("%s failed to get cookies from XQ: %+v", stk.Code, e)
+		return nil, lklid, false, true
+	}
 	//symbol = SH600104
 	//begin = 1579589390096
 	//period = day/week/month/60m/120m...
@@ -137,8 +155,8 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	//count = -1000
 	urlt := `https://stock.xueqiu.com/v5/stock/chart/kline.json?` +
 		`symbol=%[1]s&begin=%[2]d&period=%[3]s&type=%[4]s&count=%[5]d&indicator=kline`
-	begin := time.Now().AddDate(0, 0, 1)
-	url := fmt.Sprintf(urlt, symbol, begin.Unix(), period, xdrType, count)
+	begin := util.UnixMilliseconds(time.Now().AddDate(0, 0, 1))
+	url := fmt.Sprintf(urlt, symbol, begin, period, xdrType, count)
 	res, e := util.HTTPGet(url, headers, px, cookies...)
 	if e != nil {
 		log.Warnf("%s failed to get %v from %s: %+v", stk.Code, tab, url, e)
@@ -150,7 +168,7 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		log.Warnf("%s failed to read http response body from %s: %+v", stk.Code, url, e)
 		return nil, lklid, false, true
 	}
-	var xqk *model.XQKline
+	xqk := &model.XQKline{Code: stk.Code}
 	e = json.Unmarshal(data, xqk)
 	if e != nil {
 		log.Warnf("%s failed to parse json for %v from %s: %+v\return value:%+v", stk.Code, tab, url, e, string(data))
@@ -178,10 +196,31 @@ func xqCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]stri
 	headers = map[string]string{
 		"User-Agent": uagent,
 	}
-	px, e = util.PickProxy()
-	if e != nil {
-		e = errors.Wrap(e, "failed to get proxy")
-		return
+	wgt := conf.Args.DataSource.XQ.DirectProxyWeight
+	sum := wgt[0] + wgt[1] + wgt[2]
+	dw := wgt[0] / sum
+	mw := (wgt[0] + wgt[1]) / sum
+	dice := rand.Float64()
+	if dice <= dw {
+		//direct connection
+		log.Debug("accessing XQ using direct connection")
+	} else if dice <= mw {
+		//master proxy
+		log.Debugf("accessing XQ using master proxy: %s", conf.Args.Network.MasterProxyAddr)
+		ss := strings.Split(conf.Args.Network.MasterProxyAddr, ":")
+		px = &util.Proxy{
+			Host: ss[0],
+			Port: ss[1],
+			Type: "socks5",
+		}
+	} else {
+		//rotate proxy
+		px, e = util.PickProxy()
+		if e != nil {
+			e = errors.Wrap(e, "failed to get rotate proxy")
+			return
+		}
+		log.Debugf("accessing XQ using rotate proxy: %s://%s:%s", px.Type, px.Host, px.Port)
 	}
 	res, e := util.HTTPGet(homePage, headers, px)
 	if e != nil {
@@ -194,7 +233,7 @@ func xqCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]stri
 }
 
 func xqShares(stock *model.Stock, px *util.Proxy, headers map[string]string, cookies []*http.Cookie) (ok, retry bool) {
-	//TODO get share info from xueqiu.com
+	// get share info from xueqiu.com
 	// https://xueqiu.com/snowman/S/SH601598/detail#/GBJG
 	// https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=SH601598&count=100&extend=true
 	url := fmt.Sprintf(`https://stock.xueqiu.com/v5/stock/f10/cn/shareschg.json?symbol=%s%s&count=1000&extend=true`, stock.Market.String, stock.Code)

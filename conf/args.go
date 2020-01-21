@@ -114,6 +114,10 @@ type Arguments struct {
 		IndicatorSource       string    `mapstructure:"indicator_source"`
 		LimitPriceDayLr       []float64 `mapstructure:"limit_price_day_lr"`
 		FeatureScaling        string    `mapstructure:"feature_scaling"`
+		XQ                    struct {
+			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
+			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
+		}
 	}
 	Scorer struct {
 		RunScorer            bool     `mapstructure:"run_scorer"`
@@ -191,6 +195,10 @@ func checkConfig() {
 	if shift > prior {
 		log.Panicf(`invalid configuration setting, Sampler.PriorLength (%d) greater than `+
 			`Sampler.XCorlShift (%d)`, prior, shift)
+	}
+	if len(Args.DataSource.XQ.DirectProxyWeight) != 3 {
+		log.Panicf(`invalid direct_proxy_weight, must be a float number array of 3 elements: %+v`,
+			Args.DataSource.XQ.DirectProxyWeight)
 	}
 }
 

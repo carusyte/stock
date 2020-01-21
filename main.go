@@ -8,6 +8,7 @@ import (
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/profile"
+	"github.com/sirupsen/logrus"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
@@ -17,6 +18,16 @@ import (
 var log = global.Log
 
 func main() {
+	defer func() {
+		code := 0
+		if r := recover(); r != nil {
+			if _, hasError := r.(error); hasError {
+				code = 1
+			}
+		}
+		logrus.Exit(code)
+	}()
+
 	log.Info("Starting...")
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":

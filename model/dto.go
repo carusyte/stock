@@ -1346,15 +1346,16 @@ func (x *XQKline) c2vMap() map[string]interface{} {
 
 //converts the map to TradeDataBasic structure
 func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) {
-	var sec int64
+	var ms float64
 	var ok bool
 	var v float64
-	if sec, ok = m["timestamp"].(int64); !ok {
+	if ms, ok = m["timestamp"].(float64); !ok {
 		return b, errors.Errorf("invalid format of 'timestamp': %+v", m)
 	}
+	sec := util.ConvTimeUnit(ms, time.Millisecond, time.Second)
 	b = &TradeDataBasic{
 		Code: x.Code,
-		Date: time.Unix(sec, 0).Format(global.DateFormat),
+		Date: time.Unix(int64(sec), 0).Format(global.DateFormat),
 	}
 	if v, ok = m["volume"].(float64); ok {
 		b.Volume = sql.NullFloat64{Float64: v, Valid: true}
@@ -1429,7 +1430,7 @@ func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
 	}
-	ecode := m["error_code"].(int)
+	ecode := m["error_code"].(float64)
 	if ecode != 0 {
 		desc := m["error_description"].(string)
 		return errors.Errorf("error_code from remote: %s, error_description: %s", ecode, desc)
@@ -1440,8 +1441,16 @@ func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
 	c2v := x.c2vMap()
 	i2c := make(map[int]string)
 	var cols []string
-	if cols, ok = m["column"].([]string); !ok {
-		return errors.Errorf("unrecognized data structure, cant't cast 'column' to []string: %+v", m)
+	var intf []interface{}
+	if intf, ok = m["column"].([]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast 'column' to []interface{}: %+v", m)
+	}
+	for _, i := range intf {
+		var str string
+		if str, ok = i.(string); !ok {
+			return errors.Errorf("unrecognized data structure, cant't cast 'column' element to string: %+v", m)
+		}
+		cols = append(cols, str)
 	}
 	for i, c := range cols {
 		if _, ok = c2v[c]; ok {

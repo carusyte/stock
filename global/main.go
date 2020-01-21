@@ -49,6 +49,8 @@ func init() {
 	}
 
 	switch conf.Args.LogLevel {
+	case "trace":
+		Log.SetLevel(logrus.TraceLevel)
 	case "debug":
 		Log.SetLevel(logrus.DebugLevel)
 	case "info":
@@ -78,4 +80,9 @@ func init() {
 	}
 	mw := io.MultiWriter(os.Stdout, logFile)
 	Log.SetOutput(mw)
+	logrus.RegisterExitHandler(func() {
+		if logFile != nil {
+			logFile.Close()
+		}
+	})
 }

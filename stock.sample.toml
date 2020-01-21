@@ -1,4 +1,4 @@
-# debug, info, warning, error, fatal, panic
+# trace, debug, info, warning, error, fatal, panic
 log_level = "info"
 
 default_retry = 10
@@ -97,6 +97,9 @@ indicator_source = "backward"
 limit_price_day_lr = [-0.15, 0.15]
 feature_scaling = "standardization"
 
+    [DataSource.XQ]
+    #weights for direct connection / master proxy / rotated proxy
+    direct_proxy_weight = [0, 1, 0]
 
 [Scorer]
 fetch_data = false

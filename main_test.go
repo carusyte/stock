@@ -131,3 +131,10 @@ func TestRepeat(t *testing.T) {
 		),
 	)
 }
+
+func TestUnixTime(t *testing.T) {
+	log.Debugf("time.Now().Unix(): %+v", time.Now().Unix())
+	log.Debugf("time.Now().Local().Unix(): %+v", time.Now().Local().Unix())
+	log.Debugf("time.Now().UnixNano(): %+v", time.Now().UnixNano())
+	log.Debugf("time.Now().Local().UnixNano(): %+v", time.Now().Local().UnixNano())
+}

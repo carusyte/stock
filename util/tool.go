@@ -6,9 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/carusyte/stock/global"
 	"github.com/pkg/errors"
 )
 
@@ -127,13 +125,6 @@ func Str2FBilMod(s string, mod float64) (f sql.NullFloat64) {
 	return
 }
 
-func TimeStr() (d, t string) {
-	now := time.Now()
-	d = now.Format(global.DateFormat)
-	t = now.Format(global.TimeFormat)
-	return
-}
-
 func SprintFa(fa []float64, format, sep string, ls int) string {
 	if len(fa) == 0 {
 		return ""
@@ -190,15 +181,6 @@ func Devi(a, b []float64) (float64, error) {
 		s += math.Pow(a[i]-b[i], 2)
 	}
 	return math.Pow(s/float64(len(a)), 0.5), nil
-}
-
-func DaysSince(then string) (float64, error) {
-	t, err := time.Parse(global.DateFormat, then)
-	if err != nil {
-		return 0, err
-	} else {
-		return time.Since(t).Hours() / 24.0, nil
-	}
 }
 
 func DiffStrings(str1 []string, str2 []string) (equal bool, dif1, dif2 []string) {

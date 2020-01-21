@@ -1,7 +1,9 @@
 package getd
 
 import (
+	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/carusyte/stock/model"
 )
@@ -21,7 +23,10 @@ func Test_getKlineXQ(t *testing.T) {
 		{
 			name: "basic test",
 			args: args{
-				stk:    &model.Stock{Code: "000585", Name: "东北电气"},
+				stk: &model.Stock{
+					Market: sql.NullString{String: "SZ", Valid: true},
+					Code:   "000585",
+					Name:   "东北电气"},
 				kltype: []model.DBTab{model.KLINE_DAY_B, model.KLINE_DAY_F, model.KLINE_DAY_NR},
 			},
 		},
@@ -32,4 +37,9 @@ func Test_getKlineXQ(t *testing.T) {
 			getKlineXQ(tt.args.stk, tt.args.kltype)
 		})
 	}
+}
+
+func TestUnixMilliSec(t *testing.T) {
+	begin := float64(time.Now().AddDate(0, 0, 1).UnixNano()) * float64(time.Nanosecond) / float64(time.Millisecond)
+	log.Debugf("got: %d", int64(begin))
 }
