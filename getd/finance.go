@@ -904,8 +904,8 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 			"np_adn_yoy,npm,np_rg,np_yoy,ocfps,ocfps_yoy,roe,roe_yoy,roe_dlt,udpps,udpps_yoy,year,"+
 			"inv_turnover_days,ar_turnover_days,cur_ratio,quick_ratio,cons_quick_ratio,equity_ratio,udate,utime) VALUES"+
 			" %s"+
-			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values"+
-			"(eps_yoy),gpm=values(gpm),busi_cycle=values(busi_cycle)"+
+			" on duplicate key update dar=values(dar),crps=values(crps),eps=values(eps),eps_yoy=values(eps_yoy),"+
+			"gpm=values(gpm),busi_cycle=values(busi_cycle),"+
 			"gr=values(gr),gr_yoy=values(gr_yoy),itr=values(itr),navps=values(navps),np=values(np),"+
 			"np_adn=values(np_adn),np_adn_yoy=values(np_adn_yoy),npm=values(npm),np_rg=values(np_rg),"+
 			"np_yoy=values(np_yoy),ocfps=values(ocfps),ocfps_yoy=values(ocfps_yoy),roe=values(roe),"+
