@@ -31,7 +31,7 @@ CREATE TABLE `basics` (
   `profit` double DEFAULT NULL COMMENT '利润同比（%）',
   `gpr` double DEFAULT NULL COMMENT '毛利率（%）',
   `npr` double DEFAULT NULL COMMENT '净利润率（%）',
-  `holders` bigint(20) DEFAULT NULL COMMENT '股东人数',
+  `holders` bigint DEFAULT NULL COMMENT '股东人数',
   `price` decimal(6,3) DEFAULT NULL COMMENT '现价',
   `varate` decimal(4,2) DEFAULT NULL COMMENT '涨跌幅（%）',
   `var` decimal(6,3) DEFAULT NULL COMMENT '涨跌',
@@ -57,7 +57,7 @@ CREATE TABLE `basics` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `cmpool` (
-  `seqno` int(11) NOT NULL AUTO_INCREMENT,
+  `seqno` int NOT NULL AUTO_INCREMENT,
   `code` varchar(8) NOT NULL,
   `remarks` varchar(200) DEFAULT NULL,
   PRIMARY KEY (`seqno`,`code`)
@@ -102,14 +102,14 @@ CREATE TABLE `finance` (
 CREATE TABLE `fin_predict` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
   `year` varchar(4) NOT NULL COMMENT '年份',
-  `eps_num` int(11) DEFAULT NULL COMMENT '每股收益预测机构数',
+  `eps_num` int DEFAULT NULL COMMENT '每股收益预测机构数',
   `eps_min` double DEFAULT NULL COMMENT '每股收益最小值',
   `eps_avg` double DEFAULT NULL COMMENT '每股收益平均值',
   `eps_max` double DEFAULT NULL COMMENT '每股收益最大值',
   `eps_ind_avg` double DEFAULT NULL COMMENT '每股收益行业平均',
   `eps_up_rt` double DEFAULT NULL COMMENT 'EPS预测上调机构占比',
   `eps_dn_rt` double DEFAULT NULL COMMENT 'EPS预测下调机构占比',
-  `np_num` int(11) DEFAULT NULL COMMENT '净利润预测机构数',
+  `np_num` int DEFAULT NULL COMMENT '净利润预测机构数',
   `np_min` double DEFAULT NULL COMMENT '净利润最小值 (亿元）',
   `np_avg` double DEFAULT NULL COMMENT '净利润平均值 (亿元）',
   `np_max` double DEFAULT NULL COMMENT '净利润最大值 (亿元）',
@@ -135,11 +135,11 @@ CREATE TABLE `fs_stats` (
 
 CREATE TABLE `grader_stats` (
   `grader` varchar(20) NOT NULL,
-  `frame` int(11) NOT NULL,
+  `frame` int NOT NULL,
   `score` double NOT NULL,
   `threshold` double DEFAULT NULL,
   `uuid` varchar(50) DEFAULT NULL,
-  `size` int(11) NOT NULL,
+  `size` int NOT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`grader`,`frame`,`score`)
@@ -157,8 +157,8 @@ CREATE TABLE `indc_feat` (
   `fid` varchar(50) NOT NULL COMMENT '特征ID(UUID)',
   `cytp` varchar(5) NOT NULL COMMENT '周期类型（D:天/W:周/M:月）',
   `bysl` varchar(2) NOT NULL COMMENT 'BY：买/SL：卖',
-  `smp_num` int(3) NOT NULL COMMENT '采样数量',
-  `fd_num` int(10) NOT NULL COMMENT '同类样本数量',
+  `smp_num` int NOT NULL COMMENT '采样数量',
+  `fd_num` int NOT NULL COMMENT '同类样本数量',
   `weight` double DEFAULT NULL COMMENT '权重',
   `remarks` varchar(200) DEFAULT NULL COMMENT '备注',
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
@@ -173,9 +173,9 @@ CREATE TABLE `indc_feat_raw` (
   `cytp` varchar(5) NOT NULL COMMENT '周期类型（D:天/W:周/M:月）',
   `bysl` varchar(2) NOT NULL COMMENT 'BY：买/SL：卖',
   `smp_date` varchar(10) NOT NULL COMMENT '采样开始日期',
-  `smp_num` int(3) NOT NULL COMMENT '采样数量',
+  `smp_num` int NOT NULL COMMENT '采样数量',
   `mark` double DEFAULT NULL COMMENT '标记获利/亏损幅度',
-  `tspan` int(11) DEFAULT NULL COMMENT '获利/亏损的时间跨度',
+  `tspan` int DEFAULT NULL COMMENT '获利/亏损的时间跨度',
   `mpt` double DEFAULT NULL COMMENT '单位时间的获利/亏损（Mark/TSpan）',
   `remarks` varchar(200) DEFAULT NULL COMMENT '备注',
   `udate` varchar(10) NOT NULL COMMENT '更新日期',
@@ -187,7 +187,7 @@ CREATE TABLE `indc_feat_raw` (
 CREATE TABLE `indicator_d` (
   `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
-  `Klid` int(11) NOT NULL,
+  `Klid` int NOT NULL,
   `KDJ_K` double DEFAULT NULL,
   `KDJ_D` double DEFAULT NULL,
   `KDJ_J` double DEFAULT NULL,
@@ -223,7 +223,7 @@ CREATE TABLE `indicator_d` (
 CREATE TABLE `indicator_m` (
   `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
-  `Klid` int(11) NOT NULL,
+  `Klid` int NOT NULL,
   `KDJ_K` double DEFAULT NULL,
   `KDJ_D` double DEFAULT NULL,
   `KDJ_J` double DEFAULT NULL,
@@ -259,7 +259,7 @@ CREATE TABLE `indicator_m` (
 CREATE TABLE `indicator_w` (
   `Code` varchar(8) NOT NULL,
   `Date` varchar(10) NOT NULL,
-  `Klid` int(11) NOT NULL,
+  `Klid` int NOT NULL,
   `KDJ_K` double DEFAULT NULL,
   `KDJ_D` double DEFAULT NULL,
   `KDJ_J` double DEFAULT NULL,
@@ -294,7 +294,7 @@ CREATE TABLE `indicator_w` (
 
 CREATE TABLE `kdj_feat_dat` (
   `fid` varchar(50) NOT NULL COMMENT '特征ID',
-  `seq` int(11) NOT NULL COMMENT '序号',
+  `seq` int NOT NULL COMMENT '序号',
   `K` double NOT NULL,
   `D` double NOT NULL,
   `J` double NOT NULL,
@@ -306,7 +306,7 @@ CREATE TABLE `kdj_feat_dat` (
 CREATE TABLE `kdj_feat_dat_raw` (
   `code` varchar(8) NOT NULL COMMENT '股票代码',
   `fid` varchar(15) NOT NULL COMMENT '特征ID',
-  `klid` int(11) NOT NULL COMMENT '序号',
+  `klid` int NOT NULL COMMENT '序号',
   `K` double NOT NULL,
   `D` double NOT NULL,
   `J` double NOT NULL,
@@ -324,8 +324,8 @@ CREATE TABLE `kdjv_stats` (
   `bh` double DEFAULT NULL COMMENT 'Buy High',
   `sor` double DEFAULT NULL COMMENT 'Sell Overlap Ratio',
   `bor` double DEFAULT NULL COMMENT 'Buy Overlap Ratio',
-  `scnt` int(5) DEFAULT NULL COMMENT 'Sell Count',
-  `bcnt` int(5) DEFAULT NULL COMMENT 'Buy Count',
+  `scnt` int DEFAULT NULL COMMENT 'Sell Count',
+  `bcnt` int DEFAULT NULL COMMENT 'Buy Count',
   `smean` double DEFAULT NULL COMMENT 'Sell Mean',
   `bmean` double DEFAULT NULL COMMENT 'Buy Mean',
   `frmdt` varchar(10) DEFAULT NULL COMMENT 'Data Date Start',
@@ -339,7 +339,7 @@ CREATE TABLE `kline_60m` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
   `time` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -360,7 +360,7 @@ CREATE TABLE `kline_60m` (
 CREATE TABLE `kline_d_b` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -388,7 +388,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_b_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -411,7 +411,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_b_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -440,7 +440,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_b_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -493,7 +493,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_f` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -521,7 +521,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_f_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -544,7 +544,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_f_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -573,7 +573,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_f_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -626,7 +626,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -654,7 +654,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_n_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -677,7 +677,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_n_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -706,7 +706,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_n_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -759,7 +759,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_d_v` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -824,7 +824,7 @@ CREATE TABLE `kline_d_v` (
 CREATE TABLE `kline_m_b` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -852,7 +852,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_b_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -875,7 +875,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_b_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -904,7 +904,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_b_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -957,7 +957,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_f` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -985,7 +985,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_f_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -1008,7 +1008,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_f_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -1037,7 +1037,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_f_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -1090,7 +1090,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1118,7 +1118,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_n_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -1141,7 +1141,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_n_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -1170,7 +1170,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_n_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -1223,7 +1223,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_m_v` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1288,7 +1288,7 @@ CREATE TABLE `kline_m_v` (
 CREATE TABLE `kline_w_b` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1316,7 +1316,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_b_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -1339,7 +1339,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_b_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -1368,7 +1368,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_b_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -1421,7 +1421,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_f` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1449,7 +1449,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_f_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -1472,7 +1472,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_f_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -1501,7 +1501,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_f_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -1554,7 +1554,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_n` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1582,7 +1582,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_n_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `amount` double DEFAULT NULL,
   `xrate` double DEFAULT NULL,
   `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
@@ -1605,7 +1605,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_n_ma` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma10` double DEFAULT NULL,
   `ma20` double DEFAULT NULL,
@@ -1634,7 +1634,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_n_ma_lr` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `ma5` double DEFAULT NULL,
   `ma5_o` double DEFAULT NULL,
   `ma5_h` double DEFAULT NULL,
@@ -1687,7 +1687,7 @@ PARTITIONS 1024 */;
 CREATE TABLE `kline_w_v` (
   `code` varchar(8) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `open` double DEFAULT NULL,
   `high` double DEFAULT NULL,
   `close` double DEFAULT NULL,
@@ -1752,7 +1752,7 @@ CREATE TABLE `kline_w_v` (
 CREATE TABLE `kpts10` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1773,7 +1773,7 @@ CREATE TABLE `kpts10` (
 CREATE TABLE `kpts120` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1794,7 +1794,7 @@ CREATE TABLE `kpts120` (
 CREATE TABLE `kpts20` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1815,7 +1815,7 @@ CREATE TABLE `kpts20` (
 CREATE TABLE `kpts30` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1836,7 +1836,7 @@ CREATE TABLE `kpts30` (
 CREATE TABLE `kpts5` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1857,7 +1857,7 @@ CREATE TABLE `kpts5` (
 CREATE TABLE `kpts60` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `date` varchar(10) NOT NULL,
   `score` decimal(6,0) NOT NULL,
   `sum_fall` decimal(10,3) NOT NULL,
@@ -1881,7 +1881,7 @@ CREATE TABLE `proxy_list` (
   `port` varchar(5) NOT NULL,
   `type` varchar(10) NOT NULL,
   `status` varchar(10) NOT NULL,
-  `fail` int(11) NOT NULL,
+  `fail` int NOT NULL,
   `last_check` varchar(20) NOT NULL,
   `last_scanned` varchar(20) NOT NULL,
   PRIMARY KEY (`host`,`port`),
@@ -1901,7 +1901,7 @@ CREATE TABLE `stats` (
 CREATE TABLE `stockrel` (
   `code` varchar(6) NOT NULL,
   `date` varchar(20) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `rcode_pos` varchar(6) DEFAULT NULL,
   `rcode_pos_hs` varchar(6) DEFAULT NULL,
   `rcode_neg` varchar(6) DEFAULT NULL,
@@ -1910,8 +1910,8 @@ CREATE TABLE `stockrel` (
   `pos_corl_hs` double DEFAULT NULL,
   `neg_corl` double DEFAULT NULL,
   `neg_corl_hs` double DEFAULT NULL,
-  `rcode_size` int(11) DEFAULT NULL,
-  `rcode_size_hs` int(11) DEFAULT NULL,
+  `rcode_size` int DEFAULT NULL,
+  `rcode_size_hs` int DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`code`,`klid`)
@@ -1920,18 +1920,18 @@ CREATE TABLE `stockrel` (
 PARTITIONS 512 */;
 
 CREATE TABLE `tradecal` (
-  `index` bigint(20) DEFAULT NULL,
+  `index` bigint DEFAULT NULL,
   `calendarDate` date DEFAULT NULL,
-  `isOpen` int(11) DEFAULT NULL,
+  `isOpen` int DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
   `utime` varchar(8) DEFAULT NULL COMMENT '更新时间',
   KEY `ix_tradecal_index` (`index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `user_agents` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `user_agent` varchar(512) DEFAULT NULL,
-  `times_seen` int(11) DEFAULT NULL,
+  `times_seen` int DEFAULT NULL,
   `simple_software_string` varchar(100) DEFAULT NULL,
   `software_name` varchar(45) DEFAULT NULL,
   `software_version` varchar(30) DEFAULT NULL,
@@ -1948,7 +1948,7 @@ CREATE TABLE `worst_rec` (
   `model` varchar(45) NOT NULL,
   `start_time` varchar(20) NOT NULL,
   `phase` varchar(10) NOT NULL,
-  `step` int(11) NOT NULL,
+  `step` int NOT NULL,
   `uuid` varchar(50) DEFAULT NULL,
   `xentropy` double DEFAULT NULL,
   `predict` decimal(6,0) DEFAULT NULL,
@@ -1960,7 +1960,7 @@ CREATE TABLE `xcorl_trn` (
   `uuid` varchar(50) NOT NULL,
   `code` varchar(8) NOT NULL,
   `date` varchar(10) NOT NULL,
-  `klid` int(11) NOT NULL,
+  `klid` int NOT NULL,
   `rcode` varchar(8) NOT NULL,
   `corl` double DEFAULT NULL,
   `flag` varchar(20) DEFAULT NULL,
@@ -1975,7 +1975,7 @@ CREATE TABLE `xcorl_trn` (
 CREATE TABLE `xdxr` (
   `code` varchar(6) NOT NULL COMMENT '股票代码',
   `name` varchar(10) DEFAULT NULL COMMENT '股票名称',
-  `idx` int(10) NOT NULL COMMENT '序号',
+  `idx` int NOT NULL COMMENT '序号',
   `notice_date` varchar(10) DEFAULT NULL COMMENT '公告日期',
   `report_year` varchar(10) DEFAULT NULL COMMENT '报告期',
   `board_date` varchar(10) DEFAULT NULL COMMENT '董事会日期',
@@ -1997,7 +1997,7 @@ CREATE TABLE `xdxr` (
   `progress` varchar(45) DEFAULT NULL COMMENT '方案进度',
   `divi_target` varchar(45) DEFAULT NULL COMMENT '分红对象',
   `divi_amt` double DEFAULT NULL COMMENT '分红总额（亿）',
-  `shares_base` bigint(20) DEFAULT NULL COMMENT '派息股本基数',
+  `shares_base` bigint DEFAULT NULL COMMENT '派息股本基数',
   `end_trddate` varchar(10) DEFAULT NULL COMMENT '最后交易日',
   `xprice` varchar(1) DEFAULT NULL COMMENT '是否已更新过前复权价格信息',
   `udate` varchar(10) DEFAULT NULL COMMENT '更新日期',
