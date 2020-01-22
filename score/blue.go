@@ -72,7 +72,7 @@ func (b *BlueChip) Geta() (r *Result) {
 //ranked: sort the result by score in descending order
 func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
-	r.PfIds = append(r.PfIds, b.Id())
+	r.PfIds = append(r.PfIds, b.ID())
 	var blus []*BlueChip
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("BLUE")
@@ -94,7 +94,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 		item.Name = ib.Name
 		item.Profiles = make(map[string]*Profile)
 		ip := new(Profile)
-		item.Profiles[b.Id()] = ip
+		item.Profiles[b.ID()] = ip
 		ip.FieldHolder = ib
 
 		wts := make(WtScore)
@@ -115,7 +115,7 @@ func (b *BlueChip) Get(s []string, limit int, ranked bool) (r *Result) {
 
 		item.Score += ip.Score
 	}
-	r.SetFields(b.Id(), b.Fields()...)
+	r.SetFields(b.ID(), b.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -540,12 +540,12 @@ func cofa(num float64) float64 {
 // · SMA(DAR,3) >= 95
 // Baseline: Latest DAR <= 80% and SMA DAR <= 70%
 func pDar(b *BlueChip, hist []*model.Finance, wts WtScore) {
-	MAX_DAR := 100.
-	ZERO_DAR := 80.
+	MaxDAR := 100.
+	ZeroDAR := 80.
 	s := .0
 	// fine latest DAR
-	if b.Dar.Valid && b.Dar.Float64 > ZERO_DAR {
-		s = 50. * math.Min(1, math.Pow((b.Dar.Float64-ZERO_DAR)/(MAX_DAR-ZERO_DAR), 4.37))
+	if b.Dar.Valid && b.Dar.Float64 > ZeroDAR {
+		s = 50. * math.Min(1, math.Pow((b.Dar.Float64-ZeroDAR)/(MaxDAR-ZeroDAR), 4.37))
 	}
 	// fine average DAR
 	dars := make([]float64, 0, 16)
@@ -587,12 +587,12 @@ func pDar(b *BlueChip, hist []*model.Finance, wts WtScore) {
 // UDPPS: Get max score if UDPPS_YOY is all positive and complete for 3 years, and SMA UDPPS_YOY >= 10%;
 //        Get 0 if avg negative growth rate is <= -70%
 func sUdpps(b *BlueChip, fins []*model.Finance, wts WtScore) {
-	ZERO_PU := 10.
-	MAX_PU := 1.
+	ZeroPU := 10.
+	MaxPU := 1.
 	s := .0
 	// score latest P/U
-	if b.Pu.Valid && b.Pu.Float64 >= 0 && b.Pu.Float64 < ZERO_PU {
-		s = 100. * math.Min(1, math.Pow((ZERO_PU-b.Pu.Float64)/(ZERO_PU-MAX_PU), 0.5))
+	if b.Pu.Valid && b.Pu.Float64 >= 0 && b.Pu.Float64 < ZeroPU {
+		s = 100. * math.Min(1, math.Pow((ZeroPU-b.Pu.Float64)/(ZeroPU-MaxPU), 0.5))
 	}
 	wts.Add("PU", s, WeightPU)
 	// score UDPPS growth rate
@@ -668,12 +668,12 @@ func getFinPredicts(code string) (fps []*model.FinPredict) {
 // EPS GR: Get max score if EPS_YOY is all positive and complete for 3 years, and SMA EPS_YOY >= 15;
 //         Get 0 if recent 5 avg negative growth rate is <= -80%
 func sEps(b *BlueChip, hist []*model.Finance, wts WtScore) {
-	ZERO_PE := 80.
-	MAX_PE := 5.
+	ZeroPE := 80.
+	MaxPE := 5.
 	// score latest P/E
 	s := .0
-	if b.Pe.Float64 > 0 && b.Pe.Float64 < ZERO_PE {
-		s = 100. * math.Min(1, math.Pow((ZERO_PE-b.Pe.Float64)/(ZERO_PE-MAX_PE), 0.5))
+	if b.Pe.Float64 > 0 && b.Pe.Float64 < ZeroPE {
+		s = 100. * math.Min(1, math.Pow((ZeroPE-b.Pe.Float64)/(ZeroPE-MaxPE), 0.5))
 	}
 	wts.Add("PE", s, WeightPE)
 	// score EPS growth rate
@@ -727,8 +727,8 @@ func sEps(b *BlueChip, hist []*model.Finance, wts WtScore) {
 	return
 }
 
-//Id the identifier of this scorer
-func (*BlueChip) Id() string {
+//ID the identifier of this scorer
+func (*BlueChip) ID() string {
 	return "BLUE"
 }
 

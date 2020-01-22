@@ -37,7 +37,6 @@ const (
 
 //GetTrDataDB get specified type of kline data from database.
 func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model.TradeData) {
-	//TODO refactor me
 	tables := resolveTables(qry)
 	var wg, wgr sync.WaitGroup
 	//A slice of trading data of arbitrary kind
@@ -66,30 +65,30 @@ func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model
 
 	for table, typ := range tables {
 		wg.Add(1)
-		go func() {
+		go func(tab string, typ reflect.Type) {
 			defer wg.Done()
 			intf := reflect.New(reflect.SliceOf(typ)).Interface()
 			// sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
 			// 	table, cond1, cond2, d)
 			if limit <= 0 {
-				sql := fmt.Sprintf("select * from %s where code = ? order by klid", table)
+				sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
 				if desc {
 					sql += " desc"
 				}
 				_, e := dbmap.Select(&intf, sql, code)
-				util.CheckErr(e, "failed to query "+table+" for "+code)
+				util.CheckErr(e, "failed to query "+tab+" for "+code)
 			} else {
 				d := ""
 				if desc {
 					d = "desc"
 				}
 				sql := fmt.Sprintf("select * from (select * from %s where code = ? order by klid desc limit ?) t "+
-					"order by t.klid %s", table, d)
+					"order by t.klid %s", tab, d)
 				_, e := dbmap.Select(&intf, sql, code, limit)
-				util.CheckErr(e, "failed to query "+table+" for "+code)
+				util.CheckErr(e, "failed to query "+tab+" for "+code)
 			}
 			ochan <- intf
-		}()
+		}(table, typ)
 	}
 	wg.Wait()
 	close(ochan)
@@ -302,7 +301,6 @@ func getTableColumns(i interface{}) (cols []string) {
 //CalLogReturnsV2 calculates log return for high, open, close, low, and volume
 // variation rates, or regulated variation rates if available.
 func CalLogReturnsV2(trdat *model.TradeData) {
-	//TODO refactor me
 	hasLogRtn := len(trdat.LogRtn) > 0
 	hasMovAvgLogRtn := len(trdat.MovAvgLogRtn) > 0
 	for i, b := range trdat.Base {

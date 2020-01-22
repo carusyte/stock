@@ -13,8 +13,8 @@ import (
 func TestParseLastJson(t *testing.T) {
 	code := "600242"
 	//get last kline data
-	url_last := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/last.js", code)
-	body, e := util.HttpGetBytes(url_last)
+	urlLast := fmt.Sprintf("http://d.10jqka.com.cn/v2/line/hs_%s/01/last.js", code)
+	body, e := util.HttpGetBytes(urlLast)
 	if e != nil {
 		t.Error(e)
 	}

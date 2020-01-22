@@ -42,7 +42,7 @@ func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) 
 		parallel = conf.Args.ChromeDP.PoolSize
 	}
 	wf := make(chan int, parallel)
-	outstks := make(chan *model.Stock, JOB_CAPACITY)
+	outstks := make(chan *model.Stock, JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
 	chDbjob = createDbJobQueues(kltype...)

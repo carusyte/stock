@@ -470,8 +470,9 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 	tdmap = make(map[model.DBTab][]byte)
 	hismap = make(map[model.DBTab][]byte)
 	// create context
-	ctxt, _ := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
-
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
+	defer cancel()
+	
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
@@ -482,7 +483,7 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 		opts = append(opts, chromedp.Headless)
 	}
 
-	ctxt, cancel := chromedp.NewExecAllocator(ctxt, opts...)
+	ctxt, cancel = chromedp.NewExecAllocator(ctxt, opts...)
 	defer cancel()
 
 	chr := make(chan bool)
@@ -866,20 +867,20 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	default:
 		log.Panicf("unhandled kltype: %s", klt)
 	}
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
-	body, e = util.HttpGetBytesUsingHeaders(url_today,
+	urlToday := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(urlToday,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_today)
 	if e != nil {
-		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
+		log.Printf("%s error visiting %s: \n%+v", code, urlToday, e)
 		return kldy, false, false
 	}
 	ktoday = model.Ktoday{}
 	e = json.Unmarshal(strip(body), &ktoday)
 	if e != nil {
-		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, urlToday, string(body), e)
 		return kldy, false, true
 	}
 	if ktoday.Code != "" {
@@ -887,7 +888,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		dkeys = append(dkeys, ktoday.Date)
 		oldest = ktoday.Date
 	} else {
-		log.Printf("kline today skipped: %s", url_today)
+		log.Printf("kline today skipped: %s", urlToday)
 	}
 
 	// If it is an IPO, return immediately
@@ -902,23 +903,23 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	}
 
 	//get last kline data
-	url_last := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/last.js", code, mode)
-	body, e = util.HttpGetBytesUsingHeaders(url_last,
+	urlLast := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/last.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(urlLast,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_last)
 	if e != nil {
-		log.Printf("%s error visiting %s: \n%+v", code, url_last, e)
+		log.Printf("%s error visiting %s: \n%+v", code, urlLast, e)
 		return kldy, false, true
 	}
 	klast = model.Klast{}
 	e = json.Unmarshal(strip(body), &klast)
 	if e != nil {
-		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_last, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, urlLast, string(body), e)
 		return kldy, false, true
 	} else if klast.Data == "" {
-		log.Printf("%s empty data in json response from %s: %s", code, url_last, string(body))
+		log.Printf("%s empty data in json response from %s: %s", code, urlLast, string(body))
 		return kldy, false, true
 	}
 
@@ -988,22 +989,22 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 		}
 		ok := false
 		for tries := 1; tries <= 3; tries++ {
-			url_hist := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/%d.js", code, mode,
+			urlHist := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/%d.js", code, mode,
 				yr)
-			body, e = util.HttpGetBytesUsingHeaders(url_hist,
+			body, e = util.HttpGetBytesUsingHeaders(urlHist,
 				map[string]string{
 					"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 					"Cookie":  conf.Args.DataSource.ThsCookie})
 			//body, e = util.HttpGetBytes(url_hist)
 			if e != nil {
-				log.Printf("%s [%d] error visiting %s: \n%+v", code, tries, url_hist, e)
+				log.Printf("%s [%d] error visiting %s: \n%+v", code, tries, urlHist, e)
 				ok = false
 				continue
 			}
 			khist := model.Khist{}
 			e = json.Unmarshal(strip(body), &khist)
 			if e != nil {
-				log.Printf("%s [%d], error parsing json from %s: %s\n%+v", code, tries, url_hist, string(body), e)
+				log.Printf("%s [%d], error parsing json from %s: %s\n%+v", code, tries, urlHist, string(body), e)
 				ok = false
 				continue
 			}
@@ -1063,25 +1064,25 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	default:
 		log.Panicf("unhandled kltype: %s", klt)
 	}
-	url_today := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
-	body, e = util.HttpGetBytesUsingHeaders(url_today,
+	urlToday := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/today.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(urlToday,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	if e != nil {
-		log.Printf("%s error visiting %s: \n%+v", code, url_today, e)
+		log.Printf("%s error visiting %s: \n%+v", code, urlToday, e)
 		return quotes, false, false
 	}
 	ktoday = model.Ktoday{}
 	e = json.Unmarshal(strip(body), &ktoday)
 	if e != nil {
-		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_today, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, urlToday, string(body), e)
 		return quotes, false, true
 	}
 	if ktoday.Code != "" {
 		quotes = append(quotes, &ktoday.Quote)
 	} else {
-		log.Printf("kline today skipped: %s", url_today)
+		log.Printf("kline today skipped: %s", urlToday)
 	}
 
 	_, e = time.Parse(global.DateFormat, ktoday.Date)
@@ -1102,42 +1103,40 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 			log.Printf("%s invalid date format for \"time to market\": %s\n%+v",
 				code, stk.TimeToMarket.String, e)
 			return quotes, false, true
-		} else {
-			ttd, e := time.Parse(global.DateFormat, ktoday.Date)
-			if e != nil {
-				log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
-					code, ktoday.Date, e)
-				return quotes, false, true
-			} else {
-				y1, w1 := ttm.ISOWeek()
-				y2, w2 := ttd.ISOWeek()
-				if y1 == y2 && w1 == w2 {
-					log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
-					return quotes, true, false
-				}
-			}
+		}
+		ttd, e := time.Parse(global.DateFormat, ktoday.Date)
+		if e != nil {
+			log.Printf("%s invalid date format for \"kline today\": %s\n%+v",
+				code, ktoday.Date, e)
+			return quotes, false, true
+		}
+		y1, w1 := ttm.ISOWeek()
+		y2, w2 := ttd.ISOWeek()
+		if y1 == y2 && w1 == w2 {
+			log.Printf("%s IPO week %s fetch data for today only", code, stk.TimeToMarket.String)
+			return quotes, true, false
 		}
 	}
 
 	//get all kline data
 	//e.g: http://d.10jqka.com.cn/v6/line/hs_000001/01/all.js
-	url_all := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/all.js", code, mode)
-	body, e = util.HttpGetBytesUsingHeaders(url_all,
+	urlAll := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/hs_%s/%s/all.js", code, mode)
+	body, e = util.HttpGetBytesUsingHeaders(urlAll,
 		map[string]string{
 			"Referer": "http://stockpage.10jqka.com.cn/HQ_v4.html",
 			"Cookie":  conf.Args.DataSource.ThsCookie})
 	//body, e = util.HttpGetBytes(url_all)
 	if e != nil {
-		log.Printf("%s error visiting %s: \n%+v", code, url_all, e)
+		log.Printf("%s error visiting %s: \n%+v", code, urlAll, e)
 		return quotes, false, true
 	}
 	kall = model.KlAll{}
 	e = json.Unmarshal(strip(body), &kall)
 	if e != nil {
-		log.Printf("%s error parsing json from %s: %s\n%+v", code, url_all, string(body), e)
+		log.Printf("%s error parsing json from %s: %s\n%+v", code, urlAll, string(body), e)
 		return quotes, false, true
 	} else if kall.Price == "" {
-		log.Printf("%s empty data in json response from %s: %s", code, url_all, string(body))
+		log.Printf("%s empty data in json response from %s: %s", code, urlAll, string(body))
 		return quotes, false, true
 	}
 
@@ -1319,9 +1318,9 @@ DATES:
 			case 4:
 				kl.Close = util.Str2F64(e)
 			case 5:
-				kl.Volume = sql.NullFloat64{util.Str2F64(e), true}
+				kl.Volume = sql.NullFloat64{Float64: util.Str2F64(e), Valid:true}
 			case 6:
-				kl.Amount = sql.NullFloat64{util.Str2F64(e), true}
+				kl.Amount = sql.NullFloat64{Float64: util.Str2F64(e), Valid:true}
 			case 7:
 				kl.Xrate = util.Str2Fnull(e)
 			default:

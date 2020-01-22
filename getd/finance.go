@@ -35,8 +35,8 @@ func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting XDXR info...")
 	unmappedField = make(map[string]int)
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chstk := make(chan *model.Stock, global.JobCapacity)
+	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
@@ -416,11 +416,11 @@ func saveXdxrs(xdxrs []*model.Xdxr) {
 
 func newXdxr() *model.Xdxr {
 	xdxr := &model.Xdxr{}
-	xdxr.SharesAllot = sql.NullFloat64{0, false}
-	xdxr.SharesCvt = sql.NullFloat64{0, false}
-	xdxr.Dyr = sql.NullFloat64{0, false}
-	xdxr.Divi = sql.NullFloat64{0, false}
-	xdxr.Dpr = sql.NullFloat64{0, false}
+	xdxr.SharesAllot = sql.NullFloat64{Float64: 0, Valid: false}
+	xdxr.SharesCvt = sql.NullFloat64{Float64: 0, Valid: false}
+	xdxr.Dyr = sql.NullFloat64{Float64: 0, Valid: false}
+	xdxr.Divi = sql.NullFloat64{Float64: 0, Valid: false}
+	xdxr.Dpr = sql.NullFloat64{Float64: 0, Valid: false}
 	return xdxr
 }
 
@@ -461,8 +461,8 @@ func parseXdxrPlan(xdxr *model.Xdxr) {
 func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting Finance info...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chstk := make(chan *model.Stock, global.JobCapacity)
+	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
@@ -490,8 +490,8 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("getting financial prediction...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chstk := make(chan *model.Stock, global.JobCapacity)
+	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
@@ -782,16 +782,16 @@ func saveFinPredict(code string, fpMap map[string]*model.FinPredict) bool {
 func newFinPredict(code string) *model.FinPredict {
 	fp := new(model.FinPredict)
 	fp.Code = code
-	fp.EpsAvg = sql.NullFloat64{0, false}
-	fp.EpsIndAvg = sql.NullFloat64{0, false}
-	fp.EpsNum = sql.NullInt64{0, false}
-	fp.EpsMax = sql.NullFloat64{0, false}
-	fp.EpsMin = sql.NullFloat64{0, false}
-	fp.NpAvg = sql.NullFloat64{0, false}
-	fp.NpIndAvg = sql.NullFloat64{0, false}
-	fp.NpNum = sql.NullInt64{0, false}
-	fp.NpMax = sql.NullFloat64{0, false}
-	fp.NpMin = sql.NullFloat64{0, false}
+	fp.EpsAvg = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.EpsIndAvg = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.EpsNum = sql.NullInt64{Int64: 0, Valid: false}
+	fp.EpsMax = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.EpsMin = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.NpAvg = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.NpIndAvg = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.NpNum = sql.NullInt64{Int64: 0, Valid: false}
+	fp.NpMax = sql.NullFloat64{Float64: 0, Valid: false}
+	fp.NpMin = sql.NullFloat64{Float64: 0, Valid: false}
 	return fp
 }
 

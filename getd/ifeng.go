@@ -9,6 +9,7 @@ import (
 	"github.com/carusyte/stock/util"
 )
 
+//ParseIfengBonus parses stock bonus info from Ifeng
 func ParseIfengBonus(stock *model.Stock) (ok, retry bool) {
 	urlt := `http://app.finance.ifeng.com/data/stock/fhpxjl.php?symbol=%s`
 	url := fmt.Sprintf(urlt, stock.Code)

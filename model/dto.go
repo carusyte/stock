@@ -1202,9 +1202,9 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 			kt.High = util.Str2F64(qm["8"].(string))
 			kt.Low = util.Str2F64(qm["9"].(string))
 			kt.Close = util.Str2F64(qm["11"].(string))
-			kt.Volume = sql.NullFloat64{qm["13"].(float64), true}
-			kt.Amount = sql.NullFloat64{util.Str2F64(qm["19"].(string)), true}
-			kt.Xrate = sql.NullFloat64{util.Str2F64(qm["1968584"].(string)), true}
+			kt.Volume = sql.NullFloat64{Float64: qm["13"].(float64), Valid: true}
+			kt.Amount = sql.NullFloat64{Float64: util.Str2F64(qm["19"].(string)), Valid:true}
+			kt.Xrate = sql.NullFloat64{Float64:util.Str2F64(qm["1968584"].(string)), Valid:true}
 		} else {
 			e = errors.Errorf("failed to parse Ktoday json: %s", string(b))
 			return
@@ -1326,6 +1326,7 @@ type XQKline struct {
 	Code  string
 	Data  map[string]*TradeDataBasic
 	Dates []string
+	NumAdded int
 }
 
 //creates a map for column name -> value
@@ -1430,10 +1431,16 @@ func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
 	}
-	ecode := m["error_code"].(float64)
-	if ecode != 0 {
-		desc := m["error_description"].(string)
-		return errors.Errorf("error_code from remote: %s, error_description: %s", ecode, desc)
+	if ecode, ok := m["error_code"].(float64); ok {
+		if ecode != 0 {
+			desc := m["error_description"].(string)
+			return errors.Errorf("error_code=%s, error_description=%s", ecode, desc)
+		}
+	} else if ecode, ok := m["error_code"].(string); ok {
+		if ecode != "0" {
+			desc := m["error_description"].(string)
+			return errors.Errorf("error_code=%s, error_description=%s", ecode, desc)
+		}
 	}
 	if m, ok = m["data"].(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast 'data' to map: %+v", m)
@@ -1483,10 +1490,12 @@ func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
 		if e != nil {
 			return
 		}
+		x.NumAdded = 0
 		//omit duplicates
 		if _, ok = x.Data[base.Date]; !ok {
 			x.Dates = append(x.Dates, base.Date)
 			x.Data[base.Date] = base
+			x.NumAdded++
 		}
 	}
 	return nil

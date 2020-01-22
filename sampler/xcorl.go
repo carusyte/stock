@@ -34,7 +34,7 @@ func CalXCorl(stocks *model.Stocks) {
 	var wg sync.WaitGroup
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	wf := make(chan int, pl)
-	suc := make(chan string, global.JOB_CAPACITY)
+	suc := make(chan string, global.JobCapacity)
 	var rstks []string
 	wgr := collect(&rstks, suc)
 	chxcorl := make(chan *xCorlTrnDBJob, conf.Args.DBQueueCapacity)

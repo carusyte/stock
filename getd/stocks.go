@@ -67,8 +67,8 @@ func GetStockInfo() (allstk *model.Stocks) {
 func getIndustry(stocks *model.Stocks) {
 	log.Println("getting industry info...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chstk := make(chan *model.Stock, global.JobCapacity)
+	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks := new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	pl := conf.Args.Concurrency
@@ -99,8 +99,8 @@ func getIndustry(stocks *model.Stocks) {
 func getShares(stocks *model.Stocks) {
 	log.Println("getting share info...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, global.JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, global.JOB_CAPACITY)
+	chstk := make(chan *model.Stock, global.JobCapacity)
+	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks := new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	for i := 0; i < conf.Args.Concurrency; i++ {
@@ -402,9 +402,9 @@ func getFromExchanges() (allstk *model.Stocks) {
 //get Shenzhen A-share list
 func getSZSE() (list []*model.Stock) {
 	log.Println("Fetching Shenzhen A-Share list...")
-	url_sz := `http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1110x&TABKEY=tab1&random=%.16f`
-	url_sz = fmt.Sprintf(url_sz, rand.Float64())
-	d, e := util.HttpGetBytes(url_sz)
+	urlSZ := `http://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1110x&TABKEY=tab1&random=%.16f`
+	urlSZ = fmt.Sprintf(urlSZ, rand.Float64())
+	d, e := util.HttpGetBytes(urlSZ)
 	util.CheckErr(e, "failed to get Shenzhen A-share list")
 	x, e := zip.NewReader(bytes.NewReader(d), int64(len(d)))
 	util.CheckErr(e, "failed to parse Shenzhen A-share xlsx file")
@@ -475,8 +475,8 @@ func getSSE() *model.Stocks {
 	// // supplement shares info from the following
 	// // http://query.sse.com.cn/commonQuery.do?jsonCallBack=jsonpCallback5040&isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=600000&_=1578668181485
 	// urlt := `http://query.sse.com.cn/commonQuery.do?isPagination=false&sqlId=COMMON_SSE_CP_GPLB_GPGK_GBJG_C&companyCode=%s`
-	// ichan := make(chan string, global.JOB_CAPACITY)
-	// ochan := make(chan *model.SseShareJson, global.JOB_CAPACITY)
+	// ichan := make(chan string, global.JobCapacity)
+	// ochan := make(chan *model.SseShareJson, global.JobCapacity)
 	// wgr.Add(1)
 	// go func() {
 	// 	defer wgr.Done()
@@ -516,13 +516,13 @@ func getSseShareInfo(wg *sync.WaitGroup, cin chan string, cout chan *model.SseSh
 				log.Debugf("failed to http body from %s\n%+v", url, e)
 				return repeat.HintTemporary(e)
 			}
-			sseJson := &model.SseShareJson{Code: code}
-			e = json.Unmarshal(payload, sseJson)
+			sseJSON := &model.SseShareJson{Code: code}
+			e = json.Unmarshal(payload, sseJSON)
 			if e != nil {
 				log.Debugf("failed to parse json from %s\n%+v", url, e)
 				return repeat.HintTemporary(e)
 			}
-			cout <- sseJson
+			cout <- sseJSON
 			return nil
 		}
 		e := repeat.Repeat(
@@ -908,6 +908,10 @@ func (x *xlsxData) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 
 // Update basic info such as P/E, P/UDPPS, P/OCFPS
 func updBasics(stocks *model.Stocks) *model.Stocks {
+	if stocks.Size() == 0 {
+		log.Infof("no stock for basic info update.")
+		return stocks
+	}
 	sql, e := dot.Raw("UPD_BASICS")
 	util.CheckErr(e, "failed to get UPD_BASICS sql")
 	sql = fmt.Sprintf(sql, util.Join(stocks.Codes, ",", true))

@@ -31,7 +31,7 @@ func SampAllKeyPoints() (e error) {
 	var wg sync.WaitGroup
 	pl := int(float64(runtime.NumCPU()) * 0.8)
 	wf := make(chan int, pl)
-	fail := make(chan string, global.JOB_CAPACITY)
+	fail := make(chan string, global.JobCapacity)
 	failstks := make([]string, 0, 16)
 	wgr := collect(&failstks, fail)
 	chkpts = createDbJobQueues()

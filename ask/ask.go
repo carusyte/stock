@@ -14,7 +14,7 @@ import (
 
 const APP_VERSION = "0.1"
 const MAX_CONCURRENCY = 200
-const JOB_CAPACITY = 512
+const JobCapacity = 512
 const LOGFILE = "ask.log"
 
 var dbmap *gorp.DbMap

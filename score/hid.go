@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+//HiD does the following:
 // Medium to Long term model.
 // Value stocks for:
 // 1. High average DYR of up to 5 years, without interruptions
@@ -49,22 +50,31 @@ type HiD struct {
 }
 
 const (
-	AVG_GR_HIST_SIZE         = 5
-	SCORE_DYR_AVG    float64 = 35
-	SCORE_DYR_GR             = 20
-	SCORE_LATEST_DYR         = 20
-	SCORE_DYR2DPR            = 15
-	SCORE_REG_DATE           = 10
-	PENALTY_DPR              = 25
+	//AvgGrHistSize average GR history size
+	AvgGrHistSize = 5
+	//ScoreDyrAvg score for DYR average
+	ScoreDyrAvg float64 = 35
+	//ScoreDyrGr score for DYR GR
+	ScoreDyrGr = 20
+	//ScoreLatestDyr score for latest DYR
+	ScoreLatestDyr = 20
+	//ScoreDyr2Dpr score for DYR to DPR
+	ScoreDyr2Dpr = 15
+	//ScoreRegDate score for registration date
+	ScoreRegDate = 10
+	//PenaltyDpr penalty for DPR
+	PenaltyDpr = 25
 )
 
+//Geta gets all data
 func (h *HiD) Geta() (r *Result) {
 	return h.Get(nil, -1, false)
 }
 
+//Get result for the specified args
 func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
-	r.PfIds = append(r.PfIds, h.Id())
+	r.PfIds = append(r.PfIds, h.ID())
 	var hids []*HiD
 	if s == nil || len(s) == 0 {
 		sql, e := dot.Raw("HID")
@@ -91,9 +101,9 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		item.Name = ih.Name
 		item.Profiles = make(map[string]*Profile)
 		ip := new(Profile)
-		item.Profiles[h.Id()] = ip
+		item.Profiles[h.ID()] = ip
 		ip.FieldHolder = ih
-		ip.Score += scoreDyr(ih, SCORE_LATEST_DYR)
+		ip.Score += scoreDyr(ih, ScoreLatestDyr)
 
 		if i := sort.SearchStrings(hstk, ih.Code); i < len(hstk) && ih.Code == hstk[i] {
 			item.AddMark(HMark)
@@ -115,7 +125,7 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 
 		ip.Score += scoreDyrHist(ih)
 
-		ip.Score += scoreRegDate(ih, item, SCORE_REG_DATE)
+		ip.Score += scoreRegDate(ih, item, ScoreRegDate)
 
 		//warn if dpr is greater than 90%
 		if ih.Dpr.Valid && ih.Dpr.Float64 > 0.9 {
@@ -125,7 +135,7 @@ func (h *HiD) Get(s []string, limit int, ranked bool) (r *Result) {
 		ip.Score = math.Max(0, ip.Score)
 		item.Score += ip.Score
 	}
-	r.SetFields(h.Id(), h.Fields()...)
+	r.SetFields(h.ID(), h.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -194,10 +204,10 @@ func scoreDyrHist(ih *HiD) (s float64) {
 	var hist []*HiD
 	_, e = dbmap.Select(&hist, sql, ih.Code)
 	util.CheckErr(e, "failed to query hid hist for "+ih.Code)
-	s += scoreDyrAvg(ih, hist, SCORE_DYR_AVG)
-	s += scoreDyrGr(ih, hist, SCORE_DYR_GR)
-	s += scoreDyr2Dpr(ih, SCORE_DYR2DPR)
-	s -= fineDpr(ih, hist, PENALTY_DPR)
+	s += scoreDyrAvg(ih, hist, ScoreDyrAvg)
+	s += scoreDyrGr(ih, hist, ScoreDyrGr)
+	s += scoreDyr2Dpr(ih, ScoreDyr2Dpr)
+	s -= fineDpr(ih, hist, PenaltyDpr)
 	return
 }
 
@@ -210,12 +220,10 @@ func scoreDyr2Dpr(ih *HiD, m float64) float64 {
 		ih.Dyr2Dpr = r
 		if r <= 3 {
 			return 0
-		} else {
-			return m * math.Min(1, math.Pow((r-3)/7, 0.35))
 		}
-	} else {
-		return m
+		return m * math.Min(1, math.Pow((r-3)/7, 0.35))
 	}
+	return m
 }
 
 // Fine for max penalty if average dpr is greater than 100% and latest dpr is greater than 150%
@@ -247,52 +255,51 @@ func scoreDyrAvg(ih *HiD, hist []*HiD, m float64) float64 {
 		ih.DprAvg = 0
 		ih.DprAvgYrs = 0
 		return 0
-	} else {
-		dyrs := make([]float64, len(hist))
-		dprs := make([]float64, len(hist))
-		yrs := .0
-		countyrs := true
-		for i, ihist := range hist {
-			if ihist.Divi.Valid {
-				if countyrs {
-					yrs++
-				}
-			} else {
-				countyrs = false
-			}
-			if ihist.Dyr.Valid {
-				dyrs[i] = ihist.Dyr.Float64
-			} else {
-				dyrs[i] = 0
-			}
-			if ihist.Dpr.Valid {
-				dprs[i] = ihist.Dpr.Float64
-			} else {
-				dprs[i] = 0
-			}
-		}
-		s := 0.3 * m * math.Min(1, math.Pow(yrs/AVG_GR_HIST_SIZE, 1.82))
-		var e error
-		avgDyr := .0
-		avgDpr := .0
-		if len(hist) < 3 {
-			avgDyr, e = stats.Mean(dyrs)
-			util.CheckErr(e, "failed to calculate average dyr: "+fmt.Sprint(dyrs))
-			avgDpr, e = stats.Mean(dprs)
-			util.CheckErr(e, "failed to calculate average dpr: "+fmt.Sprint(dprs))
-		} else {
-			util.ReverseF64s(dyrs, false)
-			util.ReverseF64s(dprs, false)
-			avgDyr = indc.SMA(dyrs, 3, 1)[len(dyrs)-1]
-			avgDpr = indc.SMA(dprs, 3, 1)[len(dprs)-1]
-		}
-		ih.DyrAvg = avgDyr
-		ih.DyrAvgYrs = len(dyrs)
-		ih.DprAvg = avgDpr
-		ih.DprAvgYrs = len(dprs)
-		s += 0.7 * m * math.Min(1, math.Pow(avgDyr/0.06, 2.85))
-		return s
 	}
+	dyrs := make([]float64, len(hist))
+	dprs := make([]float64, len(hist))
+	yrs := .0
+	countyrs := true
+	for i, ihist := range hist {
+		if ihist.Divi.Valid {
+			if countyrs {
+				yrs++
+			}
+		} else {
+			countyrs = false
+		}
+		if ihist.Dyr.Valid {
+			dyrs[i] = ihist.Dyr.Float64
+		} else {
+			dyrs[i] = 0
+		}
+		if ihist.Dpr.Valid {
+			dprs[i] = ihist.Dpr.Float64
+		} else {
+			dprs[i] = 0
+		}
+	}
+	s := 0.3 * m * math.Min(1, math.Pow(yrs/AvgGrHistSize, 1.82))
+	var e error
+	avgDyr := .0
+	avgDpr := .0
+	if len(hist) < 3 {
+		avgDyr, e = stats.Mean(dyrs)
+		util.CheckErr(e, "failed to calculate average dyr: "+fmt.Sprint(dyrs))
+		avgDpr, e = stats.Mean(dprs)
+		util.CheckErr(e, "failed to calculate average dpr: "+fmt.Sprint(dprs))
+	} else {
+		util.ReverseF64s(dyrs, false)
+		util.ReverseF64s(dprs, false)
+		avgDyr = indc.SMA(dyrs, 3, 1)[len(dyrs)-1]
+		avgDpr = indc.SMA(dprs, 3, 1)[len(dprs)-1]
+	}
+	ih.DyrAvg = avgDyr
+	ih.DyrAvgYrs = len(dyrs)
+	ih.DprAvg = avgDpr
+	ih.DprAvgYrs = len(dprs)
+	s += 0.7 * m * math.Min(1, math.Pow(avgDyr/0.06, 2.85))
+	return s
 }
 
 //Score according to dyr growth rate.
@@ -302,59 +309,57 @@ func scoreDyrGr(ih *HiD, hist []*HiD, m float64) float64 {
 	if len(hist) < 1 {
 		ih.DyrGrYoy = "---"
 		return 0
-	} else {
-		grs := make([]float64, len(hist))
-		ngrs := make([]float64, 0)
-		for j, ihist := range hist {
-			if j < len(hist)-1 {
-				var gr float64
-				if ihist.Dyr.Valid && hist[j+1].Dyr.Valid {
-					gr = (ihist.Dyr.Float64 - hist[j+1].Dyr.Float64) / hist[j+1].Dyr.Float64 * 100.0
-				} else if ihist.Dyr.Valid {
-					gr = 100.0
-				} else {
-					gr = -100.0
-				}
-				grs[j] = gr
-				if j < AVG_GR_HIST_SIZE {
-					ih.DyrGrYoy = ih.DyrGrYoy + fmt.Sprintf("%.1f", gr)
-					if j < int(math.Min(AVG_GR_HIST_SIZE-1, float64(len(hist)-2))) {
-						ih.DyrGrYoy = ih.DyrGrYoy + "/"
-					}
-				}
-				if gr < 0 {
-					ngrs = append(ngrs, gr)
+	}
+	grs := make([]float64, len(hist))
+	ngrs := make([]float64, 0)
+	for j, ihist := range hist {
+		if j < len(hist)-1 {
+			var gr float64
+			if ihist.Dyr.Valid && hist[j+1].Dyr.Valid {
+				gr = (ihist.Dyr.Float64 - hist[j+1].Dyr.Float64) / hist[j+1].Dyr.Float64 * 100.0
+			} else if ihist.Dyr.Valid {
+				gr = 100.0
+			} else {
+				gr = -100.0
+			}
+			grs[j] = gr
+			if j < AvgGrHistSize {
+				ih.DyrGrYoy = ih.DyrGrYoy + fmt.Sprintf("%.1f", gr)
+				if j < int(math.Min(AvgGrHistSize-1, float64(len(hist)-2))) {
+					ih.DyrGrYoy = ih.DyrGrYoy + "/"
 				}
 			}
-		}
-		var (
-			avg  = .0
-			navg = .0
-			p    = .0
-			e    error
-		)
-		if len(ngrs) > 0 {
-			navg, e = stats.Mean(ngrs)
-			util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
-			if float64(len(ngrs))/float64(len(grs)) > 2./5. && navg <= -50 {
-				return 0
+			if gr < 0 {
+				ngrs = append(ngrs, gr)
 			}
-			p = m * math.Min(1, math.Pow(-1*navg/50, 3.12))
-		}
-		if len(grs) < 3 {
-			avg, e = stats.Mean(grs)
-			util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
-		} else {
-			util.ReverseF64s(grs, false)
-			avg = indc.SMA(grs, 3, 1)[len(grs)-1]
-		}
-		if avg <= -20 {
-			return 0
-		} else {
-			s := m*math.Min(1, math.Pow((20+avg)/35, 1.68)) - p
-			return math.Max(0, s)
 		}
 	}
+	var (
+		avg  = .0
+		navg = .0
+		p    = .0
+		e    error
+	)
+	if len(ngrs) > 0 {
+		navg, e = stats.Mean(ngrs)
+		util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
+		if float64(len(ngrs))/float64(len(grs)) > 2./5. && navg <= -50 {
+			return 0
+		}
+		p = m * math.Min(1, math.Pow(-1*navg/50, 3.12))
+	}
+	if len(grs) < 3 {
+		avg, e = stats.Mean(grs)
+		util.CheckErr(e, "faild to calculate mean for :"+fmt.Sprint(grs))
+	} else {
+		util.ReverseF64s(grs, false)
+		avg = indc.SMA(grs, 3, 1)[len(grs)-1]
+	}
+	if avg <= -20 {
+		return 0
+	}
+	s := m*math.Min(1, math.Pow((20+avg)/35, 1.68)) - p
+	return math.Max(0, s)
 }
 
 // Score according to DYR.
@@ -367,24 +372,25 @@ func scoreDyr(ih *HiD, max float64) (s float64) {
 	if ih.Dyr.Valid {
 		if ih.Dyr.Float64 >= THRESHOLD {
 			return max*2.0/3.0 + max/3.0*math.Min(1, (ih.Dyr.Float64-THRESHOLD)*50)
-		} else {
-			return 2.0 / 3.0 * max * math.Pow(math.Max(0, (ih.Dyr.Float64-BOTTOM)*100), FACTOR)
 		}
-	} else {
-		return 0
+		return 2.0 / 3.0 * max * math.Pow(math.Max(0, (ih.Dyr.Float64-BOTTOM)*100), FACTOR)
 	}
+	return 0
 }
 
-func (h *HiD) Id() string {
+//ID the scorer ID
+func (h *HiD) ID() string {
 	return "HiD"
 }
 
+//Fields the scorer fields
 func (h *HiD) Fields() []string {
 	return []string{"Year", "Divi", "DYR", "DYR GR", "DYR AVG", "DPR",
 		"DPR AVG", "DYR:DPR", "Shares Allot",
 		"Shares Cvt", "Price", "Price Date", "REG DT", "XDXR DT"}
 }
 
+//GetFieldStr get printable string format for field
 func (h *HiD) GetFieldStr(name string) string {
 	switch name {
 	case "Divi":
@@ -404,15 +410,13 @@ func (h *HiD) GetFieldStr(name string) string {
 	case "Shares Allot":
 		if h.SharesAllot.Valid {
 			return fmt.Sprint(h.SharesAllot.Float64)
-		} else {
-			return ""
 		}
+		return ""
 	case "Shares Cvt":
 		if h.SharesCvt.Valid {
 			return fmt.Sprint(h.SharesCvt.Float64)
-		} else {
-			return ""
 		}
+		return ""
 	case "Divi GR":
 		return h.DiviGrYoy
 	case "Price Date":
@@ -431,6 +435,7 @@ func (h *HiD) GetFieldStr(name string) string {
 	}
 }
 
+//Description the description for scorer
 func (h *HiD) Description() string {
 	return fmt.Sprint("Medium to Long term model.\n" +
 		"Value stocks for:\n" +

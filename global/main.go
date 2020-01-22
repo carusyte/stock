@@ -26,7 +26,7 @@ const (
 	PROXY_ADDR = "127.0.0.1:1080"
 
 	MAX_CONCURRENCY = 16
-	JOB_CAPACITY    = 512
+	JobCapacity    = 512
 	DateFormat      = "2006-01-02"
 	TimeFormat      = "15:04:05"
 	DateTimeFormat  = "2006-01-02 15:04:05"

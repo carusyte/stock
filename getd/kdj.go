@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	LOCAL_PRUNE_THRESHOLD = 50000
+	//LocalPruneThreshold the threshold for local prune
+	LocalPruneThreshold = 50000
 )
 
 var (
@@ -71,9 +72,8 @@ func GetKdjHist(code string, tab model.DBTab, retro int, toDate string) (indcs [
 			if "sql: no rows in result set" == e.Error() {
 				log.Warnf("%s, %s, %s, %d: %s", code, tab, toDate, retro, e.Error())
 				return
-			} else {
-				log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 			}
+			log.Panicf("%s failed to query kdj hist, sql: %s, \n%+v", code, sql, e)
 		}
 		if len(indcs) > 0 && indcs[len(indcs)-1].Date == toDate {
 			return
@@ -386,9 +386,8 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 			fdvs := make([]*model.KDJfdrView, 0)
 			kdjFdrMap[mk] = fdvs
 			return fdvs
-		} else {
-			log.Panicf("failed to query kdj feat dat raw, sql:\n%s\n%+v", sql, e)
 		}
+		log.Panicf("failed to query kdj feat dat raw, sql:\n%s\n%+v", sql, e)
 	}
 	defer rows.Close()
 	var (
@@ -417,6 +416,7 @@ func GetKdjFeatDatRaw(cytp model.CYTP, buy bool, num int) []*model.KDJfdrView {
 	return fdvs
 }
 
+//GetKdjFeatDat gets Kdj feature data from db
 func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 	bysl := "BY"
 	if !buy {
@@ -437,9 +437,8 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 			fdvs := make([]*model.KDJfdView, 0)
 			kdjFdMap[mk] = fdvs
 			return fdvs
-		} else {
-			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 		}
+		log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 	}
 	defer rows.Close()
 	var (
@@ -467,6 +466,7 @@ func GetKdjFeatDat(cytp model.CYTP, buy bool, num int) []*model.KDJfdView {
 	return fdvs
 }
 
+//GetAllKdjFeatDat gets all kdj feature data from db
 func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 	lock.Lock()
 	defer lock.Unlock()
@@ -484,9 +484,8 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 	if e != nil {
 		if "sql: no rows in result set" == e.Error() {
 			return kdjFdMap, 0
-		} else {
-			log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 		}
+		log.Panicf("failed to query kdj feat dat, sql:\n%s\n%+v", sql, e)
 	}
 	defer rows.Close()
 	var (
@@ -523,8 +522,15 @@ func GetAllKdjFeatDat() (map[string][]*model.KDJfdView, int) {
 }
 
 func newKDJfdrView(code, date string, num int) *model.KDJfdrView {
-	return &model.KDJfdrView{code, date, num, make([]int, 0, 16), make([]float64, 0, 16),
-		make([]float64, 0, 16), make([]float64, 0, 16)}
+	return &model.KDJfdrView{
+		Code:    code,
+		SmpDate: date,
+		SmpNum:  num,
+		Klid:    make([]int, 0, 16),
+		K:       make([]float64, 0, 16),
+		D:       make([]float64, 0, 16),
+		J:       make([]float64, 0, 16),
+	}
 }
 
 func newKDJfdView(fid, bysl string, cytp model.CYTP, smpNum, fdNum int, weight float64) *model.KDJfdView {
@@ -654,14 +660,14 @@ func PruneKdjFeatDat(prec float64, pruneRate float64, resume bool) {
 		_, e = dbmap.Exec("truncate table kdj_feat_dat")
 		util.CheckErr(e, "failed to truncate kdj_feat_dat")
 	}
-	chfdk := make(chan *fdKey, JOB_CAPACITY)
-	chfdks := make(chan *fdKey, JOB_CAPACITY)
+	chfdk := make(chan *fdKey, JobCapacity)
+	chfdks := make(chan *fdKey, JobCapacity)
 	sumbf := 0
 	for _, k := range fdks {
 		sumbf += k.Count
 		switch conf.Args.RunMode {
 		case conf.AUTO:
-			if k.Count > LOCAL_PRUNE_THRESHOLD {
+			if k.Count > LocalPruneThreshold {
 				chfdk <- k
 			} else {
 				chfdks <- k
@@ -737,7 +743,7 @@ func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64,
 	case conf.REMOTE:
 		fdvs, e = pruneKdjFeatDatRemote(fdk, fdvs, nprec, pruneRate)
 	case conf.AUTO:
-		if len(fdvs) <= LOCAL_PRUNE_THRESHOLD {
+		if len(fdvs) <= LocalPruneThreshold {
 			fdvs = pruneKdjFeatDatLocal(fdk, fdvs, nprec, pruneRate, 0.8)
 		} else {
 			_, h := rpc.Available(false)
@@ -759,7 +765,7 @@ func smartPruneKdjFeatDat(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64,
 func pruneKdjFeatDatRemote(fdk *fdKey, fdvs []*model.KDJfdView, nprec float64, pruneRate float64) ([]*model.KDJfdView, error) {
 	stp := time.Now()
 	bfc := len(fdvs)
-	req := &rm.KdjPruneReq{fdk.ID(), nprec, pruneRate, fdvs}
+	req := &rm.KdjPruneReq{ID: fdk.ID(), Prec: nprec, PruneRate: pruneRate, Data: fdvs}
 	var rep *rm.KdjPruneRep
 	e := rpc.Call("IndcScorer.PruneKdj", req, &rep, 3)
 	if e != nil {
@@ -1012,6 +1018,7 @@ func (f *fdKey) ID() string {
 	return fmt.Sprintf("%s-%s-%d", f.Cytp, f.Bysl, f.SmpNum)
 }
 
+//CalcKdjDevi calculates deviation for Kdj
 func CalcKdjDevi(sk, sd, sj, tk, td, tj []float64) float64 {
 	kcc, e := util.Devi(sk, tk)
 	util.CheckErr(e, fmt.Sprintf("failed to calculate kcc: %+v, %+v", sk, tk))

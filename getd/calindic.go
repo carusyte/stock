@@ -15,18 +15,18 @@ import (
 )
 
 const (
-	HIST_DATA_SIZE    = 200
-	JOB_CAPACITY      = global.JOB_CAPACITY
-	KDJ_FD_PRUNE_PREC = 0.99
-	KDJ_PRUNE_RATE    = 0.1
+	HIST_DATA_SIZE = 200
+	JobCapacity   = global.JobCapacity
+	KdjFdPrunePrec = 0.99
+	KdjPruneRate   = 0.1
 )
 
 //CalcIndics calculates various indicators for given stocks.
 func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 	log.Println("calculating indices...")
 	var wg sync.WaitGroup
-	chstk := make(chan *model.Stock, JOB_CAPACITY)
-	chrstk := make(chan *model.Stock, JOB_CAPACITY)
+	chstk := make(chan *model.Stock, JobCapacity)
+	chrstk := make(chan *model.Stock, JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
 	for i := 0; i < int(float64(runtime.NumCPU())*0.7); i++ {
@@ -48,7 +48,7 @@ func CalcIndics(stocks *model.Stocks) (rstks *model.Stocks) {
 		}
 	}
 	//Pruning takes too long to complete, make it a separate process
-	//PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_FD_PRUNE_PASS)
+	//PruneKdjFeatDat(KdjFdPrunePrec, KDJ_FD_PRUNE_PASS)
 	return
 }
 
@@ -133,7 +133,7 @@ func calcWeek(stk *model.Stock, offset int64) {
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		panic("function not refactored yet")
-		SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
+		// SmpKdjFeat(code, model.WEEK, 5.0, 2.0, 2)
 	}
 }
 
@@ -202,7 +202,7 @@ func calcMonth(stk *model.Stock, offset int64) {
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		panic("function not refactored yet")
-		SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
+		// SmpKdjFeat(code, model.MONTH, 5.0, 2.0, 2)
 	}
 }
 
@@ -271,7 +271,7 @@ func calcDay(stk *model.Stock, offset int64) {
 
 	if conf.Args.DataSource.SampleKdjFeature {
 		panic("function not refactored yet")
-		SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
+		// SmpKdjFeat(code, model.DAY, 5.0, 2.0, 2)
 	}
 }
 

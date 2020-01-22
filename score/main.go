@@ -15,7 +15,7 @@ type mark string
 
 const (
 	//JobCapacity a sugguested value for go routine channels.
-	JobCapacity = global.JOB_CAPACITY
+	JobCapacity = global.JobCapacity
 	//StarMark has the representation ☆
 	StarMark mark = `☆`
 	//WarnMark has the representation ⚠
@@ -31,6 +31,7 @@ var (
 	log   = global.Log
 )
 
+//Profile for the score
 type Profile struct {
 	//Score for this aspect
 	Score float64
@@ -46,14 +47,17 @@ func (p *Profile) String() string {
 	return fmt.Sprintf("%v", string(j))
 }
 
+//Cmt appends comment
 func (it *Item) Cmt(c ...string) {
 	it.Comments = append(it.Comments, c...)
 }
 
+//Cmtf appends comment with formatted string
 func (it *Item) Cmtf(f string, i ...interface{}) {
 	it.Cmt(fmt.Sprintf(f, i...))
 }
 
+//Item of the result
 type Item struct {
 	//Security Code
 	Code string
@@ -98,6 +102,7 @@ type Result struct {
 	Highlights map[string]bool
 }
 
+//Stocks retrieves stock list
 func (r *Result) Stocks() []string {
 	s := make([]string, len(r.Items))
 	for i := range s {
@@ -106,6 +111,7 @@ func (r *Result) Stocks() []string {
 	return s
 }
 
+//AddItem to the result
 func (r *Result) AddItem(items ...*Item) {
 	if r.Items == nil {
 		r.Items = make([]*Item, len(items))
@@ -159,6 +165,7 @@ func (r *Result) Highlight(codes ...string) *Result {
 	return r
 }
 
+//Shrink the item list within the result
 func (r *Result) Shrink(num int) *Result {
 	if 0 <= num && num < len(r.Items) {
 		r.Items = r.Items[:num]
@@ -166,6 +173,7 @@ func (r *Result) Shrink(num int) *Result {
 	return r
 }
 
+//SetFields for the result
 func (r *Result) SetFields(id string, fields ...string) {
 	if r.Fields == nil {
 		r.Fields = make(map[string][]string)
@@ -264,15 +272,17 @@ func (r *Result) String() string {
 type Scorer interface {
 	Get(stock []string, limit int, ranked bool) (r *Result)
 	Geta() (r *Result)
-	Id() string
+	ID() string
 	Fields() []string
 	Description() string
 }
 
+//FieldHolder returns the string representation of the specified field.
 type FieldHolder interface {
 	GetFieldStr(name string) string
 }
 
+//Combine 2 results
 func Combine(rs ...*Result) (fr *Result) {
 	fr = &Result{}
 	for i, r := range rs {

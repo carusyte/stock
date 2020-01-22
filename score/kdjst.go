@@ -16,6 +16,7 @@ type KdjSt struct {
 	Kdjv, Sl, Sh, Bl, Bh, Smean, Bmean float64
 }
 
+//GetFieldStr returns the string representation of the specified field.
 func (k *KdjSt) GetFieldStr(name string) string {
 	switch name {
 	case "LEN":
@@ -48,12 +49,13 @@ var (
 	kdjv = new(KdjV)
 )
 
+//Get result
 func (k *KdjSt) Get(stock []string, limit int, ranked bool) (r *Result) {
 	r = new(Result)
-	r.PfIds = append(r.PfIds, k.Id())
+	r.PfIds = append(r.PfIds, k.ID())
 	vr := kdjv.Get(stock, -1, false)
 	for _, vri := range vr.Items {
-		v := vri.Profiles[kdjv.Id()].FieldHolder.(*KdjV)
+		v := vri.Profiles[kdjv.ID()].FieldHolder.(*KdjV)
 		item := new(Item)
 		item.Code = vri.Code
 		item.Name = vri.Name
@@ -69,17 +71,17 @@ func (k *KdjSt) Get(stock []string, limit int, ranked bool) (r *Result) {
 		kst.Len = v.Len
 		kst.Smean = v.Smean
 		kst.Bmean = v.Bmean
-		kst.Kdjv = vri.Profiles[kdjv.Id()].Score
+		kst.Kdjv = vri.Profiles[kdjv.ID()].Score
 		item.Profiles = make(map[string]*Profile)
 		ip := new(Profile)
-		item.Profiles[kst.Id()] = ip
+		item.Profiles[kst.ID()] = ip
 		ip.FieldHolder = kst
 		ip.Score = kdjstScore(kst)
 		item.Score += ip.Score
 
 		r.AddItem(item)
 	}
-	r.SetFields(k.Id(), k.Fields()...)
+	r.SetFields(k.ID(), k.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -121,18 +123,22 @@ func kdjstScore(kst *KdjSt) (s float64) {
 	return
 }
 
+//Geta gets all result
 func (k *KdjSt) Geta() (r *Result) {
 	return k.Get(nil, -1, false)
 }
 
-func (k *KdjSt) Id() string {
+//ID the scorer ID
+func (k *KdjSt) ID() string {
 	return "KDJSt"
 }
 
+//Fields the fields related to the scorer
 func (k *KdjSt) Fields() []string {
 	return []string{"LEN", "KDJV", "SMEAN", "BMEAN", "SL", "SH", "BL", "BH"}
 }
 
+//Description for the scorer
 func (k *KdjSt) Description() string {
 	panic("implement me")
 }

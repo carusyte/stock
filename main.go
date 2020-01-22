@@ -77,7 +77,7 @@ func test() {
 }
 
 func pruneKdjFd(resume bool) {
-	getd.PruneKdjFeatDat(getd.KDJ_FD_PRUNE_PREC, getd.KDJ_PRUNE_RATE, resume)
+	getd.PruneKdjFeatDat(getd.KdjFdPrunePrec, getd.KdjPruneRate, resume)
 }
 
 func renewKdjStats(resume bool) {

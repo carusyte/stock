@@ -10,7 +10,7 @@ func UpdateStockRels(stocks *model.Stocks) (rstks *model.Stocks) {
 	// var wg sync.WaitGroup
 	// parallel := conf.Args.Concurrency
 	// wf := make(chan int, parallel)
-	// outstks := make(chan *model.Stock, JOB_CAPACITY)
+	// outstks := make(chan *model.Stock, JobCapacity)
 	// rstks = new(model.Stocks)
 	// wgr := collect(rstks, outstks)
 	// chDbjob = createStockRelsDbJobQueues()

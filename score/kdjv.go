@@ -22,7 +22,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// Medium to Long term model.
+//KdjV Medium to Long term model.
 // Search for stocks with best KDJ form which closely matches the historical ones indicating the buy opportunity.
 type KdjV struct {
 	Code  string
@@ -41,11 +41,12 @@ type KdjV struct {
 }
 
 const (
-	WEIGHT_KDJV_MONTH float64 = 40.0
-	WEIGHT_KDJV_WEEK  float64 = 30.0
-	WEIGHT_KDJV_DAY   float64 = 30.0
+	weightKdjvMonth float64 = 40.0
+	weightKdjvWeek  float64 = 30.0
+	weightKdjvDay   float64 = 30.0
 )
 
+//GetFieldStr returns the string representation of the specified field.
 func (k *KdjV) GetFieldStr(name string) string {
 	switch name {
 	case "DOD":
@@ -74,10 +75,10 @@ func (k *KdjV) GetFieldStr(name string) string {
 	}
 }
 
-// The codes slice may contain either stock codes or index codes. If not specified, both will be handled.
+//Get the codes slice may contain either stock codes or index codes. If not specified, both will be handled.
 func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	r = &Result{}
-	r.PfIds = append(r.PfIds, k.Id())
+	r.PfIds = append(r.PfIds, k.ID())
 	var (
 		stks   []*model.Stock
 		idxlst []*model.IdxLst
@@ -146,7 +147,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	}
 	close(chitm)
 	wg.Wait()
-	r.SetFields(k.Id(), k.Fields()...)
+	r.SetFields(k.ID(), k.Fields()...)
 	if ranked {
 		r.Sort()
 	}
@@ -154,6 +155,7 @@ func (k *KdjV) Get(codes []string, limit int, ranked bool) (r *Result) {
 	return
 }
 
+//RenewStats renew the stats for specified code
 func (k *KdjV) RenewStats(useRaw bool, code ...string) {
 	var (
 		codes   []string
@@ -232,6 +234,7 @@ func getParallelLevel() (pl int) {
 	return
 }
 
+//SyncKdjFeatDat synchronize KDJ feature data
 func (k *KdjV) SyncKdjFeatDat() bool {
 	st := time.Now()
 	log.Debug("Getting all kdj feature data...")
@@ -245,11 +248,10 @@ func (k *KdjV) SyncKdjFeatDat() bool {
 			log.Error(e)
 		}
 		return false
-	} else {
-		log.Debugf("%d KDJ feature data has been publish to remote rpc server. time: %.2f",
-			count, time.Since(st).Seconds())
-		return true
 	}
+	log.Debugf("%d KDJ feature data has been publish to remote rpc server. time: %.2f",
+		count, time.Since(st).Seconds())
+	return true
 }
 
 func saveKps(kps ...*model.KDJVStat) {
@@ -452,7 +454,12 @@ func kdjScoresRemote(code string, klhist []*model.Quote, expvr, mxrt float64, mx
 }
 
 func fetchKdjScores(s []*rm.KdjSeries) (rowIds []string, scores []float64, details []map[string]interface{}, e error) {
-	req := &rm.KdjScoreReq{s, WEIGHT_KDJV_DAY, WEIGHT_KDJV_WEEK, WEIGHT_KDJV_MONTH}
+	req := &rm.KdjScoreReq{
+		Data:     s,
+		WgtDay:   weightKdjvDay,
+		WgtWeek:  weightKdjvWeek,
+		WgtMonth: weightKdjvMonth,
+	}
 	var rep *rm.KdjScoreRep
 	e = rpc.Call("IndcScorer.ScoreKdj", req, &rep, 3)
 	if e != nil {
@@ -765,7 +772,7 @@ func scoreKdjRemote(items []*Item) (e error) {
 	ks := make([]*rm.KdjSeries, 0, 16)
 	for _, item := range items {
 		kdjv := new(KdjV)
-		pid = kdjv.Id()
+		pid = kdjv.ID()
 		kdjv.Code = item.Code
 		kdjv.Name = item.Name
 		item.Profiles = make(map[string]*Profile)
@@ -836,7 +843,7 @@ func scoreKdjLocal(item *Item) {
 	kdjv.Name = item.Name
 	item.Profiles = make(map[string]*Profile)
 	ip := new(Profile)
-	item.Profiles[kdjv.Id()] = ip
+	item.Profiles[kdjv.ID()] = ip
 	ip.FieldHolder = kdjv
 
 	histmo, fnd := getd.ToLstJDCross(getd.GetKdjHist(item.Code, model.INDICATOR_MONTH, 100, ""))
@@ -879,28 +886,28 @@ func scoreKdjLocal(item *Item) {
 }
 
 func wgtKdjScoreRaw(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
-	s += scoreKdjRaw(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
-	s += scoreKdjRaw(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
-	s += scoreKdjRaw(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
-	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
+	s += scoreKdjRaw(kdjv, model.MONTH, histmo) * weightKdjvMonth
+	s += scoreKdjRaw(kdjv, model.WEEK, histwk) * weightKdjvWeek
+	s += scoreKdjRaw(kdjv, model.DAY, histdy) * weightKdjvDay
+	s /= weightKdjvMonth + weightKdjvWeek + weightKdjvDay
 	s = math.Min(100, math.Max(0, s))
 	return
 }
 
 func wgtKdjScore(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
-	s += scoreKdj(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
-	s += scoreKdj(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
-	s += scoreKdj(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
-	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
+	s += scoreKdj(kdjv, model.MONTH, histmo) * weightKdjvMonth
+	s += scoreKdj(kdjv, model.WEEK, histwk) * weightKdjvWeek
+	s += scoreKdj(kdjv, model.DAY, histdy) * weightKdjvDay
+	s /= weightKdjvMonth + weightKdjvWeek + weightKdjvDay
 	s = math.Min(100, math.Max(0, s))
 	return
 }
 
-func wgtKdjScoreRpc(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
-	s += scoreKdj(kdjv, model.MONTH, histmo) * WEIGHT_KDJV_MONTH
-	s += scoreKdj(kdjv, model.WEEK, histwk) * WEIGHT_KDJV_WEEK
-	s += scoreKdj(kdjv, model.DAY, histdy) * WEIGHT_KDJV_DAY
-	s /= WEIGHT_KDJV_MONTH + WEIGHT_KDJV_WEEK + WEIGHT_KDJV_DAY
+func wgtKdjScoreRPC(kdjv *KdjV, histmo, histwk, histdy []*model.Indicator) (s float64) {
+	s += scoreKdj(kdjv, model.MONTH, histmo) * weightKdjvMonth
+	s += scoreKdj(kdjv, model.WEEK, histwk) * weightKdjvWeek
+	s += scoreKdj(kdjv, model.DAY, histdy) * weightKdjvDay
+	s /= weightKdjvMonth + weightKdjvWeek + weightKdjvDay
 	s = math.Min(100, math.Max(0, s))
 	return
 }
@@ -1144,18 +1151,22 @@ func extractKdjFd(fds []*model.KDJfdRaw) (k, d, j []float64) {
 	return
 }
 
-func (k *KdjV) Id() string {
+//ID for the scorer
+func (k *KdjV) ID() string {
 	return "KDJV"
 }
 
+//Fields for the scorer
 func (k *KdjV) Fields() []string {
 	return []string{"DOD", "SFL", "BMEAN", "SMEAN", "LEN", "KDJ_DY", "KDJ_WK", "KDJ_MO"}
 }
 
+//Description for the scorer
 func (k *KdjV) Description() string {
 	panic("implement me")
 }
 
+//Geta gets all result
 func (k *KdjV) Geta() (r *Result) {
 	return k.Get(nil, -1, false)
 }

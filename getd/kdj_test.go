@@ -209,17 +209,17 @@ func TestUUID(t *testing.T) {
 
 func TestPruneKdjFeatDat(t *testing.T) {
 	log.SetLevel(logrus.DebugLevel)
-	PruneKdjFeatDat(KDJ_FD_PRUNE_PREC, KDJ_PRUNE_RATE, true)
+	PruneKdjFeatDat(KdjFdPrunePrec, KdjPruneRate, true)
 }
 
 func TestPruneKdjFeatDatRunMode(t *testing.T) {
 	runMode := conf.LOCAL
-	pruneRate := KDJ_PRUNE_RATE
+	pruneRate := KdjPruneRate
 	smpNum := 19
 	st := time.Now()
 	fdk := &fdKey{"D", "BY", smpNum, 763}
 	fdrvs := GetKdjFeatDatRaw(model.DAY, true, smpNum)
-	nprec := KDJ_FD_PRUNE_PREC * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(smpNum-2),
+	nprec := KdjFdPrunePrec * (1 - 1./math.Pow(math.E*math.Pi, math.E)*math.Pow(float64(smpNum-2),
 		1+1./(math.Sqrt2*math.Pi)))
 	log.Debugf("pruning: %s size: %d, nprec: %.3f", fdk.ID(), len(fdrvs), nprec)
 	fdvsInput := convert2Fdvs(fdk, fdrvs)

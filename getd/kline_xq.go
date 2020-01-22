@@ -26,13 +26,13 @@ func getKlineXQ(stk *model.Stock, kltype []model.DBTab) (
 	code := stk.Code
 	xdxr := latestUFRXdxr(stk.Code)
 
-	for _, klt := range kltype {
-		op := func(c int) (e error) {
-			trdat, lklid, suc, retry := xqKline(stk, klt, xdxr)
+	genop := func(tab model.DBTab) (op func(c int) (e error)) {
+		return func(c int) (e error) {
+			trdat, lklid, suc, retry := xqKline(stk, tab, xdxr)
 			if suc {
-				log.Infof("%s %v fetched: %d", code, klt, trdat.MaxLen())
-				tdmap[klt] = trdat
-				lkmap[klt] = lklid
+				log.Infof("%s %v fetched: %d", code, tab, trdat.MaxLen())
+				tdmap[tab] = trdat
+				lkmap[tab] = lklid
 				return nil
 			}
 			e = fmt.Errorf("failed to get kline for %s", code)
@@ -42,8 +42,11 @@ func getKlineXQ(stk *model.Stock, kltype []model.DBTab) (
 			}
 			return repeat.HintStop(e)
 		}
+	}
+
+	for _, klt := range kltype {
 		e := repeat.Repeat(
-			repeat.FnWithCounter(op),
+			repeat.FnWithCounter(genop(klt)),
 			repeat.StopOnSuccess(),
 			repeat.LimitMaxTries(conf.Args.DataSource.KlineFailureRetry-1),
 			repeat.WithDelay(
@@ -54,6 +57,7 @@ func getKlineXQ(stk *model.Stock, kltype []model.DBTab) (
 			suc = false
 		}
 	}
+
 	return tdmap, lkmap, suc
 }
 
@@ -87,9 +91,9 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	}
 	mkt := strings.ToUpper(stk.Market.String)
 	symbol := mkt + stk.Code
-	codeid := stk.Code
+	code := stk.Code
 	if isIndex(symbol) {
-		codeid = symbol
+		code = symbol
 	}
 	incr := true
 	switch tab {
@@ -99,15 +103,15 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	lklid = -1
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBasic(codeid, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
 		} else {
-			log.Printf("%s latest %s data not found, will be fully refreshed", codeid, tab)
+			log.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
 		}
 	} else {
-		log.Printf("%s %s data will be fully refreshed", codeid, tab)
+		log.Printf("%s %s data will be fully refreshed", code, tab)
 	}
 
 	startDateStr := "1990-12-19"
@@ -116,8 +120,10 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		log.Panicf("failed to parse date %s: %+v", startDateStr, e)
 	}
 	count := -142
+	multiGet := false
 	if lklid == -1 {
-		count = int(math.Round(-.7*(time.Since(startDate).Hours()/24.) - float64(rand.Intn(1000))))
+		count = int(math.Round(-.75*(time.Since(startDate).Hours()/24.) - float64(rand.Intn(1000))))
+		multiGet = true
 	} else {
 		ltime, e := time.Parse(global.DateFormat, ldate)
 		if e != nil {
@@ -127,11 +133,24 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		count = -1 * (int(time.Since(ltime).Hours()/24) + 2)
 	}
 
-	//use util.HTTPGet to get cookie and data (twice gets)
-	//first get the cookies from home page
-	var cookies []*http.Cookie
-	var px *util.Proxy
-	var headers map[string]string
+	xqk, e := tryXQKline(code, symbol, period, xdrType, count, multiGet)
+	if e != nil {
+		return nil, lklid, false, true
+	}
+	//FIXME need to supplement missing "amount" from somewhere
+
+	//construct trade data
+	trdat = &model.TradeData{
+		Code:          stk.Code,
+		Cycle:         cycle,
+		Reinstatement: rtype,
+		Base:          xqk.GetData(false),
+	}
+
+	return trdat, lklid, true, false
+}
+
+func tryXQCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]string, e error) {
 	op := func() error {
 		cookies, px, headers, e = xqCookie()
 		if e != nil {
@@ -145,9 +164,13 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		repeat.LimitMaxTries(conf.Args.DefaultRetry),
 	)
 	if e != nil {
-		log.Warnf("%s failed to get cookies from XQ: %+v", stk.Code, e)
-		return nil, lklid, false, true
+		log.Warnf("failed to get cookies from XQ: %+v", e)
 	}
+	return
+}
+
+func tryXQKline(code, symbol, period, xdrType string, count int, multiGet bool) (xqk *model.XQKline, e error) {
+	xqk = &model.XQKline{Code: code}
 	//symbol = SH600104
 	//begin = 1579589390096
 	//period = day/week/month/60m/120m...
@@ -157,32 +180,82 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		`symbol=%[1]s&begin=%[2]d&period=%[3]s&type=%[4]s&count=%[5]d&indicator=kline`
 	begin := util.UnixMilliseconds(time.Now().AddDate(0, 0, 1))
 	url := fmt.Sprintf(urlt, symbol, begin, period, xdrType, count)
-	res, e := util.HTTPGet(url, headers, px, cookies...)
-	if e != nil {
-		log.Warnf("%s failed to get %v from %s: %+v", stk.Code, tab, url, e)
-		return nil, lklid, false, true
+	RETRY := 5
+	genop := func(url string, hd map[string]string,
+		px *util.Proxy, ck []*http.Cookie) (op func(c int) error) {
+		return func(c int) error {
+			res, e := util.HTTPGet(url, hd, px, ck...)
+			if e != nil {
+				log.Warnf("%s HTTP failed from %s: %+v", code, url, e)
+				return repeat.HintTemporary(e)
+			}
+			defer res.Body.Close()
+			data, e := ioutil.ReadAll(res.Body)
+			if e != nil {
+				log.Warnf("%s failed to read http response body from %s: %+v", code, url, e)
+				return repeat.HintTemporary(e)
+			}
+			e = json.Unmarshal(data, xqk)
+			if e != nil {
+				if strings.Contains(e.Error(), "400016") { //cookie timeout
+					log.Warnf("%s cookie timeout for %s: %+v", code, url, e)
+					return repeat.HintStop(e)
+				}
+				log.Warnf("%s failed to parse json from %s: %+v\return value:%+v", code, url, e, string(data))
+				return repeat.HintTemporary(e)
+			}
+			log.Debugf("return from XQ: %+v", string(data))
+			return nil
+		}
 	}
-	defer res.Body.Close()
-	data, e := ioutil.ReadAll(res.Body)
-	if e != nil {
-		log.Warnf("%s failed to read http response body from %s: %+v", stk.Code, url, e)
-		return nil, lklid, false, true
+	var (
+		ck []*http.Cookie
+		px *util.Proxy
+		hd map[string]string
+	)
+	//first get the cookies from home page
+	if ck, px, hd, e = tryXQCookie(); e != nil {
+		return
 	}
-	xqk := &model.XQKline{Code: stk.Code}
-	e = json.Unmarshal(data, xqk)
-	if e != nil {
-		log.Warnf("%s failed to parse json for %v from %s: %+v\return value:%+v", stk.Code, tab, url, e, string(data))
-		return nil, lklid, false, true
+	//get kline using same header, proxy and cookies
+	if e = repeat.Repeat(
+		repeat.FnWithCounter(genop(url, hd, px, ck)),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(RETRY),
+		repeat.WithDelay(repeat.FullJitterBackoff(200*time.Millisecond).WithMaxDelay(2*time.Second).Set()),
+	); e != nil {
+		return
 	}
-	log.Debugf("return from XQ: %+v", string(data))
-	//construct trade data
-	trdat = &model.TradeData{
-		Code:          stk.Code,
-		Cycle:         cycle,
-		Reinstatement: rtype,
-		Base:          xqk.GetData(false),
+	//check if more data is required
+	ckTimeout := 0
+	for multiGet && xqk.NumAdded == count && ckTimeout < 2 {
+		data := xqk.GetData(false)
+		var startDate time.Time
+		startDate, e = time.Parse(global.DateFormat, data[0].Date)
+		if e != nil {
+			log.Warnf("%s failed to parse date %s: %+v", code, data[0].Date, e)
+			return
+		}
+		begin = util.UnixMilliseconds(startDate.AddDate(0, 0, -1))
+		url = fmt.Sprintf(urlt, symbol, begin, period, xdrType, count)
+		if e = repeat.Repeat(
+			repeat.FnWithCounter(genop(url, hd, px, ck)),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(RETRY),
+			repeat.WithDelay(repeat.FullJitterBackoff(200*time.Millisecond).WithMaxDelay(2*time.Second).Set()),
+		); e != nil {
+			if strings.Contains(e.Error(), "400016") { //cookie timeout, refresh cookie then retry
+				if ck, px, hd, e = tryXQCookie(); e != nil {
+					return
+				}
+				ckTimeout++
+				continue
+			}
+			return
+		}
+		ckTimeout = 0
 	}
-	return trdat, lklid, true, false
+	return
 }
 
 func xqCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]string, e error) {
