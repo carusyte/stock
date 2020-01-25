@@ -224,6 +224,10 @@ func tryEMKline(code, symbol, period, xdrType string) (emk *model.EMKline, e err
 		log.Warnf("%s failed to read http response body from %s: %+v", code, url, e)
 		return
 	}
+	if len(data) == 0 {
+		e = errors.Errorf("no data returned from %s", url)
+		return
+	}
 	//strip parentheses
 	e = json.Unmarshal(data[1:len(data)-1], emk)
 	if e != nil {
