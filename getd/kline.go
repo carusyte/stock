@@ -618,21 +618,24 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 
 func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
-	var kltnv []model.DBTab
+	var kltnv, kltv []model.DBTab
 	var tdmap map[model.DBTab]*model.TradeData
 	var lkmap map[model.DBTab]int
 	//process validate request first
 	for _, klt := range kltype {
 		switch klt {
 		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
-			switch conf.Args.DataSource.KlineValidateSource {
-			case conf.EM:
-				tdmap, lkmap, suc = getKlineEM(stk, kltnv)
-			default:
-				log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
-			}
+			kltv = append(kltv, klt)
 		default:
 			kltnv = append(kltnv, klt)
+		}
+	}
+	if len(kltv) > 0 {
+		switch conf.Args.DataSource.KlineValidateSource {
+		case conf.EM:
+			tdmap, lkmap, suc = getKlineEM(stk, kltv)
+		default:
+			log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
 		}
 	}
 	if !suc {
