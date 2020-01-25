@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,11 @@ const (
 	M15   CYTP = "M15"
 	M5    CYTP = "M5"
 	M1    CYTP = "M1"
+)
+
+const (
+	MarketSZ string = "SZ"
+	MarketSH string = "SH"
 )
 
 const (
@@ -1203,8 +1209,8 @@ func (kt *Ktoday) UnmarshalJSON(b []byte) (e error) {
 			kt.Low = util.Str2F64(qm["9"].(string))
 			kt.Close = util.Str2F64(qm["11"].(string))
 			kt.Volume = sql.NullFloat64{Float64: qm["13"].(float64), Valid: true}
-			kt.Amount = sql.NullFloat64{Float64: util.Str2F64(qm["19"].(string)), Valid:true}
-			kt.Xrate = sql.NullFloat64{Float64:util.Str2F64(qm["1968584"].(string)), Valid:true}
+			kt.Amount = sql.NullFloat64{Float64: util.Str2F64(qm["19"].(string)), Valid: true}
+			kt.Xrate = sql.NullFloat64{Float64: util.Str2F64(qm["1968584"].(string)), Valid: true}
 		} else {
 			e = errors.Errorf("failed to parse Ktoday json: %s", string(b))
 			return
@@ -1321,12 +1327,102 @@ type KDJVStat struct {
 	Scnt, Bcnt                                  int
 }
 
+//EMKline represents kline data from eastmoney.com
+type EMKline struct {
+	Code    string
+	Data    []*TradeDataBasic
+	DataMap map[string]*TradeDataBasic
+}
+
+//UnmarshalJSON unmarshals JSON payload
+func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
+	var (
+		ss    []interface{}
+		f     interface{}
+		s, sv string
+		f64   float64
+		m     map[string]interface{}
+		ok    bool
+	)
+	//eliminates embracing parentheses
+	e = json.Unmarshal(b, &f)
+	if e != nil {
+		return errors.Wrapf(e, "failed to unmarshal json data: %+v", string(b))
+	}
+	if m, ok = f.(map[string]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
+	}
+	if ss, ok = m["data"].([]interface{}); !ok {
+		return errors.Errorf("unrecognized data structure, cant't cast 'data' to slice: %+v", m)
+	}
+	if len(ss) == 0 {
+		log.Debugf("no item data for %s", x.Code)
+		return
+	}
+	if x.DataMap == nil {
+		x.DataMap = make(map[string]*TradeDataBasic)
+	}
+	for i, intf := range ss {
+		if s, ok = intf.(string); !ok {
+			return errors.Errorf("unable to convert #%d data item (%+v) to string: %+v",
+				i, reflect.TypeOf(intf), intf)
+		}
+		fields := strings.Split(s, ",")
+		if len(fields) < 8 {
+			return errors.Errorf("unrecognized data item structure: %s", s)
+		}
+		b := &TradeDataBasic{
+			Code: x.Code,
+			Date: fields[0],
+			Klid: i,
+		}
+		if f64, e = strconv.ParseFloat(fields[1], 64); e != nil {
+			return errors.Wrapf(e, "unable to parse 'open' as float, #%d string value: %s", i, s)
+		}
+		b.Open = f64
+		if f64, e = strconv.ParseFloat(fields[2], 64); e != nil {
+			return errors.Wrapf(e, "unable to parse 'close' as float, #%d string value: %s", i, s)
+		}
+		b.Close = f64
+		if f64, e = strconv.ParseFloat(fields[3], 64); e != nil {
+			return errors.Wrapf(e, "unable to parse 'high' as float, #%d string value: %s", i, s)
+		}
+		b.High = f64
+		if f64, e = strconv.ParseFloat(fields[4], 64); e != nil {
+			return errors.Wrapf(e, "unable to parse 'low' as float, #%d string value: %s", i, s)
+		}
+		b.Low = f64
+		if f64, e = strconv.ParseFloat(fields[5], 64); e != nil {
+			return errors.Wrapf(e, "unable to parse 'volume' as float, #%d string value: %s", i, s)
+		}
+		b.Volume = sql.NullFloat64{Float64: f64, Valid: true}
+		if sv = fields[6]; strings.Contains(sv, "万") || strings.Contains(sv, "亿") {
+			b.Amount = util.Str2Fnull(sv)
+		} else if f64, e = strconv.ParseFloat(sv, 64); e == nil {
+			b.Amount = sql.NullFloat64{Float64: f64, Valid: true}
+		} else {
+			return errors.Wrapf(e, "unable to parse 'amount' as float, #%d string value: %s", i, s)
+		}
+		if "-" != fields[7] {
+			b.Varate = util.Pct2Fnull(fields[7])
+		}
+		if len(fields) > 8 { // xrate included
+			b.Xrate = util.Str2Fnull(fields[8])
+		}
+		x.Data = append(x.Data, b)
+		x.DataMap[b.Date] = b
+	}
+	return nil
+}
+
 //XQKline represents kline data from xueqiu.com
 type XQKline struct {
 	Code  string
 	Data  map[string]*TradeDataBasic
 	Dates []string
-	NumAdded int
+	//MissingAmount stores dates of kline missing amount info
+	MissingAmount []string
+	NumAdded      int
 }
 
 //creates a map for column name -> value
@@ -1391,6 +1487,7 @@ func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) 
 	if v, ok = m["amount"].(float64); ok {
 		b.Amount = sql.NullFloat64{Float64: v, Valid: true}
 	} else {
+		x.MissingAmount = append(x.MissingAmount, b.Date)
 		log.Warnf("unable to parse amount for %s at %s: %+v", b.Code, b.Date, m)
 	}
 	return
@@ -1426,7 +1523,7 @@ func (x *XQKline) UnmarshalJSON(b []byte) (e error) {
 	)
 	e = json.Unmarshal(b, &f)
 	if e != nil {
-		return errors.Wrap(e, "failed to unmarshal json data")
+		return errors.Wrapf(e, "failed to unmarshal json data: %+v", string(b))
 	}
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
@@ -1564,6 +1661,7 @@ type SseShareJson struct {
 	ListingVoteShares string
 }
 
+//UnmarshalJSON unmarshals JSON payload
 func (j *SseShareJson) UnmarshalJSON(b []byte) error {
 	var (
 		s  []interface{}
@@ -1575,7 +1673,7 @@ func (j *SseShareJson) UnmarshalJSON(b []byte) error {
 	)
 	e = json.Unmarshal(b, &f)
 	if e != nil {
-		return errors.Wrap(e, "failed to unmarshal json data")
+		return errors.Wrapf(e, "failed to unmarshal json data: %+v", string(b))
 	}
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
@@ -1613,7 +1711,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 	)
 	e = json.Unmarshal(b, &f)
 	if e != nil {
-		return errors.Wrapf(e, "%s %s failed to unmarshal json data", qj.Code, qj.Period)
+		return errors.Wrapf(e, "%s %s failed to unmarshal json data: %+v", qj.Code, qj.Period, string(b))
 	}
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
@@ -1894,4 +1992,14 @@ func toJSONString(i interface{}) string {
 		fmt.Println(e)
 	}
 	return fmt.Sprintf("%v", string(j))
+}
+
+//Params represents the table structure for Params.
+type Params struct {
+	ID      int
+	Section string
+	Param   string
+	Value   string
+	Udate   sql.NullString
+	Utime   sql.NullString
 }

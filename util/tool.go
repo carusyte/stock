@@ -52,10 +52,20 @@ func Str2F32(s string) (f float32) {
 	return
 }
 
+//Str2Fnull converts string value to sql.NullFloat64
 func Str2Fnull(s string) (f sql.NullFloat64) {
-	f64, e := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	s = strings.TrimSpace(s)
+	mod := 1.
+	if strings.HasSuffix(s, `万`) {
+		s = strings.TrimSuffix(s, `万`)
+		mod = 1e4
+	} else if strings.HasSuffix(s, `亿`) {
+		s = strings.TrimSuffix(s, `亿`)
+		mod = 1e8
+	}
+	f64, e := strconv.ParseFloat(s, 64)
 	if e == nil {
-		f.Float64 = f64
+		f.Float64 = f64 * mod
 		f.Valid = true
 	} else {
 		f.Valid = false
@@ -202,6 +212,14 @@ func DiffStrings(str1 []string, str2 []string) (equal bool, dif1, dif2 []string)
 			equal = false
 			dif1 = append(dif1, s)
 		}
+	}
+	return
+}
+
+//Str2IntfSlice converts string slice to slice of interface{}
+func Str2IntfSlice(ss []string) (intfs []interface{}) {
+	for _, s := range ss {
+		intfs = append(intfs, s)
 	}
 	return
 }

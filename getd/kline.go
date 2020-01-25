@@ -96,7 +96,12 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 			snmap *sync.Map, lock *sync.RWMutex, tab model.DBTab) {
 			defer wg.Done()
 			for j := range ch {
-				c := binsertV2(j.tradeData, j.klid)
+				validate := false
+				switch j.table {
+				case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
+					validate = true
+				}
+				c := binsertV2(j.tradeData, j.klid, validate)
 				if c == j.tradeData.MaxLen() {
 					lock.Lock()
 					var cnt interface{}
@@ -613,7 +618,6 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 
 func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
-	fail := false
 	var kltnv []model.DBTab
 	var tdmap map[model.DBTab]*model.TradeData
 	var lkmap map[model.DBTab]int
@@ -621,23 +625,21 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	for _, klt := range kltype {
 		switch klt {
 		case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
-			log.Warnf("Validation data is not supported yet: %s", klt)
-			// switch conf.Args.DataSource.KlineValidateSource {
-			// case conf.TENCENT:
-			// 	// _, suc = klineTc(stk, klt, true)
-			// default:
-			// 	log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
-			// }
-			// if !suc {
-			// 	fail = true
-			// }
+			switch conf.Args.DataSource.KlineValidateSource {
+			case conf.EM:
+				tdmap, lkmap, suc = getKlineEM(stk, kltnv)
+			default:
+				log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+			}
 		default:
 			kltnv = append(kltnv, klt)
 		}
 	}
-	if fail {
-		return false
+	if !suc {
+		return suc
 	}
+	var tdmapNV map[model.DBTab]*model.TradeData
+	var lkmapNV map[model.DBTab]int
 	if len(kltnv) > 0 {
 		src := conf.Args.DataSource.Kline
 		if stk.Source != "" {
@@ -645,18 +647,27 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		}
 		switch src {
 		case conf.WHT:
-			tdmap, lkmap, suc = getKlineWht(stk, kltnv)
+			tdmapNV, lkmapNV, suc = getKlineWht(stk, kltnv)
 		case conf.THS:
 			// qmap, lkmap, suc = getKlineThs(stk, kltnv)
 			log.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
-			tdmap, lkmap, suc = getKlineTc(stk, kltnv)
+			tdmapNV, lkmapNV, suc = getKlineTc(stk, kltnv)
 		case conf.XQ:
-			tdmap, lkmap, suc = getKlineXQ(stk, kltnv)
+			tdmapNV, lkmapNV, suc = getKlineXQ(stk, kltnv)
+		case conf.EM:
+			tdmapNV, lkmapNV, suc = getKlineEM(stk, kltnv)
 		}
 	}
 	if !suc {
-		return false
+		return suc
+	}
+	//merge non-validate kline data
+	for k, v := range tdmapNV {
+		tdmap[k] = v
+	}
+	for k, v := range lkmapNV {
+		lkmap[k] = v
 	}
 	for klt, trdat := range tdmap {
 		supplementMiscV2(trdat, lkmap[klt])
@@ -673,7 +684,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 				trdat.MovAvg = trdat.MovAvg[1:]
 				trdat.MovAvgLogRtn = trdat.MovAvgLogRtn[1:]
 			}
-			binsertV2(trdat, lkmap[klt])
+			binsertV2(trdat, lkmap[klt], false)
 		}
 	}
 	if !isIndex(stk.Code) {

@@ -44,13 +44,14 @@ func getKlineXQ(stk *model.Stock, kltype []model.DBTab) (
 		}
 	}
 
+	suc = true
 	for _, klt := range kltype {
 		e := repeat.Repeat(
 			repeat.FnWithCounter(genop(klt)),
 			repeat.StopOnSuccess(),
 			repeat.LimitMaxTries(conf.Args.DataSource.KlineFailureRetry-1),
 			repeat.WithDelay(
-				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(10*time.Second).Set(),
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(5*time.Second).Set(),
 			),
 		)
 		if e != nil {
@@ -96,8 +97,7 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		code = symbol
 	}
 	incr := true
-	switch tab {
-	case model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F:
+	if rtype == model.Forward {
 		incr = xdxr == nil
 	}
 	lklid = -1
@@ -137,7 +137,10 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	if e != nil {
 		return nil, lklid, false, true
 	}
-	//FIXME need to supplement missing "amount" from somewhere
+
+	if e = fixXqAmount(xqk); e != nil {
+		return nil, lklid, false, true
+	}
 
 	//construct trade data
 	trdat = &model.TradeData{
@@ -148,6 +151,19 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	}
 
 	return trdat, lklid, true, false
+}
+
+//supplement missing "amount" from validate table if any
+func fixXqAmount(k *model.XQKline) (e error) {
+	if len(k.MissingAmount) == 0 {
+		return
+	}
+	trdat := GetTrDataAt(k.Code, TrDataQry{Validate: true, Basic: true},
+		Date, false, util.Str2IntfSlice(k.MissingAmount)...)
+	for _, b := range trdat.Base {
+		k.Data[b.Date].Amount = b.Amount
+	}
+	return
 }
 
 func tryXQCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]string, e error) {

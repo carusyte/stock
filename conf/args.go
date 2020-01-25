@@ -28,13 +28,14 @@ const (
 
 //Data sources
 const (
-	XQ           string = "xq"
-	THS          string = "ths"
-	THS_CDP      string = "ths.cdp"
-	TENCENT      string = "tencent"
-	TENCENT_CSRC string = "tencent.csrc"
-	TENCENT_TC   string = "tencent.tc"
-	WHT          string = "wht"
+	XQ          string = "xq"
+	EM          string = "em"
+	THS         string = "ths"
+	ThsCDP      string = "ths.cdp"
+	TENCENT     string = "tencent"
+	TencentCSRC string = "tencent.csrc"
+	TencentTC   string = "tencent.tc"
+	WHT         string = "wht"
 )
 
 //Arguments arguments struct type
@@ -90,6 +91,7 @@ type Arguments struct {
 	DataSource struct {
 		Kline                 string    `mapstructure:"kline"`
 		KlineValidateSource   string    `mapstructure:"kline_validate_source"`
+		KlineValidateType     string    `mapstructure:"kline_validate_type"`
 		DropInconsistent      bool      `mapstructure:"drop_inconsistent"`
 		KlineFailureRetry     int       `mapstructure:"kline_failure_retry"`
 		Index                 string    `mapstructure:"index"`
@@ -114,7 +116,11 @@ type Arguments struct {
 		IndicatorSource       string    `mapstructure:"indicator_source"`
 		LimitPriceDayLr       []float64 `mapstructure:"limit_price_day_lr"`
 		FeatureScaling        string    `mapstructure:"feature_scaling"`
-		XQ                    struct {
+		EM                    struct {
+			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
+			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
+		}
+		XQ struct {
 			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
 			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
 		}
@@ -212,7 +218,7 @@ func setDefaults() {
 	Args.Network.HTTPTimeout = 60
 	Args.DataSource.Kline = THS
 	Args.DataSource.Index = TENCENT
-	Args.DataSource.Industry = TENCENT_CSRC
+	Args.DataSource.Industry = TencentCSRC
 	Args.Scorer.FetchData = true
 	Args.Scorer.BlueWeight = 0.8
 	Args.Scorer.KdjStWeight = 0.67

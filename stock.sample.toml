@@ -67,6 +67,8 @@ stats_retro_span = 1000
 kline = "wht"
 kline_alt = "tencent"
 kline_validate_source = "tencent"
+#backward, forward, none
+kline_validate_type = "backward"
 drop_inconsistent = true
 kline_failure_retry = 25
 
@@ -92,10 +94,15 @@ skip_fs_stats = false
 skip_fin_mark = false
 
 sample_kdj_feature = false
+#backward, forward, none
 indicator_source = "backward"
 
 limit_price_day_lr = [-0.15, 0.15]
 feature_scaling = "standardization"
+
+    [DataSource.EM]
+    #weights for direct connection / master proxy / rotated proxy
+    direct_proxy_weight = [1, 1, 8]
 
     [DataSource.XQ]
     #weights for direct connection / master proxy / rotated proxy

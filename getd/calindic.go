@@ -15,10 +15,14 @@ import (
 )
 
 const (
-	HIST_DATA_SIZE = 200
-	JobCapacity   = global.JobCapacity
+	//HistDataSize history data size
+	HistDataSize = 200
+	//JobCapacity reference
+	JobCapacity = global.JobCapacity
+	//KdjFdPrunePrec the precision for KDJ feature data pruning
 	KdjFdPrunePrec = 0.99
-	KdjPruneRate   = 0.1
+	//KdjPruneRate the rate for KDJ pruning
+	KdjPruneRate = 0.1
 )
 
 //CalcIndics calculates various indicators for given stocks.

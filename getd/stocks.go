@@ -131,7 +131,7 @@ func doGetIndustry(chstk, chrstk chan *model.Stock, wg *sync.WaitGroup) {
 		for rtCount := 0; rtCount <= conf.Args.DataSource.KlineFailureRetry; rtCount++ {
 			var ok, r bool
 			switch conf.Args.DataSource.Industry {
-			case conf.TENCENT_TC, conf.TENCENT_CSRC:
+			case conf.TencentTC, conf.TencentCSRC:
 				ok, r = tcIndustry(stock)
 			case conf.THS:
 				ok, r = thsIndustry(stock)
@@ -310,9 +310,9 @@ func tcIndustry(stock *model.Stock) (ok, retry bool) {
 	//parse industry value
 	var sel string
 	switch conf.Args.DataSource.Industry {
-	case conf.TENCENT_TC:
+	case conf.TencentTC:
 		sel = `body div.page div table.list tbody tr:nth-child(2) td:nth-child(2) a`
-	case conf.TENCENT_CSRC:
+	case conf.TencentCSRC:
 		sel = `body div.page div table.list tbody tr.nobor td:nth-child(2) a`
 	default:
 		log.Panicf("unrecognized industry info source: %s", conf.Args.DataSource.Industry)

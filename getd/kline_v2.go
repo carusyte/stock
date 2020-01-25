@@ -20,6 +20,7 @@ import (
 
 //TrDataQry trading data query parameters
 type TrDataQry struct {
+	Validate                            bool
 	Cycle                               model.CYTP
 	Reinstate                           model.Rtype
 	Basic, LogRtn, MovAvg, MovAvgLogRtn bool
@@ -191,6 +192,91 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 	return
 }
 
+//GetTrDataAt fetches trading data at specified dates/klids.
+func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, val ...interface{}) (trdat *model.TradeData) {
+	var (
+		args []interface{}
+		cond string
+		e    error
+	)
+	args = append(args, code)
+	holders := make([]string, len(val))
+	for i := range holders {
+		holders[i] = "?"
+	}
+	args = append(args, val...)
+	cond = fmt.Sprintf("%s in (%s)", field, strings.Join(holders, ","))
+	d := ""
+	if desc {
+		d = "desc"
+	}
+
+	tables := resolveTables(qry)
+	var wg, wgr sync.WaitGroup
+	//A slice of trading data of arbitrary kind
+	ochan := make(chan interface{}, 4)
+
+	trdat = &model.TradeData{Code: code}
+
+	if qry.Validate {
+		params := make([]*model.Params, 0, 2)
+		if _, e = dbmap.Select(&params,
+			`select * from params where section = ? order by id`, "Validate Kline"); e != nil {
+			log.Panicf("failed to query params: %+v", e)
+		}
+		for _, p := range params {
+			switch p.Param {
+			case "Cycle":
+				trdat.Cycle = model.CYTP(p.Value)
+			case "Reinstatement":
+				trdat.Reinstatement = model.Rtype(p.Value)
+			}
+		}
+	} else {
+		trdat.Cycle = qry.Cycle
+		trdat.Reinstatement = qry.Reinstate
+	}
+
+	//Collect and merge query results
+	wgr.Add(1)
+	go func() {
+		defer wgr.Done()
+		for i := range ochan {
+			//merge into model.TradeData slice
+			switch i.(type) {
+			case *[]*model.TradeDataBasic:
+				trdat.Base = *i.(*[]*model.TradeDataBasic)
+			case *[]*model.TradeDataLogRtn:
+				trdat.LogRtn = *i.(*[]*model.TradeDataLogRtn)
+			case *[]*model.TradeDataMovAvg:
+				trdat.MovAvg = *i.(*[]*model.TradeDataMovAvg)
+			case *[]*model.TradeDataMovAvgLogRtn:
+				trdat.MovAvgLogRtn = *i.(*[]*model.TradeDataMovAvgLogRtn)
+			default:
+				log.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
+			}
+		}
+	}()
+
+	for table, typ := range tables {
+		wg.Add(1)
+		go func(table string, typ reflect.Type) {
+			defer wg.Done()
+			intf := reflect.New(reflect.SliceOf(typ)).Interface()
+			sql := fmt.Sprintf("select * from %s where code = ? and %s order by klid %s",
+				table, cond, d)
+			_, e := dbmap.Select(intf, sql, args...)
+			util.CheckErr(e, "failed to query "+table+" for "+code)
+			ochan <- intf
+		}(table, typ)
+	}
+	wg.Wait()
+	close(ochan)
+	wgr.Wait()
+
+	return
+}
+
 func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	tables = make(map[string]reflect.Type)
 	//prelim checking
@@ -208,15 +294,19 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	default:
 		log.Panicf("Unsupported cycle type: %v, query param: %+v", q.Cycle, q)
 	}
-	switch q.Reinstate {
-	case model.Backward:
-		base += "b"
-	case model.Forward:
-		base += "f"
-	case model.None:
-		base += "n"
-	default:
-		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
+	if q.Validate {
+		base += "v"
+	} else {
+		switch q.Reinstate {
+		case model.Backward:
+			base += "b"
+		case model.Forward:
+			base += "f"
+		case model.None:
+			base += "n"
+		default:
+			log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
+		}
 	}
 	if q.Basic {
 		tables[base] = reflect.TypeOf(&model.TradeDataBasic{})
@@ -234,7 +324,7 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 }
 
 // returns a mapping of [database table] to [table columns] based on availability of data sets in TradeData.
-func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, tabData map[string]interface{}) {
+func resolveTradeDataTables(td *model.TradeData, validate bool) (tabCols map[string][]string, tabData map[string]interface{}) {
 	if td.Empty() {
 		return
 	}
@@ -251,15 +341,19 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 	default:
 		log.Panicf("Unsupported cycle type: %v, query param: %+v", td.Cycle, td)
 	}
-	switch td.Reinstatement {
-	case model.Backward:
-		base += "b"
-	case model.Forward:
-		base += "f"
-	case model.None:
-		base += "n"
-	default:
-		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
+	if validate {
+		base += "v"
+	} else {
+		switch td.Reinstatement {
+		case model.Backward:
+			base += "b"
+		case model.Forward:
+			base += "f"
+		case model.None:
+			base += "n"
+		default:
+			log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
+		}
 	}
 	if len(td.Base) > 0 {
 		tabCols[base] = getTableColumns(model.TradeDataBasic{})
@@ -696,7 +790,7 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 	}
 }
 
-func binsertV2(trdat *model.TradeData, lklid int) (c int) {
+func binsertV2(trdat *model.TradeData, lklid int, validate bool) (c int) {
 	if trdat == nil || trdat.Empty() {
 		return 0
 	}
@@ -733,7 +827,7 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 	rt := 0
 	lklid++
 	code := trdat.Code
-	tables, data := resolveTradeDataTables(trdat)
+	tables, data := resolveTradeDataTables(trdat, validate)
 	var e error
 	// delete stale records first
 	for table := range tables {
