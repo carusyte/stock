@@ -442,12 +442,48 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 			trdat.MovAvgLogRtn = append(trdat.MovAvgLogRtn, malr)
 		}
 		bias := .01
-		lr.Close = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
-		lr.High = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
+		if vcl/100.+1. < 0 {
+			lr.Close.Valid = true
+			v := 0.
+			if i > 0 {
+				v = util.LogReturn(trdat.Base[i-1].Close, b.Close, bias)
+			}
+			lr.Close.Float64 = v
+		} else {
+			lr.Close = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
+		}
+		if vhg/100.+1. < 0 {
+			lr.High.Valid = true
+			v := 0.
+			if i > 0 {
+				v = util.LogReturn(trdat.Base[i-1].High, b.High, bias)
+			}
+			lr.High.Float64 = v
+		} else {
+			lr.High = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
+		}
+		if vop/100.+1. < 0 {
+			lr.Open.Valid = true
+			v := 0.
+			if i > 0 {
+				v = util.LogReturn(trdat.Base[i-1].Open, b.Open, bias)
+			}
+			lr.Open.Float64 = v
+		} else {
+			lr.Open = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
+		}
+		if vlw/100.+1. < 0 {
+			lr.Low.Valid = true
+			v := 0.
+			if i > 0 {
+				v = util.LogReturn(trdat.Base[i-1].Low, b.Low, bias)
+			}
+			lr.Low.Float64 = v
+		} else {
+			lr.Low = sql.NullFloat64{Float64: math.Log(vlw/100. + 1.), Valid: true}
+		}
 		lr.HighClose = sql.NullFloat64{Float64: util.LogReturn(b.Close, b.High, bias), Valid: true}
-		lr.Open = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
 		lr.OpenClose = sql.NullFloat64{Float64: util.LogReturn(b.Close, b.Open, bias), Valid: true}
-		lr.Low = sql.NullFloat64{Float64: math.Log(vlw/100. + 1.), Valid: true}
 		lr.LowClose = sql.NullFloat64{Float64: util.LogReturn(b.Close, b.Low, bias), Valid: true}
 
 		if (trdat.Cycle == model.DAY) && len(conf.Args.DataSource.LimitPriceDayLr) > 0 {
