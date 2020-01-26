@@ -41,7 +41,6 @@ func getKlineEM(stk *model.Stock, kltype []model.DBTab) (
 		}
 	}
 
-	suc = true
 	for _, klt := range kltype {
 		e := repeat.Repeat(
 			repeat.FnWithCounter(genop(klt)),
@@ -52,11 +51,11 @@ func getKlineEM(stk *model.Stock, kltype []model.DBTab) (
 			),
 		)
 		if e != nil {
-			suc = false
+			return tdmap, lkmap, false
 		}
 	}
 
-	return tdmap, lkmap, suc
+	return tdmap, lkmap, true
 }
 
 func emKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
@@ -130,29 +129,10 @@ func emKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	}
 
 	switch tab {
-	//for validate kline, we need to supplement kline data with counterparts
 	case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
-		var emk2 *model.EMKline
-		switch authorityType {
-		case "", "fa":
-			if emk2, e = tryEMKline(code, symbol, period, "ba"); e == nil {
-				for _, k1 := range emk.Data {
-					if k2, ok := emk2.DataMap[k1.Date]; ok {
-						k1.Xrate = k2.Xrate
-					}
-				}
-			}
-		case "ba":
-			if emk2, e = tryEMKline(code, symbol, period, ""); e == nil {
-				for _, k1 := range emk.Data {
-					if k2, ok := emk2.DataMap[k1.Date]; ok {
-						k1.Xrate = k2.Amount
-					}
-				}
-			}
-		}
+		e = supplementEMKline(emk)
 		if e != nil {
-			log.Warnf("%s failed to supplement EM kline data: %+v", code, e)
+			log.Warn(e)
 			return nil, lklid, false, true
 		}
 	}
@@ -168,9 +148,60 @@ func emKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	return trdat, lklid, true, false
 }
 
+//supplement kline data with counterparts
+func supplementEMKline(k *model.EMKline) (e error) {
+	var emk2 *model.EMKline
+	var op func(error) error
+	RETRY := conf.Args.DefaultRetry
+
+	switch k.AuthType {
+	case "", "fa":
+		op = func(error) error {
+			if emk2, e = tryEMKline(k.Code, k.Symbol, k.Period, "ba"); e == nil {
+				for _, k1 := range k.Data {
+					if k2, ok := emk2.DataMap[k1.Date]; ok {
+						k1.Xrate = k2.Xrate
+					}
+				}
+				return nil
+			}
+			return e
+		}
+	case "ba":
+		op = func(error) error {
+			if emk2, e = tryEMKline(k.Code, k.Symbol, k.Period, ""); e == nil {
+				for _, k1 := range k.Data {
+					if k2, ok := emk2.DataMap[k1.Date]; ok {
+						k1.Amount = k2.Amount
+					}
+				}
+				return nil
+			}
+			return e
+		}
+	}
+
+	e = repeat.Repeat(
+		repeat.FnHintTemporary(op),
+		repeat.StopOnSuccess(),
+		repeat.LimitMaxTries(RETRY),
+	)
+
+	if e != nil {
+		e = errors.Wrapf(e, "failed to supplement EM kline data for %s, %s, %s", k.Symbol, k.Period, k.AuthType)
+	}
+
+	return
+}
+
 //get data from eastmoney.com and convert json to TradeDataBasic
 func tryEMKline(code, symbol, period, xdrType string) (emk *model.EMKline, e error) {
-	emk = &model.EMKline{Code: code}
+	emk = &model.EMKline{
+		Code:     code,
+		Symbol:   symbol,
+		Period:   period,
+		AuthType: xdrType,
+	}
 	//id = 6008981, 0000022
 	//type = k/wk/mk
 	//authorityType = /fa/ba

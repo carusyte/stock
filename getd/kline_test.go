@@ -75,14 +75,14 @@ func TestKlineDayNRFromWht(t *testing.T) {
 func TestGetVldKline(t *testing.T) {
 	//603999
 	s := &model.Stock{}
-	s.Code = "603999"
-	s.Name = "读者传媒"
-	s.Market = sql.NullString{String: "SH", Valid: true}
+	s.Code = "000592"
+	s.Name = "平潭发展"
+	s.Market = sql.NullString{String: "SZ", Valid: true}
 	ss := new(model.Stocks)
 	ss.Add(s)
-	GetKlines(ss, model.KLINE_DAY_VLD)
+	GetKlines(ss, model.KLINE_WEEK_VLD)
 	// model.KLINE_DAY,
 	// 		model.KLINE_WEEK, model.KLINE_MONTH,
 	// 		model.KLINE_MONTH_NR, model.KLINE_WEEK_NR
-	t.Fail()
+	// t.Fail()
 }

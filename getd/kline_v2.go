@@ -216,24 +216,21 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 	//A slice of trading data of arbitrary kind
 	ochan := make(chan interface{}, 4)
 
-	trdat = &model.TradeData{Code: code}
+	trdat = &model.TradeData{Code: code, Cycle: qry.Cycle}
 
 	if qry.Validate {
-		params := make([]*model.Params, 0, 2)
-		if _, e = dbmap.Select(&params,
-			`select * from params where section = ? order by id`, "Validate Kline"); e != nil {
-			log.Panicf("failed to query params: %+v", e)
-		}
-		for _, p := range params {
-			switch p.Param {
-			case "Cycle":
-				trdat.Cycle = model.CYTP(p.Value)
-			case "Reinstatement":
-				trdat.Reinstatement = model.Rtype(p.Value)
+		var p *model.Params
+		if e = dbmap.SelectOne(&p,
+			`select * from params where section = ? and param = ? order by id`,
+			"Validate Kline", "Reinstatement"); e == nil {
+			trdat.Reinstatement = model.Rtype(p.Value)
+		} else {
+			if "sql: no rows in result set" != e.Error() {
+				log.Panicf("failed to query params: %+v", e)
 			}
+			trdat.Reinstatement = model.Rtype(conf.Args.DataSource.KlineValidateType)
 		}
 	} else {
-		trdat.Cycle = qry.Cycle
 		trdat.Reinstatement = qry.Reinstate
 	}
 
@@ -442,7 +439,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 			trdat.MovAvgLogRtn = append(trdat.MovAvgLogRtn, malr)
 		}
 		bias := .01
-		if vcl/100.+1. < 0 {
+		if vcl/100.+1. <= 0 {
 			lr.Close.Valid = true
 			v := 0.
 			if i > 0 {
@@ -452,7 +449,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 		} else {
 			lr.Close = sql.NullFloat64{Float64: math.Log(vcl/100. + 1.), Valid: true}
 		}
-		if vhg/100.+1. < 0 {
+		if vhg/100.+1. <= 0 {
 			lr.High.Valid = true
 			v := 0.
 			if i > 0 {
@@ -462,7 +459,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 		} else {
 			lr.High = sql.NullFloat64{Float64: math.Log(vhg/100. + 1.), Valid: true}
 		}
-		if vop/100.+1. < 0 {
+		if vop/100.+1. <= 0 {
 			lr.Open.Valid = true
 			v := 0.
 			if i > 0 {
@@ -472,7 +469,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 		} else {
 			lr.Open = sql.NullFloat64{Float64: math.Log(vop/100. + 1.), Valid: true}
 		}
-		if vlw/100.+1. < 0 {
+		if vlw/100.+1. <= 0 {
 			lr.Low.Valid = true
 			v := 0.
 			if i > 0 {
@@ -874,7 +871,7 @@ func binsertV2(trdat *model.TradeData, lklid int, validate bool) (c int) {
 				if strings.Contains(e.Error(), "Deadlock") {
 					continue
 				} else {
-					log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+					log.Panicf("%s failed to delete before bulk insert %s: %+v", code, table, e)
 				}
 			}
 			break
@@ -936,7 +933,7 @@ func insertMinibatchV2(table string, cols []string, v reflect.Value) (c int) {
 			if strings.Contains(e.Error(), "Deadlock") {
 				continue
 			} else {
-				log.Panicf("%s failed to bulk insert %s: %+v", code, table, e)
+				log.Panicf("%s failed to bulk insert %s: %+v, value args:\n%+v", code, table, e, valueArgs)
 			}
 		}
 		return rowSize
@@ -1165,4 +1162,25 @@ func transferVarateRglV2(code string, cycle model.CYTP, rtype model.Rtype, nrbas
 		tgq.VarateRglLow.Float64 = tvarl
 	}
 	return nil
+}
+
+//UpdateValidateKlineParams syncs params from configuration file to database.
+func UpdateValidateKlineParams() (e error) {
+	d, t := util.TimeStr()
+	stmt := fmt.Sprintf("INSERT INTO params (section, param, value, udate, utime) VALUES (?,?,?,?,?)" +
+		" on duplicate key update section=values(section),param=values(param),value=values(value)," +
+		" udate=values(udate),utime=values(utime)")
+	for rt := 0; rt < conf.Args.DeadlockRetry; rt++ {
+		_, e = dbmap.Exec(stmt, "Validate Kline", "Reinstatement", conf.Args.DataSource.KlineValidateType, d, t)
+		if e != nil {
+			fmt.Println(e)
+			if strings.Contains(e.Error(), "Deadlock") {
+				continue
+			} else {
+				return errors.Wrap(e, "failed to update params table")
+			}
+		}
+		return
+	}
+	return
 }

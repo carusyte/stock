@@ -138,7 +138,7 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		return nil, lklid, false, true
 	}
 
-	if e = fixXqAmount(xqk); e != nil {
+	if e = fixXqAmount(xqk, cycle); e != nil {
 		return nil, lklid, false, true
 	}
 
@@ -154,11 +154,11 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 }
 
 //supplement missing "amount" from validate table if any
-func fixXqAmount(k *model.XQKline) (e error) {
+func fixXqAmount(k *model.XQKline, cycle model.CYTP) (e error) {
 	if len(k.MissingAmount) == 0 {
 		return
 	}
-	trdat := GetTrDataAt(k.Code, TrDataQry{Validate: true, Basic: true},
+	trdat := GetTrDataAt(k.Code, TrDataQry{Validate: true, Cycle: cycle, Basic: true},
 		Date, false, util.Str2IntfSlice(k.MissingAmount)...)
 	for _, b := range trdat.Base {
 		k.Data[b.Date].Amount = b.Amount

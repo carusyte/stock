@@ -1329,9 +1329,12 @@ type KDJVStat struct {
 
 //EMKline represents kline data from eastmoney.com
 type EMKline struct {
-	Code    string
-	Data    []*TradeDataBasic
-	DataMap map[string]*TradeDataBasic
+	Code     string
+	Symbol   string
+	Period   string
+	AuthType string
+	Data     []*TradeDataBasic
+	DataMap  map[string]*TradeDataBasic
 }
 
 //UnmarshalJSON unmarshals JSON payload
