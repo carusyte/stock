@@ -142,6 +142,9 @@ func StopWatch(code string, start time.Time) {
 
 //update xpriced flag in xdxr to mark that all price related data has been reinstated
 func finMark(stks *model.Stocks) *model.Stocks {
+	if stks.Size() == 0 {
+		return stks
+	}
 	sql, e := dot.Raw("UPD_XPRICE")
 	util.CheckErr(e, "failed to get UPD_XPRICE sql")
 	sql = fmt.Sprintf(sql, util.Join(stks.Codes, ",", true))

@@ -35,7 +35,7 @@ func init() {
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
 	defer Cleanup()
-	log.Printf("fetch kline data for %d stocks: %+v", stks.Size(), kltype)
+	log.Printf("fetching kline data for %d stocks: %+v", stks.Size(), kltype)
 	var wg sync.WaitGroup
 	parallel := conf.Args.Concurrency
 	if conf.THS == conf.Args.DataSource.Kline {
@@ -635,11 +635,11 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		case conf.EM:
 			tdmap, lkmap, suc = getKlineEM(stk, kltv)
 		default:
-			log.Warnf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+			log.Panicf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
 		}
-	}
-	if !suc {
-		return suc
+		if !suc {
+			return suc
+		}
 	}
 	var tdmapNV map[model.DBTab]*model.TradeData
 	var lkmapNV map[model.DBTab]int
@@ -661,9 +661,9 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		case conf.EM:
 			tdmapNV, lkmapNV, suc = getKlineEM(stk, kltnv)
 		}
-	}
-	if !suc {
-		return suc
+		if !suc {
+			return suc
+		}
 	}
 	//merge non-validate kline data
 	for k, v := range tdmapNV {

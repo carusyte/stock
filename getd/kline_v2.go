@@ -1180,7 +1180,8 @@ func UpdateValidateKlineParams() (e error) {
 				return errors.Wrap(e, "failed to update params table")
 			}
 		}
+		log.Infof("validate kline params updated")
 		return
 	}
-	return
+	return errors.Wrap(e, "failed to update params table")
 }
