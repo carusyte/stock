@@ -158,6 +158,7 @@ func fixXqAmount(k *model.XQKline, cycle model.CYTP) (e error) {
 	if len(k.MissingAmount) == 0 {
 		return
 	}
+	log.Infof("%s 'amount' for the following dates will be supplemented from validate kline: %+v", k.MissingAmount)
 	trdat := GetTrDataAt(k.Code, TrDataQry{Validate: true, Cycle: cycle, Basic: true},
 		Date, false, util.Str2IntfSlice(k.MissingAmount)...)
 	for _, b := range trdat.Base {

@@ -619,8 +619,8 @@ func getKline(stk *model.Stock, kltype []model.DBTab, wg *sync.WaitGroup, wf *ch
 func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	suc := false
 	var kltnv, kltv []model.DBTab
-	var tdmap map[model.DBTab]*model.TradeData
-	var lkmap map[model.DBTab]int
+	tdmap := make(map[model.DBTab]*model.TradeData)
+	lkmap := make(map[model.DBTab]int)
 	//process validate request first
 	for _, klt := range kltype {
 		switch klt {
