@@ -303,14 +303,14 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 		for i := range ochan {
 			//merge into model.TradeData slice
 			switch i.(type) {
-			case *[]*model.TradeDataBasic:
-				trdat.Base = *i.(*[]*model.TradeDataBasic)
-			case *[]*model.TradeDataLogRtn:
-				trdat.LogRtn = *i.(*[]*model.TradeDataLogRtn)
-			case *[]*model.TradeDataMovAvg:
-				trdat.MovAvg = *i.(*[]*model.TradeDataMovAvg)
-			case *[]*model.TradeDataMovAvgLogRtn:
-				trdat.MovAvgLogRtn = *i.(*[]*model.TradeDataMovAvgLogRtn)
+			case []*model.TradeDataBasic:
+				trdat.Base = i.([]*model.TradeDataBasic)
+			case []*model.TradeDataLogRtn:
+				trdat.LogRtn = i.([]*model.TradeDataLogRtn)
+			case []*model.TradeDataMovAvg:
+				trdat.MovAvg = i.([]*model.TradeDataMovAvg)
+			case []*model.TradeDataMovAvgLogRtn:
+				trdat.MovAvgLogRtn = i.([]*model.TradeDataMovAvgLogRtn)
 			default:
 				log.Panicf("Unsupported type for query result consolidation: %v", reflect.TypeOf(i).String())
 			}
@@ -321,7 +321,7 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 		wg.Add(1)
 		go func(table string, typ reflect.Type) {
 			defer wg.Done()
-			intf := reflect.New(reflect.SliceOf(typ)).Interface()
+			intf := reflect.Zero(reflect.SliceOf(typ)).Interface()
 			for i := range args {
 				cond := fmt.Sprintf("%s in (%s)", field, strings.Join(holders[i], ","))
 				ss := reflect.New(reflect.SliceOf(typ)).Interface()
@@ -330,9 +330,9 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 				_, e := dbmap.Select(ss, sql, args[i]...)
 				util.CheckErr(e, "failed to query "+table+" for "+code)
 				intf = reflect.AppendSlice(
-					reflect.Indirect(reflect.ValueOf(intf)),
+					reflect.ValueOf(intf),
 					reflect.Indirect(reflect.ValueOf(ss)),
-				).Addr().Interface()
+				).Interface()
 			}
 			ochan <- intf
 		}(table, typ)
