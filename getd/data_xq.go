@@ -96,7 +96,11 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	}
 
 	if e = fixXqAmount(xqk, fr); e != nil {
-		return nil, lklid, false, true
+		return nil, lklid, false, false
+	}
+
+	if e = fixXqMissingData(xqk, fr); e != nil {
+		return nil, lklid, false, false
 	}
 
 	//construct trade data
@@ -109,6 +113,38 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	}
 
 	return trdat, lklid, true, false
+}
+
+//supplement missing kline data from validate table if any
+func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
+	if len(k.MissingData) == 0 {
+		return
+	}
+	log.Infof("basic data for the following dates will be replaced with validate kline: %+v", k.MissingData)
+	trdat := GetTrDataAt(
+		k.Code,
+		TrDataQry{
+			LocalSource: model.DataSource(conf.Args.DataSource.KlineValidateSource),
+			Cycle:       fr.Cycle,
+			Reinstate:   fr.Reinstate,
+			Basic:       true,
+		},
+		Date,
+		false,
+		util.Str2IntfSlice(k.MissingData)...,
+	)
+	for _, b := range trdat.Base {
+		if kd, ok := k.Data[b.Date]; ok {
+			kd.Open = b.Open
+			kd.High = b.High
+			kd.Close = b.Close
+			kd.Low = b.Low
+			kd.Amount = b.Amount
+			kd.Volume = b.Volume
+			kd.Xrate = b.Xrate
+		}
+	}
+	return
 }
 
 //supplement missing "amount" from validate table if any

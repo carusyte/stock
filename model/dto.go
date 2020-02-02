@@ -1486,7 +1486,9 @@ type XQKline struct {
 	Dates []string
 	//MissingAmount stores dates of kline missing amount info
 	MissingAmount []string
-	NumAdded      int
+	//MissingAmount stores dates of kline missing basic info
+	MissingData []string
+	NumAdded    int
 }
 
 //creates a map for column name -> value
@@ -1553,6 +1555,10 @@ func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) 
 	} else {
 		x.MissingAmount = append(x.MissingAmount, b.Date)
 		log.Warnf("unable to parse amount for %s at %s: %+v", b.Code, b.Date, m)
+	}
+	if b.Close == 0 && b.Open == 0 && b.High == 0 && b.Low == 0 {
+		x.MissingData = append(x.MissingData, b.Date)
+		log.Warnf("%s suspect missing data at %s: %+v", b.Code, b.Date, m)
 	}
 	return
 }
