@@ -445,14 +445,16 @@ func fetchProxyFromSocksProxy(wg *sync.WaitGroup, chpx chan []string) {
 
 //Proxy represents the table structure of proxy_list.
 type Proxy struct {
-	Source      string `db:"source"`
-	Host        string `db:"host"`
-	Port        string `db:"port"`
-	Type        string `db:"type"`
-	Status      string `db:"status"`
-	Fail        int    `db:"fail"`
-	LastCheck   string `db:"last_check"`
-	LastScanned string `db:"last_scanned"`
+	Source      string  `db:"source"`
+	Host        string  `db:"host"`
+	Port        string  `db:"port"`
+	Type        string  `db:"type"`
+	Status      string  `db:"status"`
+	Suc         int     `db:"suc"`
+	Fail        int     `db:"fail"`
+	Score       float64 `db:"score"`
+	LastCheck   string  `db:"last_check"`
+	LastScanned string  `db:"last_scanned"`
 }
 
 func (x *Proxy) String() string {
