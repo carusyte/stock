@@ -195,5 +195,7 @@ func getKlineVld(stks *model.Stocks) *model.Stocks {
 	stks = GetKlinesV2(stks, frs...)
 	StopWatch("GET_KLINES_VLD_MAIN", begin)
 
+	FreeFetcherResources()
+
 	return stks
 }

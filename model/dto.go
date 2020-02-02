@@ -1456,6 +1456,8 @@ func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
 		if f64, e = strconv.ParseFloat(fields[5], 64); e != nil {
 			return errors.Wrapf(e, "unable to parse 'volume' as float, #%d string value: %s", i, s)
 		}
+		//convert unit from "hand" to share
+		f64 *= 100.
 		b.Volume = sql.NullFloat64{Float64: f64, Valid: true}
 		if sv = fields[6]; strings.Contains(sv, "万") || strings.Contains(sv, "亿") {
 			b.Amount = util.Str2Fnull(sv)
@@ -1464,8 +1466,6 @@ func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
 		} else {
 			return errors.Wrapf(e, "unable to parse 'amount' as float, #%d string value: %s", i, s)
 		}
-		//convert unit from "hand" to share
-		b.Amount.Float64 *= 100.
 		if "-" != fields[7] {
 			b.Varate = util.Pct2Fnull(fields[7])
 		}
