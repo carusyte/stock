@@ -9,6 +9,7 @@ import (
 	"github.com/carusyte/stock/util"
 	"github.com/pkg/profile"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 
 	"github.com/carusyte/stock/getd"
 	"github.com/carusyte/stock/global"
@@ -29,6 +30,8 @@ func main() {
 	}()
 
 	log.Info("Starting...")
+	log.Infof("config file used: %s", viper.ConfigFileUsed())
+	
 	switch strings.ToLower(conf.Args.Profiling) {
 	case "cpu":
 		defer profile.Start().Stop()
