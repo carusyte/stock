@@ -265,7 +265,7 @@ func byte2Quote(stk *model.Stock, klt model.DBTab, today, all []byte, xdxr *mode
 	}
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
@@ -408,7 +408,7 @@ func klineThsCDP(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	}
 
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -472,7 +472,7 @@ func runCdpV2(code string, tabs []model.DBTab) (ok, retry bool, tdmap, hismap ma
 	// create context
 	ctxt, cancel := context.WithTimeout(context.Background(), time.Duration(conf.Args.ChromeDP.Timeout)*time.Second)
 	defer cancel()
-	
+
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
@@ -941,7 +941,7 @@ func dKlineThsV2(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lk
 	*ldate = ""
 	*lklid = -1
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -1156,7 +1156,7 @@ func klineThsV6(stk *model.Stock, klt model.DBTab, incr bool, ldate *string, lkl
 	}
 
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			*ldate = ldy.Date
 			*lklid = ldy.Klid
@@ -1318,9 +1318,9 @@ DATES:
 			case 4:
 				kl.Close = util.Str2F64(e)
 			case 5:
-				kl.Volume = sql.NullFloat64{Float64: util.Str2F64(e), Valid:true}
+				kl.Volume = sql.NullFloat64{Float64: util.Str2F64(e), Valid: true}
 			case 6:
-				kl.Amount = sql.NullFloat64{Float64: util.Str2F64(e), Valid:true}
+				kl.Amount = sql.NullFloat64{Float64: util.Str2F64(e), Valid: true}
 			case 7:
 				kl.Xrate = util.Str2Fnull(e)
 			default:
@@ -1370,7 +1370,7 @@ func longKlineThs(stk *model.Stock, klt model.DBTab, incr bool) (quotes []*model
 	ldate := ""
 	lklid := -1
 	if incr {
-		latest := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		latest := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if latest != nil {
 			ldate = latest.Date
 			lklid = latest.Klid

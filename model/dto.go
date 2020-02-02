@@ -19,6 +19,7 @@ import (
 
 var log = global.Log
 
+//DBTab represents the database table for varied klines
 type DBTab string
 
 //CYTP represents cycle type.
@@ -26,6 +27,9 @@ type CYTP string
 
 //Rtype represents reinstatement type
 type Rtype string
+
+//DataSource represents the data source for stock
+type DataSource string
 
 const (
 	DAY   CYTP = "D"
@@ -42,6 +46,21 @@ const (
 const (
 	MarketSZ string = "SZ"
 	MarketSH string = "SH"
+)
+
+const (
+	//KlineMaster the master kline table
+	KlineMaster DataSource = "kline"
+	//XQ xueqiu
+	XQ DataSource = "xq"
+	//EM eastmoney
+	EM DataSource = "em"
+	//THS 10jqka
+	THS DataSource = "ths"
+	//TC tencent
+	TC DataSource = "tc"
+	//WHT Kaleidoscope
+	WHT DataSource = "wht"
 )
 
 const (
@@ -731,6 +750,7 @@ func (d *TradeDataMovAvgLogRtn) String() string {
 //TradeData models various aspects of the trading data.
 type TradeData struct {
 	Code          string
+	Source        DataSource
 	Cycle         CYTP
 	Reinstatement Rtype
 	Base          []*TradeDataBasic
@@ -871,6 +891,41 @@ func (td *TradeData) Keep(positions ...int) {
 		}
 		td.MovAvg = newArray
 	}
+}
+
+//GetDates of any of the series.
+func (td *TradeData) GetDates() (dates []string) {
+	if len(td.Base) > 0 {
+		for _, d := range td.Base {
+			dates = append(dates, d.Date)
+		}
+		return
+	} else if len(td.MovAvg) > 0 {
+		for _, d := range td.MovAvg {
+			dates = append(dates, d.Date)
+		}
+		return
+	} else if len(td.LogRtn) > 0 {
+		for _, d := range td.LogRtn {
+			dates = append(dates, d.Date)
+		}
+		return
+	} else if len(td.MovAvgLogRtn) > 0 {
+		for _, d := range td.MovAvgLogRtn {
+			dates = append(dates, d.Date)
+		}
+		return
+	}
+	return
+}
+
+//BaseMap returns a map of date -> TradeDataBasic series.
+func (td *TradeData) BaseMap() (dmap map[string]*TradeDataBasic) {
+	dmap = make(map[string]*TradeDataBasic)
+	for _, d := range td.Base {
+		dmap[d.Date] = d
+	}
+	return
 }
 
 //Quote represents various kline data
@@ -1333,8 +1388,11 @@ type EMKline struct {
 	Symbol   string
 	Period   string
 	AuthType string
-	Data     []*TradeDataBasic
-	DataMap  map[string]*TradeDataBasic
+	Dates    []string
+	//Data unmarshalled will be in chronological order.
+	Data []*TradeDataBasic
+	//DataMap for date -> TradeDataBasic
+	DataMap map[string]*TradeDataBasic
 }
 
 //UnmarshalJSON unmarshals JSON payload
@@ -1406,6 +1464,8 @@ func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
 		} else {
 			return errors.Wrapf(e, "unable to parse 'amount' as float, #%d string value: %s", i, s)
 		}
+		//convert unit from "hand" to share
+		b.Amount.Float64 *= 100.
 		if "-" != fields[7] {
 			b.Varate = util.Pct2Fnull(fields[7])
 		}
@@ -1413,6 +1473,7 @@ func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
 			b.Xrate = util.Str2Fnull(fields[8])
 		}
 		x.Data = append(x.Data, b)
+		x.Dates = append(x.Dates, b.Date)
 		x.DataMap[b.Date] = b
 	}
 	return nil

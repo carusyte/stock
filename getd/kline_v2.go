@@ -6,24 +6,48 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/ssgreg/repeat"
 
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
 )
 
+//FetchRequest specifies the arguments to fetch data from remote sources
+type FetchRequest struct {
+	//RemoteSource for the trade data.
+	RemoteSource model.DataSource
+	//LocalSource for the trade data. *model.MasterKline will be used if not specified.
+	LocalSource model.DataSource
+	//Cycle for the trade data. All *model.CYTP will be used if not specified.
+	//Cycle for the trade data. All *model.CYTP will be used if not specified.
+	Cycle model.CYTP
+	//Reinstate for the trade data. All *model.Rtype will be used if not specified.
+	Reinstate model.Rtype
+}
+
 //TrDataQry trading data query parameters
 type TrDataQry struct {
-	Validate                            bool
-	Cycle                               model.CYTP
+	//LocalSource for the trade data. *model.MasterKline will be used if not specified.
+	LocalSource model.DataSource
+	//Cycle for the trade data. All *model.CYTP will be used if not specified.
+	Cycle model.CYTP
+	//Reinstate for the trade data. All *model.Rtype will be used if not specified.
 	Reinstate                           model.Rtype
 	Basic, LogRtn, MovAvg, MovAvgLogRtn bool
+}
+
+type dbTask struct {
+	stock     *model.Stock
+	tradeData *model.TradeData
+	klid      int
 }
 
 //TradeDataField stands for the common table columns related to trade data.
@@ -31,10 +55,54 @@ type TradeDataField string
 
 const (
 	//Klid the kline ID for the specific trade data record
-	Klid = "klid"
+	Klid TradeDataField = "klid"
 	//Date the date for a specific trade data record
-	Date = "date"
+	Date TradeDataField = "date"
 )
+
+var (
+	kfmap map[model.DataSource]KlineFetcher
+	kfmtx sync.RWMutex
+)
+
+//KlineFetcher is capable of fetching kline data from a specific data source.
+type KlineFetcher interface {
+	//FetchKline from specific data source for the given stock.
+	FetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
+		trdat *model.TradeData, lklid int, suc, retry bool)
+	//Cleanup resources
+	Cleanup()
+}
+
+func resolveKlineFetcher(src model.DataSource) (f KlineFetcher) {
+	kfmtx.Lock()
+	defer kfmtx.Unlock()
+	if kfmap == nil {
+		kfmap = make(map[model.DataSource]KlineFetcher)
+	}
+	if f, ok := kfmap[src]; ok {
+		return f
+	}
+	switch src {
+	case model.WHT:
+		// tdmap, lkmap, suc = getKlineWht(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.THS:
+		// qmap, lkmap, suc = getKlineThs(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.TC:
+		// tdmap, lkmap, suc = getKlineTc(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.XQ:
+		f = &XqKlineFetcher{}
+	case model.EM:
+		f = &EmKlineFetcher{}
+	default:
+		log.Panicf("unsupported data source: %+v", src)
+	}
+	kfmap[src] = f
+	return
+}
 
 //GetTrDataDB get specified type of kline data from database.
 func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model.TradeData) {
@@ -194,18 +262,24 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 
 //GetTrDataAt fetches trading data at specified dates/klids.
 func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, val ...interface{}) (trdat *model.TradeData) {
-	var (
-		args []interface{}
-		cond string
-		e    error
-	)
-	args = append(args, code)
-	holders := make([]string, len(val))
-	for i := range holders {
-		holders[i] = "?"
+	batSize := 1000
+	total := float64(len(val))
+	numGrp := int(math.Ceil(total / float64(batSize)))
+	args := make([][]interface{}, numGrp)
+	holders := make([][]string, numGrp)
+	for i := range args {
+		args[i] = append(args[i], code)
+		grpSize := batSize
+		if i == len(args)-1 {
+			grpSize = int(total) - batSize*(numGrp-1)
+		}
+		holders[i] = make([]string, grpSize)
+		for j := 0; j < grpSize; j++ {
+			idx := i*batSize + j
+			args[i] = append(args[i], val[idx])
+			holders[i][j] = "?"
+		}
 	}
-	args = append(args, val...)
-	cond = fmt.Sprintf("%s in (%s)", field, strings.Join(holders, ","))
 	d := ""
 	if desc {
 		d = "desc"
@@ -216,22 +290,10 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 	//A slice of trading data of arbitrary kind
 	ochan := make(chan interface{}, 4)
 
-	trdat = &model.TradeData{Code: code, Cycle: qry.Cycle}
-
-	if qry.Validate {
-		var p *model.Params
-		if e = dbmap.SelectOne(&p,
-			`select * from params where section = ? and param = ? order by id`,
-			"Validate Kline", "Reinstatement"); e == nil {
-			trdat.Reinstatement = model.Rtype(p.Value)
-		} else {
-			if "sql: no rows in result set" != e.Error() {
-				log.Panicf("failed to query params: %+v", e)
-			}
-			trdat.Reinstatement = model.Rtype(conf.Args.DataSource.KlineValidateType)
-		}
-	} else {
-		trdat.Reinstatement = qry.Reinstate
+	trdat = &model.TradeData{
+		Code:          code,
+		Cycle:         qry.Cycle,
+		Reinstatement: qry.Reinstate,
 	}
 
 	//Collect and merge query results
@@ -260,10 +322,17 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 		go func(table string, typ reflect.Type) {
 			defer wg.Done()
 			intf := reflect.New(reflect.SliceOf(typ)).Interface()
-			sql := fmt.Sprintf("select * from %s where code = ? and %s order by klid %s",
-				table, cond, d)
-			_, e := dbmap.Select(intf, sql, args...)
-			util.CheckErr(e, "failed to query "+table+" for "+code)
+			for i := range args {
+				cond := fmt.Sprintf("%s in (%s)", field, strings.Join(holders[i], ","))
+				ss := reflect.New(reflect.SliceOf(typ)).Interface()
+				sql := fmt.Sprintf("select * from %s where code = ? and %s order by klid %s",
+					table, cond, d)
+				_, e := dbmap.Select(ss, sql, args[i]...)
+				util.CheckErr(e, "failed to query "+table+" for "+code)
+				for j := 0; j < reflect.ValueOf(ss).Len(); j++ {
+					intf = reflect.Append(reflect.ValueOf(intf), reflect.ValueOf(ss).Index(j)).Interface()
+				}
+			}
 			ochan <- intf
 		}(table, typ)
 	}
@@ -274,6 +343,73 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 	return
 }
 
+//resolveTableNames resolve trade data queries to database table names.
+func resolveTableNames(qs ...FetchRequest) (tables []string) {
+	for _, q := range qs {
+		base := ""
+		qtabs := make([]string, 0, 4)
+		if len(q.LocalSource) > 0 {
+			base = string(q.LocalSource) + "_"
+		} else {
+			base = string(model.KlineMaster) + "_"
+		}
+		switch q.Cycle {
+		case model.DAY:
+			base += "d_"
+		case model.WEEK:
+			base += "w_"
+		case model.MONTH:
+			base += "m_"
+		default:
+			//cycle not specified, all cycle type will be used
+			if len(qtabs) == 0 {
+				qtabs = append(qtabs, base+"d_")
+				qtabs = append(qtabs, base+"w_")
+				qtabs = append(qtabs, base+"m_")
+			} else {
+				newTables := make([]string, 0, 4)
+				for _, t := range tables {
+					newTables = append(newTables, t+"b")
+					newTables = append(newTables, t+"f")
+					newTables = append(newTables, t+"n")
+				}
+				qtabs = newTables
+			}
+		}
+		switch q.Reinstate {
+		case model.Backward:
+			base += "b"
+		case model.Forward:
+			base += "f"
+		case model.None:
+			base += "n"
+		default:
+			//reinstate not specified, all reinstatement type will be used
+			if len(qtabs) == 0 {
+				qtabs = append(qtabs, base+"b")
+				qtabs = append(qtabs, base+"f")
+				qtabs = append(qtabs, base+"n")
+			} else {
+				newTables := make([]string, 0, 4)
+				for _, t := range tables {
+					newTables = append(newTables, t+"b")
+					newTables = append(newTables, t+"f")
+					newTables = append(newTables, t+"n")
+				}
+				qtabs = newTables
+			}
+		}
+		if len(qtabs) == 0 {
+			qtabs = append(qtabs, base)
+		}
+		for _, t := range qtabs {
+			tables = append(tables, t)
+		}
+	}
+	sort.Strings(tables)
+	return
+}
+
 func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	tables = make(map[string]reflect.Type)
 	//prelim checking
@@ -281,6 +417,9 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 		log.Panicf("Invalid query parameters. Please specify at least one table to query. Params: %+v", q)
 	}
 	base := "kline_"
+	if len(q.LocalSource) > 0 {
+		base = string(q.LocalSource) + "_"
+	}
 	switch q.Cycle {
 	case model.DAY:
 		base += "d_"
@@ -291,19 +430,15 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 	default:
 		log.Panicf("Unsupported cycle type: %v, query param: %+v", q.Cycle, q)
 	}
-	if q.Validate {
-		base += "v"
-	} else {
-		switch q.Reinstate {
-		case model.Backward:
-			base += "b"
-		case model.Forward:
-			base += "f"
-		case model.None:
-			base += "n"
-		default:
-			log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
-		}
+	switch q.Reinstate {
+	case model.Backward:
+		base += "b"
+	case model.Forward:
+		base += "f"
+	case model.None:
+		base += "n"
+	default:
+		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", q.Reinstate, q)
 	}
 	if q.Basic {
 		tables[base] = reflect.TypeOf(&model.TradeDataBasic{})
@@ -321,13 +456,19 @@ func resolveTables(q TrDataQry) (tables map[string]reflect.Type) {
 }
 
 // returns a mapping of [database table] to [table columns] based on availability of data sets in TradeData.
-func resolveTradeDataTables(td *model.TradeData, validate bool) (tabCols map[string][]string, tabData map[string]interface{}) {
+func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, tabData map[string]interface{}) {
 	if td.Empty() {
 		return
 	}
 	tabCols = make(map[string][]string)
 	tabData = make(map[string]interface{})
-	base := "kline_"
+	base := ""
+	switch td.Source {
+	case "":
+		base = string(model.KlineMaster)
+	default:
+		base = string(td.Source)
+	}
 	switch td.Cycle {
 	case model.DAY:
 		base += "d_"
@@ -338,19 +479,15 @@ func resolveTradeDataTables(td *model.TradeData, validate bool) (tabCols map[str
 	default:
 		log.Panicf("Unsupported cycle type: %v, query param: %+v", td.Cycle, td)
 	}
-	if validate {
-		base += "v"
-	} else {
-		switch td.Reinstatement {
-		case model.Backward:
-			base += "b"
-		case model.Forward:
-			base += "f"
-		case model.None:
-			base += "n"
-		default:
-			log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
-		}
+	switch td.Reinstatement {
+	case model.Backward:
+		base += "b"
+	case model.Forward:
+		base += "f"
+	case model.None:
+		base += "n"
+	default:
+		log.Panicf("Unsupported reinstatement type: %v, query param: %+v", td.Reinstatement, td)
 	}
 	if len(td.Base) > 0 {
 		tabCols[base] = getTableColumns(model.TradeDataBasic{})
@@ -823,7 +960,7 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 	}
 }
 
-func binsertV2(trdat *model.TradeData, lklid int, validate bool) (c int) {
+func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 	if trdat == nil || trdat.Empty() {
 		return 0
 	}
@@ -860,7 +997,7 @@ func binsertV2(trdat *model.TradeData, lklid int, validate bool) (c int) {
 	rt := 0
 	lklid++
 	code := trdat.Code
-	tables, data := resolveTradeDataTables(trdat, validate)
+	tables, data := resolveTradeDataTables(trdat)
 	var e error
 	// delete stale records first
 	for table := range tables {
@@ -957,20 +1094,20 @@ func insertTradeData(table string, cols []string, rows interface{}, wg *sync.Wai
 	}
 }
 
-func calcVarateRglV2(stk *model.Stock, tdmap map[model.DBTab]*model.TradeData) (e error) {
-	for t, td := range tdmap {
-		switch t {
-		case model.KLINE_DAY_F:
-			e = inferVarateRglV2(stk, tdmap[model.KLINE_DAY_NR], td)
-		case model.KLINE_WEEK_F:
-			e = inferVarateRglV2(stk, tdmap[model.KLINE_WEEK_NR], td)
-		case model.KLINE_MONTH_F:
-			e = inferVarateRglV2(stk, tdmap[model.KLINE_MONTH_NR], td)
-		default:
-			//skip the rest types of kline
+func calcVarateRglV2(stk *model.Stock, tdmap map[FetchRequest]*model.TradeData) (e error) {
+	for fr, td := range tdmap {
+		if fr.Reinstate != model.Forward {
+			continue
 		}
+		nfr := FetchRequest{
+			RemoteSource: fr.RemoteSource,
+			LocalSource:  fr.LocalSource,
+			Cycle:        fr.Cycle,
+			Reinstate:    model.None,
+		}
+		e = inferVarateRglV2(stk, tdmap[nfr], td)
 		if e != nil {
-			log.Println(e)
+			log.Warn(e)
 			return e
 		}
 	}
@@ -989,9 +1126,10 @@ func inferVarateRglV2(stk *model.Stock, nrtd, tgtd *model.TradeData) (e error) {
 		nrtd = GetTrDataBtwn(
 			stk.Code,
 			TrDataQry{
-				Cycle:     tgtd.Cycle,
-				Reinstate: model.None,
-				Basic:     true,
+				LocalSource: tgtd.Source,
+				Cycle:       tgtd.Cycle,
+				Reinstate:   model.None,
+				Basic:       true,
 			},
 			Date,
 			"["+sDate, eDate+"]",
@@ -1171,7 +1309,7 @@ func UpdateValidateKlineParams() (e error) {
 		" on duplicate key update section=values(section),param=values(param),value=values(value)," +
 		" udate=values(udate),utime=values(utime)")
 	for rt := 0; rt < conf.Args.DeadlockRetry; rt++ {
-		_, e = dbmap.Exec(stmt, "Validate Kline", "Reinstatement", conf.Args.DataSource.KlineValidateType, d, t)
+		_, e = dbmap.Exec(stmt, "Validate Kline", "DataSource", conf.Args.DataSource.KlineValidateSource, d, t)
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
@@ -1184,4 +1322,210 @@ func UpdateValidateKlineParams() (e error) {
 		return
 	}
 	return errors.Wrap(e, "failed to update params table")
+}
+
+//GetKlinesV2 Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
+func GetKlinesV2(stks *model.Stocks, fetReq ...FetchRequest) (rstks *model.Stocks) {
+	defer Cleanup()
+	tabs := resolveTableNames(fetReq...)
+	log.Printf("fetching kline data for %d stocks: %+v", stks.Size(), tabs)
+	var wg sync.WaitGroup
+	parallel := conf.Args.Concurrency
+	if conf.THS == conf.Args.DataSource.Kline {
+		parallel = conf.Args.ChromeDP.PoolSize
+	}
+	wf := make(chan int, parallel)
+	outstks := make(chan *model.Stock, JobCapacity)
+	rstks = new(model.Stocks)
+	wgr := collect(rstks, outstks)
+	dbChan := createDbTaskQueues(fetReq...)
+	wgdb := saveTradeData(outstks, dbChan)
+	for _, stk := range stks.List {
+		wg.Add(1)
+		wf <- 1
+		go getKlineV2(stk, fetReq, dbChan, &wg, &wf)
+	}
+	wg.Wait()
+	close(wf)
+	waitDbjob(wgdb)
+	close(outstks)
+	wgr.Wait()
+	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(tabs, ", "))
+	if stks.Size() != rstks.Size() {
+		same, skp := stks.Diff(rstks)
+		if !same {
+			log.Printf("Failed: %+v", skp)
+		}
+	}
+	return
+}
+
+//FreeFetcherResources after usage
+func FreeFetcherResources() {
+	for _, f := range kfmap {
+		f.Cleanup()
+	}
+}
+
+func getKlineFromSource(stk *model.Stock, kf KlineFetcher, fetReq ...FetchRequest) (
+	tdmap map[FetchRequest]*model.TradeData, lkmap map[FetchRequest]int, suc bool) {
+
+	tdmap = make(map[FetchRequest]*model.TradeData)
+	lkmap = make(map[FetchRequest]int)
+	code := stk.Code
+	xdxr := latestUFRXdxr(stk.Code)
+
+	genop := func(q FetchRequest, incr bool) (op func(c int) (e error)) {
+		tabs := resolveTableNames(q)
+		return func(c int) (e error) {
+			trdat, lklid, suc, retry := kf.FetchKline(stk, q, incr)
+			if suc {
+				log.Infof("%s %+v fetched: %d", code, tabs, trdat.MaxLen())
+				tdmap[q] = trdat
+				lkmap[q] = lklid
+				return nil
+			}
+			e = fmt.Errorf("failed to get kline for %s", code)
+			if retry {
+				log.Printf("%s retrying [%d]", code, c+1)
+				return repeat.HintTemporary(e)
+			}
+			return repeat.HintStop(e)
+		}
+	}
+
+	suc = true
+	for _, q := range fetReq {
+		incr := true
+		if q.Reinstate == model.Forward {
+			incr = xdxr == nil
+		}
+		e := repeat.Repeat(
+			repeat.FnWithCounter(genop(q, incr)),
+			repeat.StopOnSuccess(),
+			repeat.LimitMaxTries(conf.Args.DataSource.KlineFailureRetry-1),
+			repeat.WithDelay(
+				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(5*time.Second).Set(),
+			),
+		)
+		if e != nil {
+			suc = false
+		}
+	}
+
+	return tdmap, lkmap, suc
+}
+
+func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]chan *dbTask,
+	wg *sync.WaitGroup, wf *chan int) {
+	defer func() {
+		wg.Done()
+		<-*wf
+	}()
+
+	//TODO refactor me
+	tdmap := make(map[FetchRequest]*model.TradeData)
+	lkmap := make(map[FetchRequest]int)
+	srcMap := splitKlineSource(stk, fetReq...)
+	for src, frs := range srcMap {
+		kf := resolveKlineFetcher(src)
+		tdmapTmp, lkmapTmp, suc := getKlineFromSource(stk, kf, frs...)
+		if !suc {
+			//abort immediately
+			return
+		}
+		for k, v := range tdmapTmp {
+			tdmap[k] = v
+		}
+		for k, v := range lkmapTmp {
+			lkmap[k] = v
+		}
+	}
+	for q, trdat := range tdmap {
+		supplementMiscV2(trdat, lkmap[q])
+	}
+	if !isIndex(stk.Code) {
+		if e := calcVarateRglV2(stk, tdmap); e != nil {
+			log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
+		}
+	}
+	for fr, trdat := range tdmap {
+		CalLogReturnsV2(trdat)
+		if lkmap[fr] != -1 {
+			//incremental fetch. skip the first record which is for varate calculation
+			trdat.Base = trdat.Base[1:]
+			trdat.LogRtn = trdat.LogRtn[1:]
+			trdat.MovAvg = trdat.MovAvg[1:]
+			trdat.MovAvgLogRtn = trdat.MovAvgLogRtn[1:]
+		}
+		qmap[fr] <- &dbTask{
+			stock:     stk,
+			tradeData: trdat,
+			klid:      lkmap[fr],
+		}
+	}
+	return
+}
+
+func createDbTaskQueues(fetReq ...FetchRequest) (qmap map[FetchRequest]chan *dbTask) {
+	qmap = make(map[FetchRequest]chan *dbTask)
+	for _, fr := range fetReq {
+		qmap[fr] = make(chan *dbTask, conf.Args.DBQueueCapacity)
+	}
+	return
+}
+
+func saveTradeData(outstks chan *model.Stock, dbtChans map[FetchRequest]chan *dbTask) (wgs []*sync.WaitGroup) {
+	snmap := new(sync.Map)
+	total := len(dbtChans)
+	lock := new(sync.RWMutex)
+	for _, ch := range dbtChans {
+		wg := new(sync.WaitGroup)
+		wgs = append(wgs, wg)
+		wg.Add(1)
+		go func(wg *sync.WaitGroup, ch chan *dbTask, outstks chan *model.Stock,
+			snmap *sync.Map, lock *sync.RWMutex) {
+			defer wg.Done()
+			for j := range ch {
+				c := binsertV2(j.tradeData, j.klid)
+				if c == j.tradeData.MaxLen() {
+					lock.Lock()
+					var cnt interface{}
+					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
+						snmap.Delete(j.stock.Code)
+						outstks <- j.stock
+						log.Printf("%s all requested klines fetched", j.stock.Code)
+					} else {
+						snmap.Store(j.stock.Code, cnt.(int)+1)
+					}
+					lock.Unlock()
+				}
+			}
+		}(wg, ch, outstks, snmap, lock)
+	}
+	return
+}
+
+func splitKlineSource(stk *model.Stock, fetReq ...FetchRequest) map[model.DataSource][]FetchRequest {
+	m := make(map[model.DataSource][]FetchRequest)
+	// 1st, check stk.Source
+	if stk.Source != "" {
+		src := model.DataSource(stk.Source)
+		for _, q := range fetReq {
+			q.RemoteSource = src
+		}
+		m[src] = fetReq
+		return m
+	}
+	// 2nd, check fetReq.RemoteSource. If none is set, use config file data source.
+	for _, q := range fetReq {
+		src := model.DataSource(conf.Args.DataSource.Kline)
+		if len(q.RemoteSource) > 0 {
+			src = q.RemoteSource
+		} else {
+			q.RemoteSource = src
+		}
+		m[src] = append(m[src], q)
+	}
+	return m
 }

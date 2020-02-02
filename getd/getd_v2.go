@@ -1,17 +1,15 @@
 package getd
 
 import (
-	"fmt"
+	"math"
 	"time"
 
 	"github.com/carusyte/stock/conf"
-	"github.com/carusyte/stock/global"
 	"github.com/carusyte/stock/model"
-	"github.com/carusyte/stock/util"
 )
 
-//Get miscellaneous stock info.
-func Get() {
+//GetV2 gets miscellaneous stock info.
+func GetV2() {
 	var allstks, stks *model.Stocks
 	start := time.Now()
 	defer StopWatch("GETD_TOTAL", start)
@@ -35,19 +33,24 @@ func Get() {
 		log.Printf("skipped finance data from web")
 		stks = allstks
 	}
-	if !conf.Args.DataSource.SkipKlineVld {
-		stgkvld := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD)
-		UpdateValidateKlineParams()
-		StopWatch("GET_KLINES_VLD", stgkvld)
-	} else {
-		log.Printf("skipped kline-vld data from web")
-	}
+
+	stks = getKlineVld(stks)
+
+	src := model.DataSource(conf.Args.DataSource.Kline)
+	frs := make([]FetchRequest, 3)
+	cs := []model.CYTP{model.DAY, model.WEEK, model.MONTH}
 	if !conf.Args.DataSource.SkipKlinePre {
-		stgkpre := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY_NR,
-			model.KLINE_MONTH_NR, model.KLINE_WEEK_NR)
-		StopWatch("GET_KLINES_PRE", stgkpre)
+		begin := time.Now()
+		for i := range frs {
+			frs[i] = FetchRequest{
+				RemoteSource: src,
+				LocalSource:  model.KlineMaster,
+				Reinstate:    model.None,
+				Cycle:        cs[i],
+			}
+		}
+		stks = GetKlinesV2(stks, frs...)
+		StopWatch("GET_KLINES_PRE", begin)
 	} else {
 		log.Printf("skipped kline-pre data from web")
 	}
@@ -61,24 +64,40 @@ func Get() {
 	}
 
 	if !conf.Args.DataSource.SkipXdxr {
-		stgx := time.Now()
-		stks = GetXDXRs(stks)
-		StopWatch("GET_XDXR", stgx)
+		// Validate Kline process already fetches XDXR info
+		if conf.Args.DataSource.SkipKlineVld {
+			stgx := time.Now()
+			stks = GetXDXRs(stks)
+			StopWatch("GET_XDXR", stgx)
+		}
 	} else {
 		log.Printf("skipped xdxr data from web")
 	}
 
 	if !conf.Args.DataSource.SkipKlines {
-		stgkl := time.Now()
-		stks = GetKlines(stks, model.KLINE_DAY_F,
-			model.KLINE_WEEK_F, model.KLINE_MONTH_F,
-			model.KLINE_MONTH_B, model.KLINE_DAY_B,
-			model.KLINE_WEEK_B)
+		begin := time.Now()
+		frs = make([]FetchRequest, 6)
+		for i := range frs {
+			csi := int(math.Mod(float64(i), 3))
+			r := model.Backward
+			if i > 3 {
+				r = model.Forward
+			}
+			frs[i] = FetchRequest{
+				RemoteSource: src,
+				LocalSource:  model.KlineMaster,
+				Reinstate:    r,
+				Cycle:        cs[csi],
+			}
+		}
+		stks = GetKlinesV2(stks, frs...)
 		stks = KlinePostProcess(stks)
-		StopWatch("GET_KLINES", stgkl)
+		StopWatch("GET_MASTER_KLINES", begin)
 	} else {
 		log.Printf("skipped klines data from web")
 	}
+
+	FreeFetcherResources()
 
 	var allIdx, sucIdx []*model.IdxLst
 	if !conf.Args.DataSource.SkipIndices {
@@ -129,37 +148,52 @@ func Get() {
 	rptFailed(allstks, stks)
 }
 
-//StopWatch stops the timer and insert duration info into stats table.
-func StopWatch(code string, start time.Time) {
-	ss := start.Format(global.DateTimeFormat)
-	end := time.Now().Format(global.DateTimeFormat)
-	dur := time.Since(start).Seconds()
-	log.Printf("%s Complete. Time Elapsed: %f sec", code, dur)
-	dbmap.Exec("insert into stats (code, start, end, dur) values (?, ?, ?, ?) "+
-		"on duplicate key update start=values(start), end=values(end), dur=values(dur)",
-		code, ss, end, dur)
-}
-
-//update xpriced flag in xdxr to mark that all price related data has been reinstated
-func finMark(stks *model.Stocks) *model.Stocks {
-	if stks.Size() == 0 {
+func getKlineVld(stks *model.Stocks) *model.Stocks {
+	if conf.Args.DataSource.SkipKlineVld {
+		log.Printf("skipped kline-vld data from web")
 		return stks
 	}
-	sql, e := dot.Raw("UPD_XPRICE")
-	util.CheckErr(e, "failed to get UPD_XPRICE sql")
-	sql = fmt.Sprintf(sql, util.Join(stks.Codes, ",", true))
-	_, e = dbmap.Exec(sql)
-	util.CheckErr(e, "failed to update xprice, sql:\n"+sql)
-	log.Printf("%d xprice mark updated", stks.Size())
-	return stks
-}
 
-func rptFailed(all *model.Stocks, fin *model.Stocks) {
-	log.Printf("Finish:[%d]\tTotal:[%d]", fin.Size(), all.Size())
-	if fin.Size() != all.Size() {
-		same, skp := all.Diff(fin)
-		if !same {
-			log.Printf("Unfinished: %+v", skp)
+	begin := time.Now()
+	vsrc := model.DataSource(conf.Args.DataSource.KlineValidateSource)
+	frs := make([]FetchRequest, 3)
+	cs := []model.CYTP{model.DAY, model.WEEK, model.MONTH}
+	for i := range frs {
+		frs[i] = FetchRequest{
+			RemoteSource: vsrc,
+			LocalSource:  vsrc,
+			Reinstate:    model.None,
+			Cycle:        cs[i],
 		}
 	}
+	stks = GetKlinesV2(stks, frs...)
+	UpdateValidateKlineParams()
+	StopWatch("GET_KLINES_VLD_PRE", begin)
+
+	if !conf.Args.DataSource.SkipXdxr {
+		begin = time.Now()
+		stks = GetXDXRs(stks)
+		StopWatch("GET_XDXR", begin)
+	} else {
+		log.Printf("skipped xdxr data from web")
+	}
+
+	frs = make([]FetchRequest, 6)
+	for i := range frs {
+		csi := int(math.Mod(float64(i), 3))
+		r := model.Backward
+		if i > 3 {
+			r = model.Forward
+		}
+		frs[i] = FetchRequest{
+			RemoteSource: vsrc,
+			LocalSource:  vsrc,
+			Reinstate:    r,
+			Cycle:        cs[csi],
+		}
+	}
+	stks = GetKlinesV2(stks, frs...)
+	StopWatch("GET_KLINES_VLD_MAIN", begin)
+
+	return stks
 }

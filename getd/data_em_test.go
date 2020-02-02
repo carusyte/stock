@@ -9,8 +9,8 @@ import (
 
 func Test_getKlineEM(t *testing.T) {
 	type args struct {
-		stk    *model.Stock
-		kltype []model.DBTab
+		stk  *model.Stock
+		freq FetchRequest
 	}
 	tests := []struct {
 		name      string
@@ -26,14 +26,23 @@ func Test_getKlineEM(t *testing.T) {
 					Market: sql.NullString{String: "SZ", Valid: true},
 					Code:   "000585",
 					Name:   "东北电气"},
-				kltype: []model.DBTab{model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD},
+				freq: FetchRequest{
+					RemoteSource: model.EM,
+					LocalSource:  model.EM,
+					Cycle:        model.DAY,
+					Reinstate:    model.None,
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			f := &EmKlineFetcher{}
 			// gotTdmap, gotLkmap, gotSuc := getKlineXQ(tt.args.stk, tt.args.kltype)
-			getKlineEM(tt.args.stk, tt.args.kltype)
+			f.FetchKline(
+				tt.args.stk,
+				tt.args.freq,
+				false)
 		})
 	}
 }

@@ -10,8 +10,8 @@ import (
 
 func Test_getKlineXQ(t *testing.T) {
 	type args struct {
-		stk    *model.Stock
-		kltype []model.DBTab
+		stk  *model.Stock
+		freq FetchRequest
 	}
 	tests := []struct {
 		name      string
@@ -27,14 +27,20 @@ func Test_getKlineXQ(t *testing.T) {
 					Market: sql.NullString{String: "SZ", Valid: true},
 					Code:   "000585",
 					Name:   "东北电气"},
-				kltype: []model.DBTab{model.KLINE_DAY_B, model.KLINE_DAY_F, model.KLINE_DAY_NR},
+				freq: FetchRequest{
+					RemoteSource: model.XQ,
+					LocalSource:  model.XQ,
+					Cycle:        model.DAY,
+					Reinstate:    model.Forward,
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			f := &XqKlineFetcher{}
 			// gotTdmap, gotLkmap, gotSuc := getKlineXQ(tt.args.stk, tt.args.kltype)
-			getKlineXQ(tt.args.stk, tt.args.kltype)
+			f.FetchKline(tt.args.stk, tt.args.freq, false)
 		})
 	}
 }

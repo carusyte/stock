@@ -81,8 +81,8 @@ func PickProxy() (proxy *Proxy, e error) {
 		FROM
 			proxy_list
 		WHERE
-			status = ?`
-	_, e = global.Dbmap.Select(&proxyList, query, "OK")
+			score >= ?`
+	_, e = global.Dbmap.Select(&proxyList, query, conf.Args.Network.RotateProxyScoreThreshold)
 	if e != nil {
 		log.Println("failed to query proxy server from database", e)
 		return proxy, errors.WithStack(e)
@@ -92,9 +92,19 @@ func PickProxy() (proxy *Proxy, e error) {
 	return proxyList[rand.Intn(len(proxyList))], nil
 }
 
-//MarkProxyFailure increases failure counter for the specified proxy.
-func MarkProxyFailure(p *Proxy) {
-	_, e := global.Dbmap.Exec(`update proxy_list set fail = fail + 1 where host = ? and port = ?`, p.Host, p.Port)
+//UpdateProxyScore for the specified proxy.
+func UpdateProxyScore(p *Proxy, success bool) {
+	if p == nil {
+		return
+	}
+	var e error
+	if success {
+		_, e = global.Dbmap.Exec(`update proxy_list set suc = suc + 1, score = suc/(suc+fail)*100 `+
+			`where host = ? and port = ?`, p.Host, p.Port)
+	} else {
+		_, e = global.Dbmap.Exec(`update proxy_list set fail = fail + 1, score = suc/(suc+fail)*100 `+
+			`where host = ? and port = ?`, p.Host, p.Port)
+	}
 	if e != nil {
 		log.Printf("failed to increase fail counter for proxy %+v", p)
 	}

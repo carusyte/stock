@@ -102,7 +102,7 @@ func HTTPGet(link string, headers map[string]string,
 			proxyStr := ""
 			if proxyAddr != "" {
 				proxyStr = fmt.Sprintf(" [proxy=%s]", proxyAddr)
-				MarkProxyFailure(px)
+				UpdateProxyScore(px, false)
 			}
 			log.Debugf("http communication error: [%+v]%s url=%s, retrying %d ...", e, proxyStr, link, c+1)
 			if res != nil {
@@ -113,7 +113,7 @@ func HTTPGet(link string, headers map[string]string,
 		return nil
 	}
 
-	repeat.Repeat(
+	e = repeat.Repeat(
 		repeat.FnWithCounter(op),
 		repeat.StopOnSuccess(),
 		repeat.LimitMaxTries(RETRY),
@@ -242,7 +242,7 @@ func HTTPGetResponse(link string, headers map[string]string,
 			proxyStr := ""
 			if proxyAddr != "" {
 				proxyStr = fmt.Sprintf(" [proxy=%s]", proxyAddr)
-				MarkProxyFailure(prx)
+				UpdateProxyScore(prx, false)
 			}
 			if i >= RETRY {
 				log.Printf("http communication failed.%s url=%s\n%+v", proxyStr, link, err)
@@ -255,6 +255,7 @@ func HTTPGetResponse(link string, headers map[string]string,
 			}
 			time.Sleep(time.Millisecond * time.Duration(500+rand.Intn(300)))
 		} else {
+			UpdateProxyScore(prx, true)
 			return
 		}
 	}

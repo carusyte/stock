@@ -65,6 +65,7 @@ type Arguments struct {
 		RotateProxyBypassRatio     float32 `mapstructure:"rotate_proxy_bypass_ratio"`
 		RotateProxyRefreshInterval float64 `mapstructure:"rotate_proxy_refresh_interval"`
 		RotateProxyFreshnessMin    int     `mapstructure:"rotate_proxy_freshness_min"`
+		RotateProxyScoreThreshold  float32 `mapstructure:"rotate_proxy_score_threshold"`
 		DefaultUserAgent           string  `mapstructure:"default_user_agent"`
 		UserAgents                 string  `mapstructure:"user_agents"`
 		UserAgentLifespan          int     `mapstructure:"user_agent_lifespan"`
@@ -91,7 +92,6 @@ type Arguments struct {
 	DataSource struct {
 		Kline                 string    `mapstructure:"kline"`
 		KlineValidateSource   string    `mapstructure:"kline_validate_source"`
-		KlineValidateType     string    `mapstructure:"kline_validate_type"`
 		DropInconsistent      bool      `mapstructure:"drop_inconsistent"`
 		KlineFailureRetry     int       `mapstructure:"kline_failure_retry"`
 		Index                 string    `mapstructure:"index"`

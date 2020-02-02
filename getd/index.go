@@ -173,7 +173,7 @@ func idxFromXq(code string, tab model.DBTab) (suc, rt bool) {
 		panic("Unsupported period: " + tab)
 	}
 	// check history from db
-	lq := getLatestTradeDataBasic(code, cycle, model.Forward, 5)
+	lq := getLatestTradeDataBasic(code, model.KlineMaster, cycle, model.Forward, 5)
 	if lq != nil {
 		tm, e := time.Parse(global.DateFormat, lq.Date)
 		util.CheckErr(e, fmt.Sprintf("%s[%s] failed to parse date", code, tab))

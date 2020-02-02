@@ -18,77 +18,37 @@ import (
 	"github.com/ssgreg/repeat"
 )
 
-func getKlineXQ(stk *model.Stock, kltype []model.DBTab) (
-	tdmap map[model.DBTab]*model.TradeData, lkmap map[model.DBTab]int, suc bool) {
+//XqKlineFetcher is capable of fetching kline data from Xueqiu.
+type XqKlineFetcher struct{}
 
-	tdmap = make(map[model.DBTab]*model.TradeData)
-	lkmap = make(map[model.DBTab]int)
-	code := stk.Code
-	xdxr := latestUFRXdxr(stk.Code)
-
-	genop := func(tab model.DBTab) (op func(c int) (e error)) {
-		return func(c int) (e error) {
-			trdat, lklid, suc, retry := xqKline(stk, tab, xdxr)
-			if suc {
-				log.Infof("%s %v fetched: %d", code, tab, trdat.MaxLen())
-				tdmap[tab] = trdat
-				lkmap[tab] = lklid
-				return nil
-			}
-			e = fmt.Errorf("failed to get kline for %s", code)
-			if retry {
-				log.Printf("%s retrying [%d]", code, c+1)
-				return repeat.HintTemporary(e)
-			}
-			return repeat.HintStop(e)
-		}
-	}
-
-	suc = true
-	for _, klt := range kltype {
-		e := repeat.Repeat(
-			repeat.FnWithCounter(genop(klt)),
-			repeat.StopOnSuccess(),
-			repeat.LimitMaxTries(conf.Args.DataSource.KlineFailureRetry-1),
-			repeat.WithDelay(
-				repeat.FullJitterBackoff(500*time.Millisecond).WithMaxDelay(5*time.Second).Set(),
-			),
-		)
-		if e != nil {
-			suc = false
-		}
-	}
-
-	return tdmap, lkmap, suc
+//Cleanup resources
+func (f *XqKlineFetcher) Cleanup() {
+	//do nothing
 }
 
-func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
+//FetchKline from Xueqiu for the given stock.
+func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
 	trdat *model.TradeData, lklid int, suc, retry bool) {
 
 	period := ""
 	xdrType := "normal"
-	rtype := model.None
-	var cycle model.CYTP
-	switch tab {
-	case model.KLINE_DAY_F, model.KLINE_DAY_NR, model.KLINE_DAY_B:
+	rtype := fr.Reinstate
+	cycle := fr.Cycle
+	switch cycle {
+	case model.DAY:
 		period = "day"
-		cycle = model.DAY
-	case model.KLINE_WEEK_F, model.KLINE_WEEK_NR, model.KLINE_WEEK_B:
+	case model.WEEK:
 		period = "week"
-		cycle = model.WEEK
-	case model.KLINE_MONTH_F, model.KLINE_MONTH_NR, model.KLINE_MONTH_B:
+	case model.MONTH:
 		period = "month"
-		cycle = model.MONTH
 	default:
-		log.Panicf("unsupported type: %+v", tab)
+		log.Panicf("unsupported cycle: %+v", fr.Cycle)
 	}
-	switch tab {
-	case model.KLINE_DAY_F, model.KLINE_WEEK_F, model.KLINE_MONTH_F:
+	switch rtype {
+	case model.Forward:
 		xdrType = "after"
-		rtype = model.Forward
-	case model.KLINE_DAY_B, model.KLINE_WEEK_B, model.KLINE_MONTH_B:
+	case model.Backward:
 		xdrType = "before"
-		rtype = model.Backward
 	}
 	mkt := strings.ToUpper(stk.Market.String)
 	symbol := mkt + stk.Code
@@ -96,22 +56,19 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	if isIndex(symbol) {
 		code = symbol
 	}
-	incr := true
-	if rtype == model.Forward {
-		incr = xdxr == nil
-	}
+	tabs := resolveTableNames(fr)
 	lklid = -1
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(code, fr.LocalSource, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid
 		} else {
-			log.Printf("%s latest %s data not found, will be fully refreshed", code, tab)
+			log.Printf("%s latest %+v data not found, will be fully refreshed", code, tabs)
 		}
 	} else {
-		log.Printf("%s %s data will be fully refreshed", code, tab)
+		log.Printf("%s %+v data will be fully refreshed", code, tabs)
 	}
 
 	startDateStr := "1990-12-19"
@@ -127,7 +84,7 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	} else {
 		ltime, e := time.Parse(global.DateFormat, ldate)
 		if e != nil {
-			log.Warnf("%s %+v failed to parse date value '%s': %+v", stk.Code, tab, ldate, e)
+			log.Warnf("%s %+v failed to parse date value '%s': %+v", stk.Code, tabs, ldate, e)
 			return nil, lklid, false, false
 		}
 		count = -1 * (int(time.Since(ltime).Hours()/24) + 2)
@@ -138,13 +95,14 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 		return nil, lklid, false, true
 	}
 
-	if e = fixXqAmount(xqk, cycle); e != nil {
+	if e = fixXqAmount(xqk, fr); e != nil {
 		return nil, lklid, false, true
 	}
 
 	//construct trade data
 	trdat = &model.TradeData{
 		Code:          stk.Code,
+		Source:        fr.LocalSource,
 		Cycle:         cycle,
 		Reinstatement: rtype,
 		Base:          xqk.GetData(false),
@@ -154,13 +112,23 @@ func xqKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 }
 
 //supplement missing "amount" from validate table if any
-func fixXqAmount(k *model.XQKline, cycle model.CYTP) (e error) {
+func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 	if len(k.MissingAmount) == 0 {
 		return
 	}
-	log.Infof("%s 'amount' for the following dates will be supplemented from validate kline: %+v", k.MissingAmount)
-	trdat := GetTrDataAt(k.Code, TrDataQry{Validate: true, Cycle: cycle, Basic: true},
-		Date, false, util.Str2IntfSlice(k.MissingAmount)...)
+	log.Infof("'amount' for the following dates will be supplemented from validate kline: %+v", k.MissingAmount)
+	trdat := GetTrDataAt(
+		k.Code,
+		TrDataQry{
+			LocalSource: model.DataSource(conf.Args.DataSource.KlineValidateSource),
+			Cycle:       fr.Cycle,
+			Reinstate:   fr.Reinstate,
+			Basic:       true,
+		},
+		Date,
+		false,
+		util.Str2IntfSlice(k.MissingAmount)...,
+	)
 	for _, b := range trdat.Base {
 		k.Data[b.Date].Amount = b.Amount
 	}
@@ -209,9 +177,11 @@ func tryXQKline(code, symbol, period, xdrType string, count int, multiGet bool) 
 			defer res.Body.Close()
 			data, e := ioutil.ReadAll(res.Body)
 			if e != nil {
+				util.UpdateProxyScore(px, false)
 				log.Warnf("%s failed to read http response body from %s: %+v", code, url, e)
 				return repeat.HintTemporary(e)
 			}
+			util.UpdateProxyScore(px, true)
 			e = json.Unmarshal(data, xqk)
 			if e != nil {
 				if strings.Contains(e.Error(), "400016") { //cookie timeout
@@ -317,6 +287,7 @@ func xqCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]stri
 		e = errors.Wrap(e, "failed to get http response")
 		return
 	}
+	util.UpdateProxyScore(px, true)
 	defer res.Body.Close()
 	cookies = res.Cookies()
 	return
@@ -334,11 +305,15 @@ func xqShares(stock *model.Stock, px *util.Proxy, headers map[string]string, coo
 	}
 	defer res.Body.Close()
 	var xqshare model.XqSharesChg
-	if body, e := ioutil.ReadAll(res.Body); e != nil {
+	var body []byte
+	if body, e = ioutil.ReadAll(res.Body); e != nil {
 		log.Printf("[%s,%s] failed to read from response body, retrying...", stock.Code,
 			stock.Name)
+		util.UpdateProxyScore(px, false)
 		return false, true
-	} else if strings.Contains(string(body), `"error_code": "400016"`) {
+	}
+	util.UpdateProxyScore(px, true)
+	if strings.Contains(string(body), `"error_code": "400016"`) {
 		log.Warnf("%s cookie timeout: %+v", stock.Code, string(body))
 		return false, true
 	} else if e = json.Unmarshal(body, &xqshare); e != nil {

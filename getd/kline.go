@@ -27,10 +27,6 @@ var (
 	chDbjob map[model.DBTab]chan *dbJob
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 //GetKlines Get various types of kline data for the given stocks. Returns the stocks that have been successfully processed.
 func GetKlines(stks *model.Stocks, kltype ...model.DBTab) (rstks *model.Stocks) {
 	//TODO find a way to get minute level klines
@@ -96,12 +92,13 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 			snmap *sync.Map, lock *sync.RWMutex, tab model.DBTab) {
 			defer wg.Done()
 			for j := range ch {
-				validate := false
-				switch j.table {
-				case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
-					validate = true
-				}
-				c := binsertV2(j.tradeData, j.klid, validate)
+				// validate := false
+				// switch j.table {
+				// case model.KLINE_DAY_VLD, model.KLINE_WEEK_VLD, model.KLINE_MONTH_VLD:
+				// 	validate = true
+				// }
+				// c := binsertV2(j.tradeData, j.klid, validate)
+				c := binsertV2(j.tradeData, j.klid)
 				if c == j.tradeData.MaxLen() {
 					lock.Lock()
 					var cnt interface{}
@@ -633,7 +630,7 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 	if len(kltv) > 0 {
 		switch conf.Args.DataSource.KlineValidateSource {
 		case conf.EM:
-			tdmap, lkmap, suc = getKlineEM(stk, kltv)
+			// tdmap, lkmap, suc = getKlineEM(stk, kltv)
 		default:
 			log.Panicf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
 		}
@@ -656,10 +653,10 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 			log.Panic("fetching kline from THS is unsupported after database refactoring.")
 		case conf.TENCENT:
 			tdmapNV, lkmapNV, suc = getKlineTc(stk, kltnv)
-		case conf.XQ:
-			tdmapNV, lkmapNV, suc = getKlineXQ(stk, kltnv)
-		case conf.EM:
-			tdmapNV, lkmapNV, suc = getKlineEM(stk, kltnv)
+			// case conf.XQ:
+			// tdmapNV, lkmapNV, suc = getKlineXQ(stk, kltnv)
+			// case conf.EM:
+			// tdmapNV, lkmapNV, suc = getKlineEM(stk, kltnv)
 		}
 		if !suc {
 			return suc
@@ -687,15 +684,16 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 				trdat.MovAvg = trdat.MovAvg[1:]
 				trdat.MovAvgLogRtn = trdat.MovAvgLogRtn[1:]
 			}
-			binsertV2(trdat, lkmap[klt], false)
+			// binsertV2(trdat, lkmap[klt], false)
+			binsertV2(trdat, lkmap[klt])
 		}
 	}
 	if !isIndex(stk.Code) {
-		e := calcVarateRglV2(stk, tdmap)
-		if e != nil {
-			log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
-			return false
-		}
+		// e := calcVarateRglV2(stk, tdmap)
+		// if e != nil {
+		// 	log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
+		// 	return false
+		// }
 	}
 	for klt, trdat := range tdmap {
 		switch klt {
@@ -1118,12 +1116,14 @@ func supplementMisc(klines []*model.Quote, kltype model.DBTab, start int) {
 	}
 }
 
-func getLatestTradeDataBasic(code string, cycle model.CYTP, rtype model.Rtype, offset int) (b *model.TradeDataBasic) {
+func getLatestTradeDataBasic(code string, src model.DataSource,
+	cycle model.CYTP, rtype model.Rtype, offset int) (b *model.TradeDataBasic) {
 	var table string
 	for k := range resolveTables(TrDataQry{
-		Basic:     true,
-		Cycle:     cycle,
-		Reinstate: rtype,
+		LocalSource: src,
+		Basic:       true,
+		Cycle:       cycle,
+		Reinstate:   rtype,
 	}) {
 		table = k
 		break

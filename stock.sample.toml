@@ -37,6 +37,7 @@ master_http_proxy = "http://localhost:1087"
 rotate_proxy_bypass_ratio = 0.05
 rotate_proxy_refresh_interval = 1
 rotate_proxy_freshness_min = 12
+rotate_proxy_score_threshold = 50.0
 default_user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36"
 user_agents = "https://developers.whatismybrowser.com/api/docs/latest/user-agent-database-dump-url-csv-sample.tar.gz"
 user_agent_lifespan = 10
@@ -67,8 +68,6 @@ stats_retro_span = 1000
 kline = "wht"
 kline_alt = "tencent"
 kline_validate_source = "tencent"
-#backward, forward, none
-kline_validate_type = "backward"
 drop_inconsistent = true
 kline_failure_retry = 25
 

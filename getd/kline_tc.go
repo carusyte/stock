@@ -85,7 +85,7 @@ func tryKlineTc(stock *model.Stock, tab model.DBTab, incr bool) (trdat *model.Tr
 
 	sklid = -1
 	if incr {
-		ldy := getLatestTradeDataBasic(code, cycle, rtype, 5+1) // plus one for varate calculation
+		ldy := getLatestTradeDataBasic(code, model.KlineMaster, cycle, rtype, 5+1) // plus one for varate calculation
 		if ldy != nil {
 			sDate = ldy.Date
 			sklid = ldy.Klid

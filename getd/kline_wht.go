@@ -100,7 +100,7 @@ func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	lklid = -1
 	ldate := ""
 	if incr {
-		ldy := getLatestTradeDataBasic(codeid, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
+		ldy := getLatestTradeDataBasic(codeid, model.KlineMaster, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
 			lklid = ldy.Klid

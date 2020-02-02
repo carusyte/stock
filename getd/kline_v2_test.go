@@ -21,3 +21,49 @@ func TestGetTrDataBtwn(t *testing.T) {
 	fmt.Println(r)
 	t.Fail()
 }
+
+func TestTrDataQryCopy(t *testing.T) {
+	q := TrDataQry{
+		LocalSource: model.KlineMaster,
+		Cycle:       model.DAY,
+		Reinstate:   model.Backward,
+		Basic:       true,
+	}
+	qs := []TrDataQry{q, q}
+	qs[1].LocalSource = model.EM
+	qs[1].Cycle = model.WEEK
+	qs[1].Reinstate = model.Forward
+	qs[1].LogRtn = true
+	log.Debugf("qs:%+v", qs)
+}
+
+func TestTrDataQryMap(t *testing.T) {
+	q := TrDataQry{
+		LocalSource: model.KlineMaster,
+		Cycle:       model.DAY,
+		Reinstate:   model.Backward,
+		Basic:       true,
+	}
+	qs := []TrDataQry{
+		q,
+		q,
+		q,
+		TrDataQry{
+			LocalSource: model.KlineMaster,
+			Cycle:       model.DAY,
+			Reinstate:   model.Backward,
+			Basic:       true,
+		}}
+	qs[1].LocalSource = model.EM
+	qs[1].Cycle = model.WEEK
+	qs[1].Reinstate = model.Forward
+	qs[1].LogRtn = true
+	qmap := map[TrDataQry]string{
+		qs[0]: "qs[0]",
+		qs[1]: "qs[1]",
+		qs[2]: "qs[2]",
+		qs[3]: "qs[3]",
+	}
+	log.Debugf("qs:%+v", qs)
+	log.Debugf("qmap:%+v", qmap)
+}

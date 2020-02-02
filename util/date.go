@@ -40,9 +40,8 @@ func DaysSince(then string) (float64, error) {
 	t, err := time.Parse(global.DateFormat, then)
 	if err != nil {
 		return 0, err
-	} else {
-		return time.Since(t).Hours() / 24.0, nil
 	}
+	return time.Since(t).Hours() / 24.0, nil
 }
 
 //UnixMilliseconds returns milliseconds since Unix Ephoch.
