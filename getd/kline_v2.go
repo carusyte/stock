@@ -465,9 +465,9 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 	base := ""
 	switch td.Source {
 	case "":
-		base = string(model.KlineMaster)
+		base = string(model.KlineMaster) + "_"
 	default:
-		base = string(td.Source)
+		base = string(td.Source) + "_"
 	}
 	switch td.Cycle {
 	case model.DAY:
