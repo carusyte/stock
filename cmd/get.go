@@ -14,7 +14,7 @@ var getCmd = &cobra.Command{
 	Short: "Get relevant stock data",
 	Run: func(cmd *cobra.Command, args []string) {
 		defer shutdownHook()
-		getd.Get()
+		getd.GetV2()
 	},
 }
 
