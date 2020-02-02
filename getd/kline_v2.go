@@ -333,7 +333,7 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 					intf = reflect.Append(
 						reflect.Indirect(reflect.ValueOf(intf)),
 						reflect.Indirect(reflect.ValueOf(ss)).Index(j),
-					).Interface()
+					).Addr().Interface()
 				}
 			}
 			ochan <- intf
