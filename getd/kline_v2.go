@@ -329,8 +329,11 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 					table, cond, d)
 				_, e := dbmap.Select(ss, sql, args[i]...)
 				util.CheckErr(e, "failed to query "+table+" for "+code)
-				for j := 0; j < reflect.ValueOf(ss).Len(); j++ {
-					intf = reflect.Append(reflect.ValueOf(intf), reflect.ValueOf(ss).Index(j)).Interface()
+				for j := 0; j < reflect.Indirect(reflect.ValueOf(ss)).Len(); j++ {
+					intf = reflect.Append(
+						reflect.ValueOf(intf),
+						reflect.Indirect(reflect.ValueOf(ss)).Index(j),
+					).Interface()
 				}
 			}
 			ochan <- intf
