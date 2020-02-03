@@ -66,19 +66,11 @@ stats_retro_span = 1000
 #kline = "tencent"
 #kline = "ths"
 kline = "wht"
-kline_alt = "tencent"
-kline_validate_source = "tencent"
-drop_inconsistent = true
 kline_failure_retry = 25
-
-ths_concurrency = 50
-ths_failure_keyword = "401 Authorization Required"
 
 index = "tencent"
 #industry = "tencent.tc"
 industry = "ths"
-#ths_cookie = "v=AbR5gxDbUQD9FsXTqlWUlH0xg3kjjdh5GrFsu04VQD_CuVotdp2oB2rBPE-e"
-wht_url = ""
 skip_stocks = false
 skip_finance = false
 skip_kline_vld = true
@@ -99,6 +91,13 @@ indicator_source = "backward"
 limit_price_day_lr = [-0.15, 0.15]
 feature_scaling = "standardization"
 
+    [DataSource.Validate]
+    source = "em"
+    drop_inconsistent = true
+    skip_kline_pre = true
+    skip_xdxr = false
+    skip_klines = false
+
     [DataSource.EM]
     #weights for direct connection / master proxy / rotated proxy
     direct_proxy_weight = [1, 1, 8]
@@ -106,6 +105,14 @@ feature_scaling = "standardization"
     [DataSource.XQ]
     #weights for direct connection / master proxy / rotated proxy
     direct_proxy_weight = [0, 1, 0]
+
+    [DataSource.THS]
+    concurrency = 50
+    failure_keyword = "401 Authorization Required"
+    #ths_cookie = "v=AbR5gxDbUQD9FsXTqlWUlH0xg3kjjdh5GrFsu04VQD_CuVotdp2oB2rBPE-e"
+
+    [DataSource.WHT]
+    url = ""
 
 [Scorer]
 fetch_data = false

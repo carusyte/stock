@@ -52,7 +52,7 @@ func GetV2() {
 		stks = GetKlinesV2(stks, frs...)
 		StopWatch("GET_KLINES_PRE", begin)
 	} else {
-		log.Printf("skipped kline-pre data from web")
+		log.Printf("skipped kline-pre data from web (non-reinstated)")
 	}
 
 	if !conf.Args.DataSource.SkipFinancePrediction {
@@ -94,7 +94,7 @@ func GetV2() {
 		stks = KlinePostProcess(stks)
 		StopWatch("GET_MASTER_KLINES", begin)
 	} else {
-		log.Printf("skipped klines data from web")
+		log.Printf("skipped klines data from web (backward & forward reinstated)")
 	}
 
 	FreeFetcherResources()
@@ -154,46 +154,56 @@ func getKlineVld(stks *model.Stocks) *model.Stocks {
 		return stks
 	}
 
-	begin := time.Now()
-	vsrc := model.DataSource(conf.Args.DataSource.KlineValidateSource)
-	frs := make([]FetchRequest, 3)
+	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
 	cs := []model.CYTP{model.DAY, model.WEEK, model.MONTH}
-	for i := range frs {
-		frs[i] = FetchRequest{
-			RemoteSource: vsrc,
-			LocalSource:  vsrc,
-			Reinstate:    model.None,
-			Cycle:        cs[i],
+	var frs []FetchRequest
+	if conf.Args.DataSource.Validate.SkipKlinePre {
+		log.Printf("skipped preliminary data for validate klines (non-reinstated)")
+	} else {
+		frs = make([]FetchRequest, 3)
+		for i := range frs {
+			frs[i] = FetchRequest{
+				RemoteSource: vsrc,
+				LocalSource:  vsrc,
+				Reinstate:    model.None,
+				Cycle:        cs[i],
+			}
 		}
+		begin := time.Now()
+		stks = GetKlinesV2(stks, frs...)
+		UpdateValidateKlineParams()
+		StopWatch("GET_KLINES_VLD_PRE", begin)
 	}
-	stks = GetKlinesV2(stks, frs...)
-	UpdateValidateKlineParams()
-	StopWatch("GET_KLINES_VLD_PRE", begin)
 
-	if !conf.Args.DataSource.SkipXdxr {
-		begin = time.Now()
+	if conf.Args.DataSource.Validate.SkipXdxr {
+		log.Printf("skipped xdxr data from web for validate klines")
+	} else {
+		begin := time.Now()
 		stks = GetXDXRs(stks)
 		StopWatch("GET_XDXR", begin)
-	} else {
-		log.Printf("skipped xdxr data from web")
 	}
 
-	frs = make([]FetchRequest, 6)
-	for i := range frs {
-		csi := int(math.Mod(float64(i), 3))
-		r := model.Backward
-		if i > 3 {
-			r = model.Forward
+	if conf.Args.DataSource.Validate.SkipKlines {
+		log.Printf("skipped validate kline main data (backward & forward reinstated)")
+	} else {
+		frs = make([]FetchRequest, 6)
+		for i := range frs {
+			csi := int(math.Mod(float64(i), 3))
+			r := model.Backward
+			if i > 3 {
+				r = model.Forward
+			}
+			frs[i] = FetchRequest{
+				RemoteSource: vsrc,
+				LocalSource:  vsrc,
+				Reinstate:    r,
+				Cycle:        cs[csi],
+			}
 		}
-		frs[i] = FetchRequest{
-			RemoteSource: vsrc,
-			LocalSource:  vsrc,
-			Reinstate:    r,
-			Cycle:        cs[csi],
-		}
+		begin := time.Now()
+		stks = GetKlinesV2(stks, frs...)
+		StopWatch("GET_KLINES_VLD_MAIN", begin)
 	}
-	stks = GetKlinesV2(stks, frs...)
-	StopWatch("GET_KLINES_VLD_MAIN", begin)
 
 	FreeFetcherResources()
 

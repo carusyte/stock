@@ -628,11 +628,11 @@ func fetchRemoteKline(stk *model.Stock, kltype []model.DBTab) (ok bool) {
 		}
 	}
 	if len(kltv) > 0 {
-		switch conf.Args.DataSource.KlineValidateSource {
+		switch conf.Args.DataSource.Validate.Source {
 		case conf.EM:
 			// tdmap, lkmap, suc = getKlineEM(stk, kltv)
 		default:
-			log.Panicf("not supported validate source: %s", conf.Args.DataSource.KlineValidateSource)
+			log.Panicf("not supported validate source: %s", conf.Args.DataSource.Validate.Source)
 		}
 		if !suc {
 			return suc
@@ -1167,7 +1167,7 @@ func calcVarateRgl(stk *model.Stock, qmap map[model.DBTab][]*model.Quote) (e err
 //matchSlice assumes len(nrqs) >= len(tgqs) in normal cases, takes care of missing data in-between,
 // trying best to make sure len(retNrqs) == len(retTgqs)
 func matchSlice(nrqs, tgqs []*model.Quote) (retNrqs, retTgqs []*model.Quote, err error) {
-	if len(nrqs) < len(tgqs) && !conf.Args.DataSource.DropInconsistent {
+	if len(nrqs) < len(tgqs) && !conf.Args.DataSource.Validate.DropInconsistent {
 		return retNrqs, retTgqs, fmt.Errorf("len(nrqs)=%d, len(tgqs)=%d, missing data in nrqs", len(nrqs), len(tgqs))
 	}
 	s := 0
@@ -1193,7 +1193,7 @@ func matchSlice(nrqs, tgqs []*model.Quote) (retNrqs, retTgqs []*model.Quote, err
 			break
 		}
 	}
-	if conf.Args.DataSource.DropInconsistent {
+	if conf.Args.DataSource.Validate.DropInconsistent {
 		if len(retTgqs) != len(tgqs) {
 			var d int64
 			var e error
@@ -1267,7 +1267,7 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 		log.Warnf("%s %v data not available, skipping varate_rgl calculation", stk.Code, tab)
 		return nil, nil
 	}
-	if !conf.Args.DataSource.DropInconsistent {
+	if !conf.Args.DataSource.Validate.DropInconsistent {
 		if len(nrqs) < len(tgqs) {
 			return retTgqs, fmt.Errorf("%s unable to infer varate rgl from %v. len(nrqs)=%d, len(tgqs)=%d",
 				stk.Code, tab, len(nrqs), len(tgqs))

@@ -124,7 +124,7 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 	trdat := GetTrDataAt(
 		k.Code,
 		TrDataQry{
-			LocalSource: model.DataSource(conf.Args.DataSource.KlineValidateSource),
+			LocalSource: model.DataSource(conf.Args.DataSource.Validate.Source),
 			Cycle:       fr.Cycle,
 			Reinstate:   fr.Reinstate,
 			Basic:       true,
@@ -133,6 +133,7 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 		false,
 		util.Str2IntfSlice(k.MissingData)...,
 	)
+	var unmatched []string
 	for _, b := range trdat.Base {
 		if kd, ok := k.Data[b.Date]; ok {
 			kd.Open = b.Open
@@ -142,7 +143,12 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 			kd.Amount = b.Amount
 			kd.Volume = b.Volume
 			kd.Xrate = b.Xrate
+		} else {
+			unmatched = append(unmatched, b.Date)
 		}
+	}
+	if len(unmatched) > 0 {
+		log.Warnf("%s unable to fix missing data from validate kline for the following dates: %+v", unmatched)
 	}
 	return
 }
@@ -156,7 +162,7 @@ func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 	trdat := GetTrDataAt(
 		k.Code,
 		TrDataQry{
-			LocalSource: model.DataSource(conf.Args.DataSource.KlineValidateSource),
+			LocalSource: model.DataSource(conf.Args.DataSource.Validate.Source),
 			Cycle:       fr.Cycle,
 			Reinstate:   fr.Reinstate,
 			Basic:       true,
@@ -165,8 +171,17 @@ func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 		false,
 		util.Str2IntfSlice(k.MissingAmount)...,
 	)
-	for _, b := range trdat.Base {
-		k.Data[b.Date].Amount = b.Amount
+	var unmatched []string
+	bm := trdat.BaseMap()
+	for _, d := range k.MissingAmount {
+		if b, ok := bm[d]; ok {
+			k.Data[d].Amount = b.Amount
+		} else {
+			unmatched = append(unmatched, d)
+		}
+	}
+	if len(unmatched) > 0 {
+		log.Warnf("%s unable to fix missing 'amount' from validate kline for the following dates: %+v", unmatched)
 	}
 	return
 }

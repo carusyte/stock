@@ -39,7 +39,7 @@ func GetXDXRs(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
+	for i := 0; i < conf.Args.DataSource.THS.Concurrency; i++ {
 		wg.Add(1)
 		go parseBonusPage(chstk, &wg, chrstk)
 	}
@@ -147,7 +147,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		return false, true
 	}
 
-	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+	if strings.Contains(doc.Text(), conf.Args.DataSource.THS.FailureKeyword) {
 		log.Printf("%s encounter authorization block, retrying: %s", stock.Code, url)
 		return false, true
 	}
@@ -465,7 +465,7 @@ func GetFinance(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
+	for i := 0; i < conf.Args.DataSource.THS.Concurrency; i++ {
 		wg.Add(1)
 		go parseFinancePage(chstk, &wg, chrstk)
 	}
@@ -494,7 +494,7 @@ func GetFinPrediction(stocks *model.Stocks) (rstks *model.Stocks) {
 	chrstk := make(chan *model.Stock, global.JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, chrstk)
-	for i := 0; i < conf.Args.DataSource.ThsConcurrency; i++ {
+	for i := 0; i < conf.Args.DataSource.THS.Concurrency; i++ {
 		wg.Add(1)
 		go parseFinPredictPage(chstk, &wg, chrstk)
 	}
@@ -561,7 +561,7 @@ func doParseFinPredictPage(url string, code string) (ok, retry bool) {
 		log.Printf("%s failed to read from response body, retrying...", code)
 		return false, true
 	}
-	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+	if strings.Contains(doc.Text(), conf.Args.DataSource.THS.FailureKeyword) {
 		log.Printf("%s encounter authorization block, retrying: %s", code, url)
 		return false, true
 	}
@@ -841,7 +841,7 @@ func doParseFinPage(url string, code string) (ok, retry bool) {
 		return false, true
 	}
 
-	if strings.Contains(doc.Text(), conf.Args.DataSource.ThsFailureKeyword) {
+	if strings.Contains(doc.Text(), conf.Args.DataSource.THS.FailureKeyword) {
 		log.Printf("%s encounter authorization block, retrying: %s", code, url)
 		return false, true
 	}

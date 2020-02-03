@@ -26,10 +26,9 @@ type FetchRequest struct {
 	RemoteSource model.DataSource
 	//LocalSource for the trade data. *model.MasterKline will be used if not specified.
 	LocalSource model.DataSource
-	//Cycle for the trade data. All *model.CYTP will be used if not specified.
-	//Cycle for the trade data. All *model.CYTP will be used if not specified.
+	//Cycle for the trade data.
 	Cycle model.CYTP
-	//Reinstate for the trade data. All *model.Rtype will be used if not specified.
+	//Reinstate for the trade data.
 	Reinstate model.Rtype
 }
 
@@ -48,6 +47,7 @@ type dbTask struct {
 	stock     *model.Stock
 	tradeData *model.TradeData
 	klid      int
+	completed bool
 }
 
 //TradeDataField stands for the common table columns related to trade data.
@@ -965,32 +965,27 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 	if trdat == nil || trdat.Empty() {
 		return 0
 	}
-	c = 0
 	if len(trdat.Base) != 0 {
-		if c == 0 {
-			c = len(trdat.Base)
-		} else if c != 0 && len(trdat.Base) != c {
-			log.Panicf("mismatched basic trade data length: %d, vs. %d", len(trdat.Base), c)
-		}
+		c = len(trdat.Base)
 	}
 	if len(trdat.LogRtn) != 0 {
 		if c == 0 {
 			c = len(trdat.LogRtn)
-		} else if c != 0 && len(trdat.LogRtn) != c {
+		} else if len(trdat.LogRtn) != c {
 			log.Panicf("mismatched log return trade data length: %d, vs. %d", len(trdat.LogRtn), c)
 		}
 	}
 	if len(trdat.MovAvg) != 0 {
 		if c == 0 {
 			c = len(trdat.MovAvg)
-		} else if c != 0 && len(trdat.MovAvg) != c {
+		} else if len(trdat.MovAvg) != c {
 			log.Panicf("mismatched moving average trade data length: %d, vs. %d", len(trdat.MovAvg), c)
 		}
 	}
 	if len(trdat.MovAvgLogRtn) != 0 {
 		if c == 0 {
 			c = len(trdat.MovAvgLogRtn)
-		} else if c != 0 && len(trdat.MovAvgLogRtn) != c {
+		} else if len(trdat.MovAvgLogRtn) != c {
 			log.Panicf("mismatched moving average log return trade data length: %d, vs. %d", len(trdat.MovAvgLogRtn), c)
 		}
 	}
@@ -1020,7 +1015,6 @@ func binsertV2(trdat *model.TradeData, lklid int) (c int) {
 	}
 
 	var wg sync.WaitGroup
-	//FIXME relevant table inserts should be grouped into a transaction
 	for table, cols := range tables {
 		wg.Add(1)
 		go insertTradeData(table, cols, data[table], &wg)
@@ -1140,7 +1134,7 @@ func inferVarateRglV2(stk *model.Stock, nrtd, tgtd *model.TradeData) (e error) {
 		log.Warnf("%s %v non-reinstated data not available, skipping varate_rgl calculation", stk.Code, tgtd.Cycle)
 		return nil
 	}
-	if !conf.Args.DataSource.DropInconsistent {
+	if !conf.Args.DataSource.Validate.DropInconsistent {
 		if len(nrtd.Base) < len(tgtd.Base) {
 			return fmt.Errorf("%s unable to infer varate rgl for (%v,%v). len(nrtd.Base)=%d, len(tgtd.Base)=%d",
 				stk.Code, tgtd.Cycle, tgtd.Reinstatement, len(nrtd.Base), len(tgtd.Base))
@@ -1167,7 +1161,7 @@ func inferVarateRglV2(stk *model.Stock, nrtd, tgtd *model.TradeData) (e error) {
 // trying best to make sure nrtd.MaxLen() == tgtd.MaxLen()
 func matchSliceV2(nrtd, tgtd *model.TradeData) (err error) {
 	oLenLR, oLenTG := nrtd.MaxLen(), tgtd.MaxLen()
-	if oLenLR < oLenTG && !conf.Args.DataSource.DropInconsistent {
+	if oLenLR < oLenTG && !conf.Args.DataSource.Validate.DropInconsistent {
 		return fmt.Errorf("nrtd.MaxLen()=%d, tgtd.MaxLen()=%d, missing data in nrtd", nrtd.MaxLen(), tgtd.MaxLen())
 	}
 	//use map (hash function, specifically) to find the intersection and prune all types of trade data within tgtd
@@ -1187,7 +1181,7 @@ func matchSliceV2(nrtd, tgtd *model.TradeData) (err error) {
 	nrtd.Keep(nrbKeep...)
 	tgtd.Keep(tgbKeep...)
 	lenNR, lenTG := nrtd.MaxLen(), tgtd.MaxLen()
-	if conf.Args.DataSource.DropInconsistent {
+	if conf.Args.DataSource.Validate.DropInconsistent {
 		if lenTG != lenNR {
 			var d int64
 			var e error
@@ -1310,7 +1304,7 @@ func UpdateValidateKlineParams() (e error) {
 		" on duplicate key update section=values(section),param=values(param),value=values(value)," +
 		" udate=values(udate),utime=values(utime)")
 	for rt := 0; rt < conf.Args.DeadlockRetry; rt++ {
-		_, e = dbmap.Exec(stmt, "Validate Kline", "DataSource", conf.Args.DataSource.KlineValidateSource, d, t)
+		_, e = dbmap.Exec(stmt, "Validate Kline", "DataSource", conf.Args.DataSource.Validate.Source, d, t)
 		if e != nil {
 			fmt.Println(e)
 			if strings.Contains(e.Error(), "Deadlock") {
@@ -1339,16 +1333,16 @@ func GetKlinesV2(stks *model.Stocks, fetReq ...FetchRequest) (rstks *model.Stock
 	outstks := make(chan *model.Stock, JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
-	dbChan := createDbTaskQueues(fetReq...)
-	wgdb := saveTradeData(outstks, dbChan)
+	dbcMap := createDbTaskQueues(fetReq...)
+	wgdb := saveTradeData(outstks, dbcMap)
 	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
-		go getKlineV2(stk, fetReq, dbChan, &wg, &wf)
+		go getKlineV2(stk, fetReq, dbcMap, &wg, wf)
 	}
 	wg.Wait()
 	close(wf)
-	waitDbjob(wgdb)
+	waitDBTasks(wgdb, dbcMap)
 	close(outstks)
 	wgr.Wait()
 	log.Printf("%d stocks %s data updated.", rstks.Size(), strings.Join(tabs, ", "))
@@ -1359,6 +1353,15 @@ func GetKlinesV2(stks *model.Stocks, fetReq ...FetchRequest) (rstks *model.Stock
 		}
 	}
 	return
+}
+
+func waitDBTasks(wgdb []*sync.WaitGroup, dbcMap map[FetchRequest]chan *dbTask) {
+	for _, ch := range dbcMap {
+		close(ch)
+	}
+	for _, wg := range wgdb {
+		wg.Wait()
+	}
 }
 
 //FreeFetcherResources after usage
@@ -1418,10 +1421,10 @@ func getKlineFromSource(stk *model.Stock, kf KlineFetcher, fetReq ...FetchReques
 }
 
 func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]chan *dbTask,
-	wg *sync.WaitGroup, wf *chan int) {
+	wg *sync.WaitGroup, wf chan int) {
 	defer func() {
 		wg.Done()
-		<-*wf
+		<-wf
 	}()
 
 	//TODO refactor me
@@ -1476,16 +1479,15 @@ func createDbTaskQueues(fetReq ...FetchRequest) (qmap map[FetchRequest]chan *dbT
 	return
 }
 
-func saveTradeData(outstks chan *model.Stock, dbtChans map[FetchRequest]chan *dbTask) (wgs []*sync.WaitGroup) {
+func saveTradeData(outstks chan *model.Stock, dbcMap map[FetchRequest]chan *dbTask) (wgs []*sync.WaitGroup) {
 	snmap := new(sync.Map)
-	total := len(dbtChans)
+	total := len(dbcMap)
 	lock := new(sync.RWMutex)
-	for _, ch := range dbtChans {
+	for _, ch := range dbcMap {
 		wg := new(sync.WaitGroup)
 		wgs = append(wgs, wg)
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, ch chan *dbTask, outstks chan *model.Stock,
-			snmap *sync.Map, lock *sync.RWMutex) {
+		go func(wg *sync.WaitGroup, ch chan *dbTask) {
 			defer wg.Done()
 			for j := range ch {
 				c := binsertV2(j.tradeData, j.klid)
@@ -1502,7 +1504,7 @@ func saveTradeData(outstks chan *model.Stock, dbtChans map[FetchRequest]chan *db
 					lock.Unlock()
 				}
 			}
-		}(wg, ch, outstks, snmap, lock)
+		}(wg, ch)
 	}
 	return
 }

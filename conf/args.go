@@ -9,8 +9,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Args Global Application Arguments
-var Args Arguments
+var (
+	// Args Global Application Arguments
+	Args Arguments
+
+	vp *viper.Viper
+)
 
 // RunMode Running mode
 type RunMode string
@@ -91,15 +95,9 @@ type Arguments struct {
 	}
 	DataSource struct {
 		Kline                 string    `mapstructure:"kline"`
-		KlineValidateSource   string    `mapstructure:"kline_validate_source"`
-		DropInconsistent      bool      `mapstructure:"drop_inconsistent"`
 		KlineFailureRetry     int       `mapstructure:"kline_failure_retry"`
 		Index                 string    `mapstructure:"index"`
 		Industry              string    `mapstructure:"industry"`
-		ThsCookie             string    `mapstructure:"ths_cookie"`
-		ThsConcurrency        int       `mapstructure:"ths_concurrency"`
-		ThsFailureKeyword     string    `mapstructure:"ths_failure_keyword"`
-		WhtURL                string    `mapstructure:"wht_url"`
 		SkipStocks            bool      `mapstructure:"skip_stocks"`
 		SkipFinance           bool      `mapstructure:"skip_finance"`
 		SkipKlineVld          bool      `mapstructure:"skip_kline_vld"`
@@ -116,13 +114,28 @@ type Arguments struct {
 		IndicatorSource       string    `mapstructure:"indicator_source"`
 		LimitPriceDayLr       []float64 `mapstructure:"limit_price_day_lr"`
 		FeatureScaling        string    `mapstructure:"feature_scaling"`
-		EM                    struct {
+		Validate              struct {
+			Source           string `mapstructure:"source"`
+			DropInconsistent bool   `mapstructure:"drop_inconsistent"`
+			SkipKlinePre     bool   `mapstructure:"skip_kline_pre"`
+			SkipXdxr         bool   `mapstructure:"skip_xdxr"`
+			SkipKlines       bool   `mapstructure:"skip_klines"`
+		}
+		EM struct {
 			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
 			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
 		}
 		XQ struct {
 			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
 			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
+		}
+		THS struct {
+			Concurrency    int    `mapstructure:"concurrency"`
+			FailureKeyword string `mapstructure:"failure_keyword"`
+			Cookie         string `mapstructure:"cookie"`
+		}
+		WHT struct {
+			URL string `mapstructure:"url"`
 		}
 	}
 	Scorer struct {
@@ -162,28 +175,29 @@ type Arguments struct {
 }
 
 func init() {
+	vp = viper.New()
 	setDefaults()
 
-	viper.SetConfigName("stock") // name of config file (without extension)
+	vp.SetConfigName("stock") // name of config file (without extension)
 
 	gopath := os.Getenv("GOPATH")
 	if "" == gopath {
 		gopath = build.Default.GOPATH
 	}
-	viper.AddConfigPath(filepath.Join(gopath, "bin"))
-	viper.AddConfigPath(".") // optionally look for config in the working directory
+	vp.AddConfigPath(filepath.Join(gopath, "bin"))
+	vp.AddConfigPath(".") // optionally look for config in the working directory
 
-	e := viper.ReadInConfig()
+	e := vp.ReadInConfig()
 	if e != nil {
 		log.Panicf("config file error: %+v", e)
 	}
-	e = viper.Unmarshal(&Args)
+	e = vp.Unmarshal(&Args)
 	if e != nil {
 		log.Panicf("config file error: %+v", e)
 	}
 	// log.Printf("Configuration: %+v", Args)
-	//viper.WatchConfig()
-	//viper.OnConfigChange(func(e fsnotify.Event) {
+	//vp.WatchConfig()
+	//vp.OnConfigChange(func(e fsnotify.Event) {
 	//	fmt.Println("Config file changed:", e.Name)
 	//})
 	checkConfig()
@@ -233,4 +247,9 @@ func setDefaults() {
 	Args.Sampler.TestSetBatchSize = 3000
 	Args.Sampler.TrainSetBatchSize = 200
 	Args.LogFile = "stock.log"
+}
+
+// ConfigFileUsed returns the file used to populate the config registry.
+func ConfigFileUsed() string {
+	return vp.ConfigFileUsed()
 }

@@ -65,7 +65,7 @@ func getKlineWht(stk *model.Stock, kltype []model.DBTab) (
 
 func whtKline(stk *model.Stock, tab model.DBTab, xdxr *model.Xdxr) (
 	trdat *model.TradeData, lklid int, suc, retry bool) {
-	url := conf.Args.DataSource.WhtURL + "/hq/hiskline"
+	url := conf.Args.DataSource.WHT.URL + "/hq/hiskline"
 	klt := ""
 	xdrType := "none"
 	rtype := model.None

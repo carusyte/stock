@@ -73,7 +73,7 @@ func getIndustry(stocks *model.Stocks) {
 	wgr := collect(rstks, chrstk)
 	pl := conf.Args.Concurrency
 	if conf.Args.DataSource.Industry == conf.THS {
-		pl = conf.Args.DataSource.ThsConcurrency
+		pl = conf.Args.DataSource.THS.Concurrency
 	}
 	for i := 0; i < pl; i++ {
 		wg.Add(1)
