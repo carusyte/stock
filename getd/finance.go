@@ -154,7 +154,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 	numXdxr := strings.TrimSpace(doc.Find("#bonuslist div.bd.pt5.pagination div strong").Text())
 	if len(numXdxr) == 0 {
-		log.Printf("%s possible erroneous page encountered."+
+		log.Warnf("%s possible erroneous page encountered."+
 			" unable to find xdxr counts in page %s", stock.Code, url)
 		return false, true
 	}

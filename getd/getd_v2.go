@@ -80,7 +80,7 @@ func GetV2() {
 		for i := range frs {
 			csi := int(math.Mod(float64(i), 3))
 			r := model.Backward
-			if i > 3 {
+			if i > 2 {
 				r = model.Forward
 			}
 			frs[i] = FetchRequest{
@@ -190,7 +190,7 @@ func getKlineVld(stks *model.Stocks) *model.Stocks {
 		for i := range frs {
 			csi := int(math.Mod(float64(i), 3))
 			r := model.Backward
-			if i > 3 {
+			if i > 2 {
 				r = model.Forward
 			}
 			frs[i] = FetchRequest{
