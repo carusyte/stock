@@ -323,8 +323,8 @@ func xqCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]stri
 		e = errors.Wrap(e, "failed to get http response")
 		return
 	}
-	util.UpdateProxyScore(px, true)
 	defer res.Body.Close()
+	util.UpdateProxyScore(px, true)
 	cookies = res.Cookies()
 	return
 }
