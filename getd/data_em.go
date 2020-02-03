@@ -35,7 +35,11 @@ func (f *EmKlineFetcher) cache(td *model.TradeData) {
 	if f.klineData == nil {
 		f.klineData = make(map[string][]byte)
 	}
-	f.klineData[f.cacheKey(td.Code, td.Cycle, td.Reinstatement)] = util.Compress(td.Base)
+	bs := make([]model.TradeDataBasic, len(td.Base))
+	for i, b := range td.Base {
+		bs[i] = *b
+	}
+	f.klineData[f.cacheKey(td.Code, td.Cycle, td.Reinstatement)] = util.Compress(bs)
 }
 
 func (f *EmKlineFetcher) cacheKey(code string, c model.CYTP, r model.Rtype) string {
@@ -44,8 +48,12 @@ func (f *EmKlineFetcher) cacheKey(code string, c model.CYTP, r model.Rtype) stri
 
 func (f *EmKlineFetcher) cachedValue(code string, c model.CYTP, r model.Rtype) (v []*model.TradeDataBasic) {
 	key := f.cacheKey(code, c, r)
-	if b, ok := f.klineData[key]; ok {
-		util.DecodeBytes(util.Decompress(b), &v)
+	var bs []model.TradeDataBasic
+	if data, ok := f.klineData[key]; ok {
+		util.DecodeBytes(util.Decompress(data), &bs)
+		for _, b := range bs {
+			v = append(v, &b)
+		}
 	}
 	return
 }

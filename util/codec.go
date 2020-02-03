@@ -14,7 +14,7 @@ func EncodeToBytes(p interface{}) []byte {
 	enc := gob.NewEncoder(&buf)
 	e := enc.Encode(p)
 	if e != nil {
-		log.Fatalf("failed to encode %+v: %+v", p, e)
+		log.Panicf("failed to encode %+v: %+v", p, e)
 	}
 	return buf.Bytes()
 }
@@ -39,7 +39,7 @@ func Decompress(s []byte) []byte {
 	defer rdr.Close()
 	data, err := ioutil.ReadAll(rdr)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic("failed to decompress", err)
 	}
 	return data
 }
@@ -54,6 +54,6 @@ func DecodeBytes(s []byte, p interface{}) {
 		err = dec.Decode(&p)
 	}
 	if err != nil {
-		log.Fatal(err)
+		log.Panicf("failed to decode bytes to %+v, %+v", reflect.TypeOf(p), err)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -407,7 +406,6 @@ func resolveTableNames(qs ...FetchRequest) (tables []string) {
 			tables = append(tables, t)
 		}
 	}
-	sort.Strings(tables)
 	return
 }
 
