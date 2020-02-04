@@ -525,8 +525,8 @@ func getTableColumns(i interface{}) (cols []string) {
 	return
 }
 
-//CalLogReturnsV2 calculates log return for high, open, close, low, and volume
-// variation rates, or regulated variation rates if available.
+//CalLogReturnsV2 calculates log return for high, open, close, low, volume,
+// and variation rates, or regulated variation rates if available.
 func CalLogReturnsV2(trdat *model.TradeData) {
 	hasLogRtn := len(trdat.LogRtn) > 0
 	hasMovAvgLogRtn := len(trdat.MovAvgLogRtn) > 0
@@ -814,9 +814,10 @@ func supplementMiscV2(trdat *model.TradeData, start int) {
 	src := GetTrDataBtwn(
 		trdat.Code,
 		TrDataQry{
-			Cycle:     trdat.Cycle,
-			Reinstate: trdat.Reinstatement,
-			Basic:     true,
+			LocalSource: trdat.Source,
+			Cycle:       trdat.Cycle,
+			Reinstate:   trdat.Reinstatement,
+			Basic:       true,
 		},
 		Klid,
 		sklid,
@@ -1087,6 +1088,7 @@ func insertTradeData(table string, cols []string, rows interface{}, wg *sync.Wai
 	}
 }
 
+//rely on non-reinstated and xdxr data to calculate the regulated varate.
 func calcVarateRglV2(stk *model.Stock, tdmap map[FetchRequest]*model.TradeData) (e error) {
 	for fr, td := range tdmap {
 		if fr.Reinstate != model.Forward {
@@ -1425,7 +1427,6 @@ func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]c
 		<-wf
 	}()
 
-	//TODO refactor me
 	tdmap := make(map[FetchRequest]*model.TradeData)
 	lkmap := make(map[FetchRequest]int)
 	srcMap := splitKlineSource(stk, fetReq...)

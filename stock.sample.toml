@@ -73,10 +73,10 @@ index = "tencent"
 industry = "ths"
 skip_stocks = false
 skip_finance = false
-skip_kline_vld = true
-skip_kline_pre = false
 skip_finance_prediction = false
 skip_xdxr = false
+skip_kline_vld = true
+skip_kline_pre = false
 skip_klines = false
 skip_indices = false
 skip_basics_update = false
@@ -95,7 +95,6 @@ feature_scaling = "standardization"
     source = "em"
     drop_inconsistent = true
     skip_kline_pre = true
-    skip_xdxr = false
     skip_klines = false
 
     [DataSource.EM]

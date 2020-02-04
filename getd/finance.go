@@ -269,15 +269,25 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 		xdxrs[i].Idx = j
 	}
 
-	calcDyrDpr(xdxrs)
-
 	saveXdxrs(xdxrs)
 
 	return true, false
 }
 
-// calculates dyr and dpr dynamically
-func calcDyrDpr(xdxrs []*model.Xdxr) {
+// calculates dyr and dpr based on non-reinstated master kline data.
+func calcDyrDpr(stks *model.Stocks) {
+	log.Infof("calculating DYR & DPR for %d stocks...", stks.Size)
+	for _, c := range stks.Codes {
+		stockDyrDpr(c)
+	}
+}
+
+func stockDyrDpr(code string) {
+	var xdxrs []*model.Xdxr
+	if _, e := dbmap.Select(&xdxrs, `select * from xdxr where code = ? order by idx`, code); e != nil {
+		log.Warnf("failed to query xdxr info for %s: %+v", code, e)
+		return
+	}
 	for _, x := range xdxrs {
 		if x.Divi.Valid && x.Divi.Float64 > 0 {
 			price := math.NaN()
@@ -318,7 +328,7 @@ func calcDyrDpr(xdxrs []*model.Xdxr) {
 			}
 
 			if math.IsNaN(price) {
-				log.Printf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear.String)
+				log.Warnf("failed to calculate dyr for %s at %s", x.Code, x.ReportYear.String)
 			} else if price != 0 {
 				x.Dyr.Float64 = x.Divi.Float64 / price / 10.0
 				x.Dyr.Valid = true

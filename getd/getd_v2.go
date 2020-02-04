@@ -34,6 +34,25 @@ func GetV2() {
 		stks = allstks
 	}
 
+	if !conf.Args.DataSource.SkipFinancePrediction {
+		fipr := time.Now()
+		stks = GetFinPrediction(stks)
+		StopWatch("GET_FIN_PREDICT", fipr)
+	} else {
+		log.Printf("skipped financial prediction data from web")
+	}
+
+	if !conf.Args.DataSource.SkipXdxr {
+		// Validate Kline process already fetches XDXR info
+		if conf.Args.DataSource.SkipKlineVld {
+			stgx := time.Now()
+			stks = GetXDXRs(stks)
+			StopWatch("GET_XDXR", stgx)
+		}
+	} else {
+		log.Printf("skipped xdxr data from web")
+	}
+
 	stks = getKlineVld(stks)
 
 	src := model.DataSource(conf.Args.DataSource.Kline)
@@ -55,25 +74,6 @@ func GetV2() {
 		log.Printf("skipped kline-pre data from web (non-reinstated)")
 	}
 
-	if !conf.Args.DataSource.SkipFinancePrediction {
-		fipr := time.Now()
-		stks = GetFinPrediction(stks)
-		StopWatch("GET_FIN_PREDICT", fipr)
-	} else {
-		log.Printf("skipped financial prediction data from web")
-	}
-
-	if !conf.Args.DataSource.SkipXdxr {
-		// Validate Kline process already fetches XDXR info
-		if conf.Args.DataSource.SkipKlineVld {
-			stgx := time.Now()
-			stks = GetXDXRs(stks)
-			StopWatch("GET_XDXR", stgx)
-		}
-	} else {
-		log.Printf("skipped xdxr data from web")
-	}
-
 	if !conf.Args.DataSource.SkipKlines {
 		begin := time.Now()
 		frs = make([]FetchRequest, 6)
@@ -91,13 +91,13 @@ func GetV2() {
 			}
 		}
 		stks = GetKlinesV2(stks, frs...)
-		stks = KlinePostProcess(stks)
 		StopWatch("GET_MASTER_KLINES", begin)
 	} else {
 		log.Printf("skipped klines data from web (backward & forward reinstated)")
 	}
 
 	FreeFetcherResources()
+	stks = KlinePostProcess(stks)
 
 	var allIdx, sucIdx []*model.IdxLst
 	if !conf.Args.DataSource.SkipIndices {
@@ -173,14 +173,6 @@ func getKlineVld(stks *model.Stocks) *model.Stocks {
 		stks = GetKlinesV2(stks, frs...)
 		UpdateValidateKlineParams()
 		StopWatch("GET_KLINES_VLD_PRE", begin)
-	}
-
-	if conf.Args.DataSource.Validate.SkipXdxr {
-		log.Printf("skipped xdxr data from web for validate klines")
-	} else {
-		begin := time.Now()
-		stks = GetXDXRs(stks)
-		StopWatch("GET_XDXR", begin)
 	}
 
 	if conf.Args.DataSource.Validate.SkipKlines {

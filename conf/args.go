@@ -118,7 +118,6 @@ type Arguments struct {
 			Source           string `mapstructure:"source"`
 			DropInconsistent bool   `mapstructure:"drop_inconsistent"`
 			SkipKlinePre     bool   `mapstructure:"skip_kline_pre"`
-			SkipXdxr         bool   `mapstructure:"skip_xdxr"`
 			SkipKlines       bool   `mapstructure:"skip_klines"`
 		}
 		EM struct {

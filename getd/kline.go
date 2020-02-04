@@ -117,7 +117,7 @@ func saveQuotes(outstks chan *model.Stock) (wgs []*sync.WaitGroup) {
 	return
 }
 
-//KlinePostProcess manipulates kline data stored in database
+//KlinePostProcess manipulates data stored in database
 //after all newly data are fetched from remote source.
 func KlinePostProcess(stks *model.Stocks) (rstks *model.Stocks) {
 	switch conf.Args.DataSource.Kline {
@@ -126,6 +126,7 @@ func KlinePostProcess(stks *model.Stocks) (rstks *model.Stocks) {
 	default:
 		rstks = stks
 	}
+	calcDyrDpr(stks)
 	return
 }
 
@@ -1260,7 +1261,6 @@ func inferVarateRgl(stk *model.Stock, tab model.DBTab, nrqs, tgqs []*model.Quote
 	sDate, eDate := tgqs[0].Date, tgqs[len(tgqs)-1].Date
 	if nrqs == nil || len(nrqs) < len(tgqs) {
 		//load non-reinstated quotes from db
-		//TODO refactor to use GetTrDataBtwn
 		nrqs = GetKlBtwn(stk.Code, tab, "["+sDate, eDate+"]", false)
 	}
 	if len(nrqs) == 0 {
