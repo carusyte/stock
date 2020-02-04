@@ -19,8 +19,8 @@ import (
 
 //EmKlineFetcher is capable of fetching kline data from eastmoney.
 type EmKlineFetcher struct {
-	//key(code_cycle_rtype) -> compressed kline data
-	klineData map[string][]byte
+	//key(code_cycle_rtype) -> []*model.TradeDataBasic
+	klineData map[string][]*model.TradeDataBasic
 	lock      sync.RWMutex
 }
 
@@ -33,29 +33,21 @@ func (f *EmKlineFetcher) cache(td *model.TradeData) {
 	lock.Lock()
 	defer lock.Unlock()
 	if f.klineData == nil {
-		f.klineData = make(map[string][]byte)
+		f.klineData = make(map[string][]*model.TradeDataBasic)
 	}
-	bs := make([]model.TradeDataBasic, len(td.Base))
-	for i, b := range td.Base {
-		bs[i] = *b
-	}
-	f.klineData[f.cacheKey(td.Code, td.Cycle, td.Reinstatement)] = util.Compress(bs)
+	f.klineData[f.cacheKey(td.Code, td.Cycle, td.Reinstatement)] = td.Base
 }
 
 func (f *EmKlineFetcher) cacheKey(code string, c model.CYTP, r model.Rtype) string {
 	return fmt.Sprintf("%v_%v_%v", code, c, r)
 }
 
-func (f *EmKlineFetcher) cachedValue(code string, c model.CYTP, r model.Rtype) (v []*model.TradeDataBasic) {
-	key := f.cacheKey(code, c, r)
-	var bs []model.TradeDataBasic
-	if data, ok := f.klineData[key]; ok {
-		util.DecodeBytes(util.Decompress(data), &bs)
-		for _, b := range bs {
-			v = append(v, &b)
-		}
+func (f *EmKlineFetcher) cachedValue(code string, c model.CYTP, r model.Rtype) (cv []*model.TradeDataBasic) {
+	if f.klineData == nil {
+		return
 	}
-	return
+	key := f.cacheKey(code, c, r)
+	return f.klineData[key]
 }
 
 //FetchKline from eastmoney for the given stock.
