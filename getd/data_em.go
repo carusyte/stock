@@ -59,19 +59,6 @@ func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	cycle := fr.Cycle
 	rtype := fr.Reinstate
 
-	//if target data has been cached previously, return from cache
-	cv := f.cachedValue(code, cycle, rtype)
-	if len(cv) > 0 {
-		trdat = &model.TradeData{
-			Source:        fr.LocalSource,
-			Code:          code,
-			Cycle:         cycle,
-			Reinstatement: rtype,
-			Base:          cv,
-		}
-		return trdat, lklid, true, false
-	}
-
 	//otherwise, need to fetch from remote
 	period, authorityType := "", ""
 	switch cycle {
@@ -105,12 +92,22 @@ func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	} else {
 		symbol = code + mkt
 	}
-	tabs := resolveTableNames(fr)
-	log.Printf("%s %+v data will be fully refreshed", code, tabs)
 
-	emk, e := tryEMKline(code, symbol, period, authorityType)
-	if e != nil {
-		return nil, lklid, false, true
+	tabs := resolveTableNames(fr)
+
+	//if target data has been cached previously, fetch from cache
+	var emk *model.EMKline
+	var e error
+	cv := f.cachedValue(code, cycle, rtype)
+	if len(cv) > 0 {
+		log.Printf("%s %+v data has been fetched from cache", code, tabs)
+		emk = newEMKline(code, symbol, period, authorityType, cv)
+	} else {
+		log.Printf("%s %+v data will be fully refreshed", code, tabs)
+		emk, e = tryEMKline(code, symbol, period, authorityType)
+		if e != nil {
+			return nil, lklid, false, true
+		}
 	}
 
 	e = fixEMKline(f, emk, fr)
@@ -128,9 +125,27 @@ func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		Base:          emk.Data,
 	}
 
-	f.cache(trdat)
+	if rtype == model.Backward || rtype == model.None {
+		f.cache(trdat)
+	}
 
 	return trdat, lklid, true, false
+}
+
+func newEMKline(code, symbol, period, authorityType string, data []*model.TradeDataBasic) (emk *model.EMKline) {
+	emk = &model.EMKline{
+		Code:     code,
+		Symbol:   symbol,
+		Period:   period,
+		AuthType: authorityType,
+		Data:     data,
+		DataMap:  make(map[string]*model.TradeDataBasic),
+	}
+	for _, d := range data {
+		emk.Dates = append(emk.Dates, d.Date)
+		emk.DataMap[d.Date] = d
+	}
+	return
 }
 
 //fix kline data with counterparts

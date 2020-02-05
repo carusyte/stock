@@ -219,6 +219,10 @@ func thsShares(stock *model.Stock) (ok, retry bool) {
 		return false, true
 	}
 
+	//TODO some pages does not contain this table: http://basic.10jqka.com.cn/300810/equity.html
+	//#stockcapit div.hd h2
+	//"总股本结构"
+
 	//parse share structure table
 	ok, retry, cont := false, true, true
 	doc.Find("#stockcapit div.bd.pt5 table tbody tr").Each(

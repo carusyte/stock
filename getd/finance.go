@@ -276,7 +276,7 @@ func parse10jqkBonus(stock *model.Stock) (ok, retry bool) {
 
 // calculates dyr and dpr based on non-reinstated master kline data.
 func calcDyrDpr(stks *model.Stocks) {
-	log.Infof("calculating DYR & DPR for %d stocks...", stks.Size)
+	log.Infof("calculating DYR & DPR for %d stocks...", stks.Size())
 	for _, c := range stks.Codes {
 		stockDyrDpr(c)
 	}

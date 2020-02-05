@@ -37,6 +37,11 @@ func TestTrDataQryCopy(t *testing.T) {
 	log.Debugf("qs:%+v", qs)
 }
 
+func TestLogFormat(t *testing.T){
+	log.Debugf("- [%.2f%%]", 23.456)
+	log.Debugf("[%.2f%%]", 23.456)
+}
+
 func TestTrDataQryMap(t *testing.T) {
 	q := TrDataQry{
 		LocalSource: model.KlineMaster,
