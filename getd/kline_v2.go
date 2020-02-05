@@ -1447,11 +1447,11 @@ func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]c
 	for q, trdat := range tdmap {
 		supplementMiscV2(trdat, lkmap[q])
 	}
-	if !isIndex(stk.Code) {
-		if e := calcVarateRglV2(stk, tdmap); e != nil {
-			log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
-		}
-	}
+	// if !isIndex(stk.Code) {
+	// 	if e := calcVarateRglV2(stk, tdmap); e != nil {
+	// 		log.Errorf("%s failed to calculate varate_rgl: %+v", stk.Code, e)
+	// 	}
+	// }
 	for fr, trdat := range tdmap {
 		CalLogReturnsV2(trdat)
 		if lkmap[fr] != -1 {
