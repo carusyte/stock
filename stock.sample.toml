@@ -104,6 +104,7 @@ feature_scaling = "standardization"
     [DataSource.XQ]
     #weights for direct connection / master proxy / rotated proxy
     direct_proxy_weight = [0, 1, 0]
+    drop_inconsistent = true
 
     [DataSource.THS]
     concurrency = 50

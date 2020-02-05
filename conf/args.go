@@ -127,6 +127,7 @@ type Arguments struct {
 		XQ struct {
 			//DirectProxyWeight is an array of weights for direct connection / master proxy / rotated proxy
 			DirectProxyWeight []float64 `mapstructure:"direct_proxy_weight"`
+			DropInconsistent  bool      `mapstructure:"drop_inconsistent"`
 		}
 		THS struct {
 			Concurrency    int    `mapstructure:"concurrency"`

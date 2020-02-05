@@ -1334,7 +1334,7 @@ func GetKlinesV2(stks *model.Stocks, fetReq ...FetchRequest) (rstks *model.Stock
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
 	dbcMap := createDbTaskQueues(fetReq...)
-	wgdb := saveTradeData(outstks, dbcMap)
+	wgdb := saveTradeData(outstks, dbcMap, stks.Size())
 	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
@@ -1478,10 +1478,13 @@ func createDbTaskQueues(fetReq ...FetchRequest) (qmap map[FetchRequest]chan *dbT
 	return
 }
 
-func saveTradeData(outstks chan *model.Stock, dbcMap map[FetchRequest]chan *dbTask) (wgs []*sync.WaitGroup) {
+func saveTradeData(outstks chan *model.Stock,
+	dbcMap map[FetchRequest]chan *dbTask, total int) (wgs []*sync.WaitGroup) {
 	snmap := new(sync.Map)
-	total := len(dbcMap)
+	sumFR := len(dbcMap)
 	lock := new(sync.RWMutex)
+	pk := "progress"
+	snmap.Store(pk, 0)
 	for _, ch := range dbcMap {
 		wg := new(sync.WaitGroup)
 		wgs = append(wgs, wg)
@@ -1493,10 +1496,14 @@ func saveTradeData(outstks chan *model.Stock, dbcMap map[FetchRequest]chan *dbTa
 				if c == j.tradeData.MaxLen() {
 					lock.Lock()
 					var cnt interface{}
-					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == total-1 {
+					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == sumFR-1 {
 						snmap.Delete(j.stock.Code)
+						v, _ := snmap.Load(pk)
 						outstks <- j.stock
-						log.Printf("%s all requested klines fetched", j.stock.Code)
+						p := v.(int) + 1
+						pp := float64(p) / float64(total) * 100.
+						log.Printf("[%.2f%%] %s all requested klines fetched", pp, j.stock.Code)
+						snmap.Store(pk, p)
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)
 					}

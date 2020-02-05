@@ -120,7 +120,8 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 	if len(k.MissingData) == 0 {
 		return
 	}
-	log.Infof("basic data for the following dates will be replaced with validate kline: %+v", k.MissingData)
+	log.Infof("%s basic data for the following dates will be replaced with validate kline: %+v",
+		k.Code, k.MissingData)
 	trdat := GetTrDataAt(
 		k.Code,
 		TrDataQry{
@@ -148,7 +149,21 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 		}
 	}
 	if len(unmatched) > 0 {
-		log.Warnf("%s unable to fix missing data from validate kline for the following dates: %+v", unmatched)
+		log.Warnf("%s unable to fix missing data from validate kline for the following dates: %+v",
+			k.Code, unmatched)
+		if conf.Args.DataSource.XQ.DropInconsistent {
+			log.Warnf("%s dropping inconsistent data for the following dates: %+v",
+				k.Code, unmatched)
+			for _, u := range unmatched {
+				delete(k.Data, u)
+				for i, d := range k.Dates {
+					if u == d {
+						k.Dates = append(k.Dates[:i], k.Dates[i+1:]...)
+						break
+					}
+				}
+			}
+		}
 	}
 	return
 }
@@ -158,7 +173,8 @@ func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 	if len(k.MissingAmount) == 0 {
 		return
 	}
-	log.Infof("'amount' for the following dates will be supplemented from validate kline: %+v", k.MissingAmount)
+	log.Infof("%s 'amount' for the following dates will be supplemented from validate kline: %+v",
+		k.Code, k.MissingAmount)
 	trdat := GetTrDataAt(
 		k.Code,
 		TrDataQry{
@@ -181,7 +197,21 @@ func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 		}
 	}
 	if len(unmatched) > 0 {
-		log.Warnf("%s unable to fix missing 'amount' from validate kline for the following dates: %+v", unmatched)
+		log.Warnf("%s unable to fix missing 'amount' from validate kline for the following dates: %+v",
+			k.Code, unmatched)
+		if conf.Args.DataSource.XQ.DropInconsistent {
+			log.Warnf("%s dropping inconsistent data for the following dates: %+v",
+				k.Code, unmatched)
+			for _, u := range unmatched {
+				delete(k.Data, u)
+				for i, d := range k.Dates {
+					if u == d {
+						k.Dates = append(k.Dates[:i], k.Dates[i+1:]...)
+						break
+					}
+				}
+			}
+		}
 	}
 	return
 }
