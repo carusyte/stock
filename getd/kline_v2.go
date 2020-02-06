@@ -1502,7 +1502,7 @@ func saveTradeData(outstks chan *model.Stock,
 						outstks <- j.stock
 						p := v.(int) + 1
 						pp := float64(p) / float64(total) * 100.
-						log.Printf("- [%.2f%%] %s all requested klines fetched", pp, j.stock.Code)
+						log.Printf("%s all requested klines fetched. Progress: [%.2f%%]", j.stock.Code, pp)
 						snmap.Store(pk, p)
 					} else {
 						snmap.Store(j.stock.Code, cnt.(int)+1)

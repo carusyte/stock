@@ -307,23 +307,23 @@ type Xdxr struct {
 	//每10股分红金额
 	Divi sql.NullFloat64 `db:"divi"`
 	//每10股分红金额（税后）
-	DiviAtx sql.NullFloat64
+	DiviAtx sql.NullFloat64 `db:"divi_atx"`
 	//分红截止日期
-	DiviEndDate sql.NullString
+	DiviEndDate sql.NullString `db:"divi_end_date"`
 	//分红率
 	Dyr sql.NullFloat64 `db:"dyr"`
 	//分红对象
-	DiviTarget sql.NullString
+	DiviTarget sql.NullString `db:"divi_target"`
 	//每十股送红股
-	SharesAllot sql.NullFloat64
+	SharesAllot sql.NullFloat64 `db:"shares_allot"`
 	//红股上市日期
-	SharesAllotDate sql.NullString
+	SharesAllotDate sql.NullString `db:"shares_allot_date"`
 	//每十股转增股本
-	SharesCvt sql.NullFloat64
+	SharesCvt sql.NullFloat64 `db:"shares_cvt"`
 	//转增股本上市日
-	SharesCvtDate sql.NullString
+	SharesCvtDate sql.NullString `db:"shares_cvt_date"`
 	//派息股本基数
-	SharesBase sql.NullInt64
+	SharesBase sql.NullInt64 `db:"shares_base"`
 	//股东大会日期
 	GmsDate sql.NullString `db:"gms_date"`
 	//实施日期
@@ -337,7 +337,7 @@ type Xdxr struct {
 	//股息到账日
 	PayoutDate sql.NullString `db:"payout_date"`
 	//最后交易日
-	EndTrdDate sql.NullString
+	EndTrdDate sql.NullString `db:"end_trddate"`
 	//分红总额(亿)
 	DiviAmt sql.NullFloat64 `db:"divi_amt"`
 	//方案进度
