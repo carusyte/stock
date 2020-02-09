@@ -102,7 +102,7 @@ func GetV2() {
 	var allIdx, sucIdx []*model.IdxLst
 	if !conf.Args.DataSource.SkipIndices {
 		stidx := time.Now()
-		allIdx, sucIdx = GetIndices()
+		allIdx, sucIdx = GetIndicesV2()
 		StopWatch("GET_INDICES", stidx)
 		for _, idx := range allIdx {
 			allstks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})

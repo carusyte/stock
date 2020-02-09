@@ -40,7 +40,7 @@ func Test_getKlineXQ(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &XqKlineFetcher{}
 			// gotTdmap, gotLkmap, gotSuc := getKlineXQ(tt.args.stk, tt.args.kltype)
-			f.FetchKline(tt.args.stk, tt.args.freq, false)
+			f.fetchKline(tt.args.stk, tt.args.freq, false)
 		})
 	}
 }
@@ -48,4 +48,19 @@ func Test_getKlineXQ(t *testing.T) {
 func TestUnixMilliSec(t *testing.T) {
 	begin := float64(time.Now().AddDate(0, 0, 1).UnixNano()) * float64(time.Nanosecond) / float64(time.Millisecond)
 	log.Debugf("got: %d", int64(begin))
+}
+
+func TestPassMap(t *testing.T) {
+	m := map[string]int{
+		"a": 1,
+		"b": 2,
+	}
+	log.Debugf("before: %+v", m)
+	modmap(m)
+	log.Debugf("after: %+v", m)
+}
+
+func modmap(m map[string]int) {
+	m["c"] = 3
+	m["a"] = 10
 }

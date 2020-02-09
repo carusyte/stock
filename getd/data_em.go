@@ -24,8 +24,7 @@ type EmKlineFetcher struct {
 	lock      sync.RWMutex
 }
 
-//Cleanup resources
-func (f *EmKlineFetcher) Cleanup() {
+func (f *EmKlineFetcher) cleanup() {
 	f.klineData = nil
 }
 
@@ -50,12 +49,15 @@ func (f *EmKlineFetcher) cachedValue(code string, c model.CYTP, r model.Rtype) (
 	return f.klineData[key]
 }
 
-//FetchKline from eastmoney for the given stock.
-func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
-	trdat *model.TradeData, lklid int, suc, retry bool) {
+//fetchKline from eastmoney for the given stock.
+func (f *EmKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
+	tdmap map[FetchRequest]*model.TradeData, lkmap map[FetchRequest]int, suc, retry bool) {
+
+	tdmap = make(map[FetchRequest]*model.TradeData)
+	lkmap = make(map[FetchRequest]int)
 
 	code := stk.Code
-	lklid = -1
+	lkmap[fr] = -1
 	cycle := fr.Cycle
 	rtype := fr.Reinstate
 
@@ -106,18 +108,18 @@ func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		log.Printf("%s %+v data will be fully refreshed", code, tabs)
 		emk, e = tryEMKline(code, symbol, period, authorityType)
 		if e != nil {
-			return nil, lklid, false, true
+			return tdmap, lkmap, false, true
 		}
 	}
 
 	e = fixEMKline(f, emk, fr)
 	if e != nil {
 		log.Warn(e)
-		return nil, lklid, false, true
+		return tdmap, lkmap, false, true
 	}
 
 	//construct trade data
-	trdat = &model.TradeData{
+	trdat := &model.TradeData{
 		Source:        fr.LocalSource,
 		Code:          code,
 		Cycle:         cycle,
@@ -125,11 +127,13 @@ func (f *EmKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		Base:          emk.Data,
 	}
 
+	tdmap[fr] = trdat
+
 	if rtype == model.Backward || rtype == model.None {
 		f.cache(trdat)
 	}
 
-	return trdat, lklid, true, false
+	return tdmap, lkmap, true, false
 }
 
 func newEMKline(code, symbol, period, authorityType string, data []*model.TradeDataBasic) (emk *model.EMKline) {

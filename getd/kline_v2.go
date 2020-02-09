@@ -21,6 +21,8 @@ import (
 
 //FetchRequest specifies the arguments to fetch data from remote sources
 type FetchRequest struct {
+	//IsIndex rather than stock
+	IsIndex bool
 	//RemoteSource for the trade data.
 	RemoteSource model.DataSource
 	//LocalSource for the trade data. *model.MasterKline will be used if not specified.
@@ -46,7 +48,6 @@ type dbTask struct {
 	stock     *model.Stock
 	tradeData *model.TradeData
 	klid      int
-	completed bool
 }
 
 //TradeDataField stands for the common table columns related to trade data.
@@ -60,47 +61,24 @@ const (
 )
 
 var (
-	kfmap map[model.DataSource]KlineFetcher
-	kfmtx sync.RWMutex
+	kfmap map[model.DataSource]klineFetcher
 )
 
-//KlineFetcher is capable of fetching kline data from a specific data source.
-type KlineFetcher interface {
-	//FetchKline from specific data source for the given stock.
-	FetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
-		trdat *model.TradeData, lklid int, suc, retry bool)
-	//Cleanup resources
-	Cleanup()
+//klineFetcher is capable of fetching kline data from a specific data source.
+type klineFetcher interface {
+	//fetchKline from specific data source for the given stock.
+	fetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
+		tdmap map[FetchRequest]*model.TradeData, lkmap map[FetchRequest]int, suc, retry bool)
 }
 
-func resolveKlineFetcher(src model.DataSource) (f KlineFetcher) {
-	kfmtx.Lock()
-	defer kfmtx.Unlock()
-	if kfmap == nil {
-		kfmap = make(map[model.DataSource]KlineFetcher)
-	}
-	if f, ok := kfmap[src]; ok {
-		return f
-	}
-	switch src {
-	case model.WHT:
-		// tdmap, lkmap, suc = getKlineWht(stk, kltnv)
-		log.Panicf("unsupported data source: %+v", src)
-	case model.THS:
-		// qmap, lkmap, suc = getKlineThs(stk, kltnv)
-		log.Panicf("unsupported data source: %+v", src)
-	case model.TC:
-		// tdmap, lkmap, suc = getKlineTc(stk, kltnv)
-		log.Panicf("unsupported data source: %+v", src)
-	case model.XQ:
-		f = &XqKlineFetcher{}
-	case model.EM:
-		f = &EmKlineFetcher{}
-	default:
-		log.Panicf("unsupported data source: %+v", src)
-	}
-	kfmap[src] = f
-	return
+//stateful is capable of caching states in memory and provides capability to cleanup those states.
+type stateful interface {
+	//Cleanup cached states or resources
+	cleanup()
+}
+
+type extraRequester interface {
+	getExtraRequests(frIn []FetchRequest) (frOut []FetchRequest)
 }
 
 //GetTrDataDB get specified type of kline data from database.
@@ -343,6 +321,66 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 	return
 }
 
+func initKlineFetcher(frs ...FetchRequest) (dsmap map[model.DataSource][]FetchRequest) {
+	if kfmap == nil {
+		kfmap = make(map[model.DataSource]klineFetcher)
+	}
+	dsmap = splitFetchRequests(frs...)
+	resolveDSMap(dsmap)
+	return
+}
+
+//check fetReq.RemoteSource. If none is set, use config file data source.
+func splitFetchRequests(frs ...FetchRequest) (dsmap map[model.DataSource][]FetchRequest) {
+	dsmap = make(map[model.DataSource][]FetchRequest)
+	for _, fr := range frs {
+		src := model.DataSource(conf.Args.DataSource.Kline)
+		if len(fr.RemoteSource) > 0 {
+			src = fr.RemoteSource
+		} else {
+			fr.RemoteSource = src
+		}
+		dsmap[src] = append(dsmap[src], fr)
+	}
+	return
+}
+
+func resolveDSMap(dsmap map[model.DataSource][]FetchRequest) {
+	for src, reqs := range dsmap {
+		if _, ok := kfmap[src]; ok {
+			continue
+		}
+		f := resolveKlineFetcher(src)
+		kfmap[src] = f
+		if ef, ok := f.(extraRequester); ok {
+			//layer-2 kline fetcher, won't populate dsmap
+			exreqs := ef.getExtraRequests(reqs)
+			resolveDSMap(splitFetchRequests(exreqs...))
+		}
+	}
+}
+
+func resolveKlineFetcher(src model.DataSource) (f klineFetcher) {
+	switch src {
+	case model.WHT:
+		// tdmap, lkmap, suc = getKlineWht(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.THS:
+		// qmap, lkmap, suc = getKlineThs(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.TC:
+		// tdmap, lkmap, suc = getKlineTc(stk, kltnv)
+		log.Panicf("unsupported data source: %+v", src)
+	case model.XQ:
+		f = &XqKlineFetcher{}
+	case model.EM:
+		f = &EmKlineFetcher{}
+	default:
+		log.Panicf("unsupported data source: %+v", src)
+	}
+	return
+}
+
 //resolveTableNames resolve trade data queries to database table names.
 func resolveTableNames(qs ...FetchRequest) (tables []string) {
 	for _, q := range qs {
@@ -528,6 +566,9 @@ func getTableColumns(i interface{}) (cols []string) {
 //CalLogReturnsV2 calculates log return for high, open, close, low, volume,
 // and variation rates, or regulated variation rates if available.
 func CalLogReturnsV2(trdat *model.TradeData) {
+	if trdat == nil {
+		return
+	}
 	hasLogRtn := len(trdat.LogRtn) > 0
 	hasMovAvgLogRtn := len(trdat.MovAvgLogRtn) > 0
 	for i, b := range trdat.Base {
@@ -795,7 +836,7 @@ func CalLogReturnsV2(trdat *model.TradeData) {
 
 //Assign KLID, calculate Varate, MovAvg, add update datetime
 func supplementMiscV2(trdat *model.TradeData, start int) {
-	if trdat.MaxLen() == 0 {
+	if trdat == nil || trdat.MaxLen() == 0 {
 		return
 	}
 	hasMA := len(trdat.MovAvg) > 0
@@ -1333,12 +1374,13 @@ func GetKlinesV2(stks *model.Stocks, fetReq ...FetchRequest) (rstks *model.Stock
 	outstks := make(chan *model.Stock, JobCapacity)
 	rstks = new(model.Stocks)
 	wgr := collect(rstks, outstks)
-	dbcMap := createDbTaskQueues(fetReq...)
+	dsmap := initKlineFetcher(fetReq...)
+	dbcMap := createDbTaskQueues(dsmap)
 	wgdb := saveTradeData(outstks, dbcMap, stks.Size())
 	for _, stk := range stks.List {
 		wg.Add(1)
 		wf <- 1
-		go getKlineV2(stk, fetReq, dbcMap, &wg, wf)
+		go getKlineV2(stk, dsmap, dbcMap, &wg, wf)
 	}
 	wg.Wait()
 	close(wf)
@@ -1367,11 +1409,13 @@ func waitDBTasks(wgdb []*sync.WaitGroup, dbcMap map[FetchRequest]chan *dbTask) {
 //FreeFetcherResources after usage
 func FreeFetcherResources() {
 	for _, f := range kfmap {
-		f.Cleanup()
+		if s, ok := f.(stateful); ok {
+			s.cleanup()
+		}
 	}
 }
 
-func getKlineFromSource(stk *model.Stock, kf KlineFetcher, fetReq ...FetchRequest) (
+func getKlineFromSource(stk *model.Stock, kf klineFetcher, fetReq ...FetchRequest) (
 	tdmap map[FetchRequest]*model.TradeData, lkmap map[FetchRequest]int, suc bool) {
 
 	tdmap = make(map[FetchRequest]*model.TradeData)
@@ -1380,21 +1424,23 @@ func getKlineFromSource(stk *model.Stock, kf KlineFetcher, fetReq ...FetchReques
 	xdxr := latestUFRXdxr(stk.Code)
 
 	genop := func(q FetchRequest, incr bool) (op func(c int) (e error)) {
-		tabs := resolveTableNames(q)
 		return func(c int) (e error) {
-			trdat, lklid, suc, retry := kf.FetchKline(stk, q, incr)
-			if suc {
-				log.Infof("%s %+v fetched: %d", code, tabs, trdat.MaxLen())
-				tdmap[q] = trdat
-				lkmap[q] = lklid
-				return nil
+			rtdMap, rlkMap, suc, retry := kf.fetchKline(stk, q, incr)
+			if !suc {
+				e = fmt.Errorf("failed to get kline for %s", code)
+				if retry {
+					log.Printf("%s retrying [%d]", code, c+1)
+					return repeat.HintTemporary(e)
+				}
+				return repeat.HintStop(e)
 			}
-			e = fmt.Errorf("failed to get kline for %s", code)
-			if retry {
-				log.Printf("%s retrying [%d]", code, c+1)
-				return repeat.HintTemporary(e)
+			for fr, td := range rtdMap {
+				tabs := resolveTableNames(fr)
+				log.Infof("%s %+v fetched: %d", code, tabs, td.MaxLen())
+				tdmap[fr] = td
+				lkmap[fr] = rlkMap[fr]
 			}
-			return repeat.HintStop(e)
+			return nil
 		}
 	}
 
@@ -1420,7 +1466,7 @@ func getKlineFromSource(stk *model.Stock, kf KlineFetcher, fetReq ...FetchReques
 	return tdmap, lkmap, suc
 }
 
-func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]chan *dbTask,
+func getKlineV2(stk *model.Stock, dsmap map[model.DataSource][]FetchRequest, qmap map[FetchRequest]chan *dbTask,
 	wg *sync.WaitGroup, wf chan int) {
 	defer func() {
 		wg.Done()
@@ -1429,9 +1475,8 @@ func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]c
 
 	tdmap := make(map[FetchRequest]*model.TradeData)
 	lkmap := make(map[FetchRequest]int)
-	srcMap := splitKlineSource(stk, fetReq...)
-	for src, frs := range srcMap {
-		kf := resolveKlineFetcher(src)
+	for src, frs := range dsmap {
+		kf := kfmap[src]
 		tdmapTmp, lkmapTmp, suc := getKlineFromSource(stk, kf, frs...)
 		if !suc {
 			//abort immediately
@@ -1454,7 +1499,7 @@ func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]c
 	// }
 	for fr, trdat := range tdmap {
 		CalLogReturnsV2(trdat)
-		if lkmap[fr] != -1 {
+		if trdat != nil && lkmap[fr] != -1 {
 			//incremental fetch. skip the first record which is for varate calculation
 			trdat.Base = trdat.Base[1:]
 			trdat.LogRtn = trdat.LogRtn[1:]
@@ -1470,10 +1515,20 @@ func getKlineV2(stk *model.Stock, fetReq []FetchRequest, qmap map[FetchRequest]c
 	return
 }
 
-func createDbTaskQueues(fetReq ...FetchRequest) (qmap map[FetchRequest]chan *dbTask) {
+func createDbTaskQueues(dsmap map[model.DataSource][]FetchRequest) (qmap map[FetchRequest]chan *dbTask) {
 	qmap = make(map[FetchRequest]chan *dbTask)
-	for _, fr := range fetReq {
-		qmap[fr] = make(chan *dbTask, conf.Args.DBQueueCapacity)
+	for ds, frs := range dsmap {
+		for _, fr := range frs {
+			qmap[fr] = make(chan *dbTask, conf.Args.DBQueueCapacity)
+		}
+		if req, ok := kfmap[ds].(extraRequester); ok {
+			exfr := req.getExtraRequests(frs)
+			for _, fr := range exfr {
+				if _, ok = qmap[fr]; !ok {
+					qmap[fr] = make(chan *dbTask, conf.Args.DBQueueCapacity)
+				}
+			}
+		}
 	}
 	return
 }
@@ -1492,8 +1547,11 @@ func saveTradeData(outstks chan *model.Stock,
 		go func(wg *sync.WaitGroup, ch chan *dbTask) {
 			defer wg.Done()
 			for j := range ch {
-				c := binsertV2(j.tradeData, j.klid)
-				if c == j.tradeData.MaxLen() {
+				c := 0
+				if j.tradeData != nil {
+					c = binsertV2(j.tradeData, j.klid)
+				}
+				if j.tradeData == nil || c == j.tradeData.MaxLen() {
 					lock.Lock()
 					var cnt interface{}
 					if cnt, _ = snmap.LoadOrStore(j.stock.Code, 0); cnt.(int) == sumFR-1 {
@@ -1513,28 +1571,4 @@ func saveTradeData(outstks chan *model.Stock,
 		}(wg, ch)
 	}
 	return
-}
-
-func splitKlineSource(stk *model.Stock, fetReq ...FetchRequest) map[model.DataSource][]FetchRequest {
-	m := make(map[model.DataSource][]FetchRequest)
-	// 1st, check stk.Source
-	if stk.Source != "" {
-		src := model.DataSource(stk.Source)
-		for _, q := range fetReq {
-			q.RemoteSource = src
-		}
-		m[src] = fetReq
-		return m
-	}
-	// 2nd, check fetReq.RemoteSource. If none is set, use config file data source.
-	for _, q := range fetReq {
-		src := model.DataSource(conf.Args.DataSource.Kline)
-		if len(q.RemoteSource) > 0 {
-			src = q.RemoteSource
-		} else {
-			q.RemoteSource = src
-		}
-		m[src] = append(m[src], q)
-	}
-	return m
 }

@@ -32,15 +32,17 @@ type Rtype string
 type DataSource string
 
 const (
-	DAY   CYTP = "D"
-	WEEK  CYTP = "W"
-	MONTH CYTP = "M"
-	M120  CYTP = "M120"
-	M60   CYTP = "M60"
-	M30   CYTP = "M30"
-	M15   CYTP = "M15"
-	M5    CYTP = "M5"
-	M1    CYTP = "M1"
+	//UnknownCytp sor the data
+	UnknownCytp CYTP = "Unknown"
+	DAY         CYTP = "D"
+	WEEK        CYTP = "W"
+	MONTH       CYTP = "M"
+	M120        CYTP = "M120"
+	M60         CYTP = "M60"
+	M30         CYTP = "M30"
+	M15         CYTP = "M15"
+	M5          CYTP = "M5"
+	M1          CYTP = "M1"
 )
 
 const (
@@ -49,6 +51,8 @@ const (
 )
 
 const (
+	//UnknownSource for the data
+	UnknownSource DataSource = "unknown"
 	//KlineMaster the master kline table
 	KlineMaster DataSource = "kline"
 	//XQ xueqiu
@@ -110,9 +114,11 @@ const (
 )
 
 const (
-	Forward  Rtype = "forward"
-	Backward Rtype = "backward"
-	None     Rtype = "none"
+	//UnknownRtype for the data
+	UnknownRtype Rtype = "unknown"
+	Forward      Rtype = "forward"
+	Backward     Rtype = "backward"
+	None         Rtype = "none"
 )
 
 //Stock represents basic stock info.
@@ -1545,6 +1551,14 @@ func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) 
 	} else {
 		log.Warnf("unable to parse close for %s at %s: %+v", b.Code, b.Date, m)
 	}
+
+	md := false
+	if b.Close == 0 && b.Open == 0 && b.High == 0 && b.Low == 0 {
+		md = true
+		x.MissingData = append(x.MissingData, b.Date)
+		log.Warnf("%s suspect missing data at %s: %+v", b.Code, b.Date, m)
+	}
+
 	if v, ok = m["turnoverrate"].(float64); ok {
 		b.Xrate = sql.NullFloat64{Float64: v, Valid: true}
 	} else {
@@ -1553,12 +1567,10 @@ func (x *XQKline) m2base(m map[string]interface{}) (b *TradeDataBasic, e error) 
 	if v, ok = m["amount"].(float64); ok {
 		b.Amount = sql.NullFloat64{Float64: v, Valid: true}
 	} else {
-		x.MissingAmount = append(x.MissingAmount, b.Date)
 		log.Warnf("unable to parse amount for %s at %s: %+v", b.Code, b.Date, m)
-	}
-	if b.Close == 0 && b.Open == 0 && b.High == 0 && b.Low == 0 {
-		x.MissingData = append(x.MissingData, b.Date)
-		log.Warnf("%s suspect missing data at %s: %+v", b.Code, b.Date, m)
+		if !md {
+			x.MissingAmount = append(x.MissingAmount, b.Date)
+		}
 	}
 	return
 }

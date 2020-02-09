@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,14 +22,28 @@ import (
 //XqKlineFetcher is capable of fetching kline data from Xueqiu.
 type XqKlineFetcher struct{}
 
-//Cleanup resources
-func (f *XqKlineFetcher) Cleanup() {
-	//do nothing
+func (f *XqKlineFetcher) extraRequest(fr FetchRequest) FetchRequest {
+	return FetchRequest{
+		RemoteSource: model.DataSource(conf.Args.DataSource.Validate.Source),
+		LocalSource:  model.DataSource(conf.Args.DataSource.Validate.Source),
+		Cycle:        fr.Cycle,
+		Reinstate:    fr.Reinstate,
+	}
 }
 
-//FetchKline from Xueqiu for the given stock.
-func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
-	trdat *model.TradeData, lklid int, suc, retry bool) {
+func (f *XqKlineFetcher) getExtraRequests(frIn []FetchRequest) (frOut []FetchRequest) {
+	for _, fr := range frIn {
+		frOut = append(frOut, f.extraRequest(fr))
+	}
+	return
+}
+
+//fetchKline from Xueqiu for the given stock.
+func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool) (
+	tdmap map[FetchRequest]*model.TradeData, lkmap map[FetchRequest]int, suc, retry bool) {
+
+	tdmap = make(map[FetchRequest]*model.TradeData)
+	lkmap = make(map[FetchRequest]int)
 
 	period := ""
 	xdrType := "normal"
@@ -46,9 +61,9 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	}
 	switch rtype {
 	case model.Forward:
-		xdrType = "after"
-	case model.Backward:
 		xdrType = "before"
+	case model.Backward:
+		xdrType = "after"
 	}
 	mkt := strings.ToUpper(stk.Market.String)
 	symbol := mkt + stk.Code
@@ -57,13 +72,13 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		code = symbol
 	}
 	tabs := resolveTableNames(fr)
-	lklid = -1
+	lkmap[fr] = -1
 	ldate := ""
 	if incr {
 		ldy := getLatestTradeDataBasic(code, fr.LocalSource, cycle, rtype, 5+1) //plus one offset for pre-close, varate calculation
 		if ldy != nil {
 			ldate = ldy.Date
-			lklid = ldy.Klid
+			lkmap[fr] = ldy.Klid
 		} else {
 			log.Printf("%s latest %+v data not found, will be fully refreshed", code, tabs)
 		}
@@ -78,33 +93,36 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	}
 	count := -142
 	multiGet := false
-	if lklid == -1 {
+	if lkmap[fr] == -1 {
 		count = int(math.Round(-.75*(time.Since(startDate).Hours()/24.) - float64(rand.Intn(1000))))
 		multiGet = true
 	} else {
 		ltime, e := time.Parse(global.DateFormat, ldate)
 		if e != nil {
 			log.Warnf("%s %+v failed to parse date value '%s': %+v", stk.Code, tabs, ldate, e)
-			return nil, lklid, false, false
+			return tdmap, lkmap, false, false
 		}
 		count = -1 * (int(time.Since(ltime).Hours()/24) + 2)
 	}
 
 	xqk, e := tryXQKline(code, symbol, period, xdrType, count, multiGet)
 	if e != nil {
-		return nil, lklid, false, true
+		return tdmap, lkmap, false, true
 	}
 
-	if e = fixXqAmount(xqk, fr); e != nil {
-		return nil, lklid, false, false
-	}
-
-	if e = fixXqMissingData(xqk, fr); e != nil {
-		return nil, lklid, false, false
+	if extd, exlk, e := fixXqData(stk, xqk, fr); e != nil {
+		return tdmap, lkmap, false, false
+	} else if len(extd) > 0 && len(exlk) > 0 {
+		for k, v := range extd {
+			tdmap[k] = v
+		}
+		for k, v := range exlk {
+			lkmap[k] = v
+		}
 	}
 
 	//construct trade data
-	trdat = &model.TradeData{
+	tdmap[fr] = &model.TradeData{
 		Code:          stk.Code,
 		Source:        fr.LocalSource,
 		Cycle:         cycle,
@@ -112,31 +130,83 @@ func (f *XqKlineFetcher) FetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		Base:          xqk.GetData(false),
 	}
 
-	return trdat, lklid, true, false
+	return tdmap, lkmap, true, false
 }
 
-//supplement missing kline data from validate table if any
-func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
-	if len(k.MissingData) == 0 {
+//supplement kline data from validate table if any
+func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
+	extd map[FetchRequest]*model.TradeData, exlk map[FetchRequest]int, e error) {
+
+	if len(k.MissingData) == 0 && len(k.MissingAmount) == 0 {
 		return
 	}
-	log.Infof("%s basic data for the following dates will be replaced with validate kline: %+v",
-		k.Code, k.MissingData)
+	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
+	//check whether local validate kline has the latest data
+	dates := make([]string, 0, 8)
+	copy(dates, k.Dates)
+	sort.Strings(dates)
 	trdat := GetTrDataAt(
 		k.Code,
 		TrDataQry{
-			LocalSource: model.DataSource(conf.Args.DataSource.Validate.Source),
+			LocalSource: vsrc,
 			Cycle:       fr.Cycle,
 			Reinstate:   fr.Reinstate,
 			Basic:       true,
 		},
 		Date,
 		false,
-		util.Str2IntfSlice(k.MissingData)...,
+		dates[len(dates)-1],
 	)
+	dates = append(k.MissingAmount, k.MissingData...)
+	bmap := make(map[string]*model.TradeDataBasic)
+	tabs := resolveTableNames(fr)
 	var unmatched []string
-	for _, b := range trdat.Base {
-		if kd, ok := k.Data[b.Date]; ok {
+	if len(trdat.Base) > 0 {
+		//fetch from db directly
+		log.Infof("%s %+v data for the following dates will be updated from local validate kline: %+v",
+			k.Code, tabs, dates)
+		trdat := GetTrDataAt(
+			k.Code,
+			TrDataQry{
+				LocalSource: vsrc,
+				Cycle:       fr.Cycle,
+				Reinstate:   fr.Reinstate,
+				Basic:       true,
+			},
+			Date,
+			false,
+			util.Str2IntfSlice(dates)...,
+		)
+		bmap = trdat.BaseMap()
+	} else {
+		//fetch from remote
+		log.Infof("%s %+v data for the following dates will be updated from remote validate source: %+v",
+			k.Code, tabs, dates)
+		kf := kfmap[vsrc]
+		suc := false
+		exfr := FetchRequest{
+			RemoteSource: vsrc,
+			LocalSource:  vsrc,
+			Cycle:        fr.Cycle,
+			Reinstate:    fr.Reinstate,
+		}
+		extd, exlk, suc = getKlineFromSource(stk, kf, exfr)
+		if !suc {
+			msg := fmt.Sprintf("%s %+v failed to fix data for the following dates: %+v", k.Code, tabs, dates)
+			e = errors.New(msg)
+			log.Warnln(msg)
+			return
+		}
+		bmap = extd[exfr].BaseMap()
+	}
+
+	for _, d := range k.MissingData {
+		if b, ok := bmap[d]; ok &&
+			b.Volume.Valid && b.Volume.Float64 != 0 &&
+			b.Amount.Valid && b.Amount.Float64 != 0 &&
+			b.Xrate.Valid && b.Xrate.Float64 != 0 {
+			kd := k.Data[d]
+			kd.Open = b.Open
 			kd.Open = b.Open
 			kd.High = b.High
 			kd.Close = b.Close
@@ -148,12 +218,21 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 			unmatched = append(unmatched, b.Date)
 		}
 	}
+
+	for _, d := range k.MissingAmount {
+		if b, ok := bmap[d]; ok && b.Amount.Valid && b.Amount.Float64 != 0 {
+			k.Data[d].Amount = b.Amount
+		} else {
+			unmatched = append(unmatched, d)
+		}
+	}
+
 	if len(unmatched) > 0 {
-		log.Warnf("%s unable to fix missing data from validate kline for the following dates: %+v",
-			k.Code, unmatched)
+		log.Warnf("%s unable to fix missing %+v data from validate kline for the following dates: %+v",
+			k.Code, tabs, unmatched)
 		if conf.Args.DataSource.XQ.DropInconsistent {
-			log.Warnf("%s dropping inconsistent data for the following dates: %+v",
-				k.Code, unmatched)
+			log.Warnf("%s dropping inconsistent %+v data for the following dates: %+v",
+				k.Code, tabs, unmatched)
 			for _, u := range unmatched {
 				delete(k.Data, u)
 				for i, d := range k.Dates {
@@ -165,6 +244,7 @@ func fixXqMissingData(k *model.XQKline, fr FetchRequest) (e error) {
 			}
 		}
 	}
+
 	return
 }
 
@@ -187,21 +267,22 @@ func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
 		false,
 		util.Str2IntfSlice(k.MissingAmount)...,
 	)
+	tabs := resolveTableNames(fr)
 	var unmatched []string
 	bm := trdat.BaseMap()
 	for _, d := range k.MissingAmount {
-		if b, ok := bm[d]; ok {
+		if b, ok := bm[d]; ok && b.Amount.Valid && b.Amount.Float64 != 0 {
 			k.Data[d].Amount = b.Amount
 		} else {
 			unmatched = append(unmatched, d)
 		}
 	}
 	if len(unmatched) > 0 {
-		log.Warnf("%s unable to fix missing 'amount' from validate kline for the following dates: %+v",
-			k.Code, unmatched)
+		log.Warnf("%s %+v unable to fix missing 'amount' from validate kline for the following dates: %+v",
+			k.Code, tabs, unmatched)
 		if conf.Args.DataSource.XQ.DropInconsistent {
-			log.Warnf("%s dropping inconsistent data for the following dates: %+v",
-				k.Code, unmatched)
+			log.Warnf("%s %+v dropping inconsistent data for the following dates: %+v",
+				k.Code, tabs, unmatched)
 			for _, u := range unmatched {
 				delete(k.Data, u)
 				for i, d := range k.Dates {

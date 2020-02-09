@@ -39,7 +39,7 @@ func Test_getKlineEM(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &EmKlineFetcher{}
 			// gotTdmap, gotLkmap, gotSuc := getKlineXQ(tt.args.stk, tt.args.kltype)
-			f.FetchKline(
+			f.fetchKline(
 				tt.args.stk,
 				tt.args.freq,
 				false)
