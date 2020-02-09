@@ -119,6 +119,11 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		for k, v := range exlk {
 			lkmap[k] = v
 		}
+	} else {
+		//construct empty signal entry
+		exfr := f.extraRequest(fr)
+		tdmap[exfr] = nil
+		lkmap[exfr] = -1
 	}
 
 	//construct trade data
