@@ -206,26 +206,29 @@ func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 	}
 
 	for _, d := range k.MissingData {
-		if b, ok := bmap[d]; ok &&
-			b.Volume.Valid && b.Volume.Float64 != 0 &&
-			b.Amount.Valid && b.Amount.Float64 != 0 &&
-			b.Xrate.Valid && b.Xrate.Float64 != 0 {
+		if b, ok := bmap[d]; ok {
 			kd := k.Data[d]
 			kd.Open = b.Open
 			kd.Open = b.Open
 			kd.High = b.High
 			kd.Close = b.Close
 			kd.Low = b.Low
-			kd.Amount = b.Amount
-			kd.Volume = b.Volume
-			kd.Xrate = b.Xrate
+			if !kd.Amount.Valid || kd.Amount.Float64 == 0 {
+				kd.Amount = b.Amount
+			}
+			if !kd.Volume.Valid || kd.Volume.Float64 == 0 {
+				kd.Volume = b.Volume
+			}
+			if !kd.Xrate.Valid || kd.Xrate.Float64 == 0 {
+				kd.Xrate = b.Xrate
+			}
 		} else {
 			unmatched = append(unmatched, b.Date)
 		}
 	}
 
 	for _, d := range k.MissingAmount {
-		if b, ok := bmap[d]; ok && b.Amount.Valid && b.Amount.Float64 != 0 {
+		if b, ok := bmap[d]; ok && b.Amount.Valid {
 			k.Data[d].Amount = b.Amount
 		} else {
 			unmatched = append(unmatched, d)
