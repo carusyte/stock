@@ -256,55 +256,6 @@ func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 	return
 }
 
-//supplement missing "amount" from validate table if any
-func fixXqAmount(k *model.XQKline, fr FetchRequest) (e error) {
-	if len(k.MissingAmount) == 0 {
-		return
-	}
-	log.Infof("%s 'amount' for the following dates will be supplemented from validate kline: %+v",
-		k.Code, k.MissingAmount)
-	trdat := GetTrDataAt(
-		k.Code,
-		TrDataQry{
-			LocalSource: model.DataSource(conf.Args.DataSource.Validate.Source),
-			Cycle:       fr.Cycle,
-			Reinstate:   fr.Reinstate,
-			Basic:       true,
-		},
-		Date,
-		false,
-		util.Str2IntfSlice(k.MissingAmount)...,
-	)
-	tabs := resolveTableNames(fr)
-	var unmatched []string
-	bm := trdat.BaseMap()
-	for _, d := range k.MissingAmount {
-		if b, ok := bm[d]; ok && b.Amount.Valid && b.Amount.Float64 != 0 {
-			k.Data[d].Amount = b.Amount
-		} else {
-			unmatched = append(unmatched, d)
-		}
-	}
-	if len(unmatched) > 0 {
-		log.Warnf("%s %+v unable to fix missing 'amount' from validate kline for the following dates: %+v",
-			k.Code, tabs, unmatched)
-		if conf.Args.DataSource.XQ.DropInconsistent {
-			log.Warnf("%s %+v dropping inconsistent data for the following dates: %+v",
-				k.Code, tabs, unmatched)
-			for _, u := range unmatched {
-				delete(k.Data, u)
-				for i, d := range k.Dates {
-					if u == d {
-						k.Dates = append(k.Dates[:i], k.Dates[i+1:]...)
-						break
-					}
-				}
-			}
-		}
-	}
-	return
-}
-
 func tryXQCookie() (cookies []*http.Cookie, px *util.Proxy, headers map[string]string, e error) {
 	op := func() error {
 		cookies, px, headers, e = xqCookie()

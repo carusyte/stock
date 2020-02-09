@@ -1435,10 +1435,12 @@ func getKlineFromSource(stk *model.Stock, kf klineFetcher, fetReq ...FetchReques
 				return repeat.HintStop(e)
 			}
 			for fr, td := range rtdMap {
-				tabs := resolveTableNames(fr)
-				log.Infof("%s %+v fetched: %d", code, tabs, td.MaxLen())
-				tdmap[fr] = td
-				lkmap[fr] = rlkMap[fr]
+				if td != nil {
+					tabs := resolveTableNames(fr)
+					log.Infof("%s %+v fetched: %d", code, tabs, td.MaxLen())
+					tdmap[fr] = td
+					lkmap[fr] = rlkMap[fr]
+				}
 			}
 			return nil
 		}
