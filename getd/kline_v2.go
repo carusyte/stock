@@ -1438,9 +1438,9 @@ func getKlineFromSource(stk *model.Stock, kf klineFetcher, fetReq ...FetchReques
 				if td != nil {
 					tabs := resolveTableNames(fr)
 					log.Infof("%s %+v fetched: %d", code, tabs, td.MaxLen())
-					tdmap[fr] = td
-					lkmap[fr] = rlkMap[fr]
 				}
+				tdmap[fr] = td
+				lkmap[fr] = rlkMap[fr]
 			}
 			return nil
 		}
