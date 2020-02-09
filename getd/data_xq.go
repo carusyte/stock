@@ -142,7 +142,7 @@ func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 	}
 	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
 	//check whether local validate kline has the latest data
-	dates := make([]string, 0, 8)
+	dates := make([]string, len(k.Dates))
 	copy(dates, k.Dates)
 	sort.Strings(dates)
 	trdat := GetTrDataAt(
