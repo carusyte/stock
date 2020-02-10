@@ -65,12 +65,16 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	case model.Backward:
 		xdrType = "after"
 	}
-	mkt := strings.ToUpper(stk.Market.String)
-	symbol := mkt + stk.Code
+
 	code := stk.Code
-	if isIndex(symbol) {
-		code = symbol
+	symbol := ""
+	if fr.IsIndex {
+		symbol = strings.ToUpper(code)
+	} else {
+		mkt := strings.ToUpper(stk.Market.String)
+		symbol = mkt + code
 	}
+	
 	tabs := resolveTableNames(fr)
 	lkmap[fr] = -1
 	ldate := ""
@@ -128,7 +132,7 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 
 	//construct trade data
 	tdmap[fr] = &model.TradeData{
-		Code:          stk.Code,
+		Code:          code,
 		Source:        fr.LocalSource,
 		Cycle:         cycle,
 		Reinstatement: rtype,
