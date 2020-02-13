@@ -2915,13 +2915,14 @@ CREATE TABLE `params` (
   `utime` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `params_idx_01` (`section`,`param`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `proxy_list` (
   `source` varchar(20) NOT NULL,
   `host` varchar(15) NOT NULL,
   `port` varchar(5) NOT NULL,
   `type` varchar(10) NOT NULL,
+  `loc` varchar(200) NOT NULL,
   `status` varchar(10) NOT NULL,
   `suc` int NOT NULL,
   `fail` int NOT NULL,

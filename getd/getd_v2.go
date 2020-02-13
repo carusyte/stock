@@ -58,6 +58,7 @@ func GetV2() {
 	src := model.DataSource(conf.Args.DataSource.Kline)
 	frs := make([]FetchRequest, 3)
 	cs := []model.CYTP{model.DAY, model.WEEK, model.MONTH}
+	postProcess := false
 	if !conf.Args.DataSource.SkipKlinePre {
 		begin := time.Now()
 		for i := range frs {
@@ -70,6 +71,7 @@ func GetV2() {
 		}
 		stks = GetKlinesV2(stks, frs...)
 		StopWatch("GET_KLINES_PRE", begin)
+		postProcess = true
 	} else {
 		log.Printf("skipped kline-pre data from web (non-reinstated)")
 	}
@@ -92,12 +94,15 @@ func GetV2() {
 		}
 		stks = GetKlinesV2(stks, frs...)
 		StopWatch("GET_MASTER_KLINES", begin)
+		postProcess = true
 	} else {
 		log.Printf("skipped klines data from web (backward & forward reinstated)")
 	}
 
 	FreeFetcherResources()
-	stks = KlinePostProcess(stks)
+	if postProcess {
+		stks = KlinePostProcess(stks)
+	}
 
 	var allIdx, sucIdx []*model.IdxLst
 	if !conf.Args.DataSource.SkipIndices {

@@ -449,6 +449,7 @@ type Proxy struct {
 	Host        string  `db:"host"`
 	Port        string  `db:"port"`
 	Type        string  `db:"type"`
+	Loc         string  `db:"loc"`
 	Status      string  `db:"status"`
 	Suc         int     `db:"suc"`
 	Fail        int     `db:"fail"`
