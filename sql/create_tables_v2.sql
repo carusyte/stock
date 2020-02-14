@@ -1372,10 +1372,10 @@ CREATE TABLE `grader_stats` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `idxlst` (
-  `code` varchar(8) NOT NULL COMMENT '代码',
-  `name` varchar(10) NOT NULL COMMENT '指数名称',
-  `src` varchar(60) DEFAULT NULL COMMENT '来源',
-  PRIMARY KEY (`code`)
+  `src` varchar(20) NOT NULL COMMENT '来源',
+  `code` varchar(20) NOT NULL COMMENT '代码',
+  `name` varchar(20) NOT NULL COMMENT '指数名称',
+  PRIMARY KEY (`code`,`src`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指数列表';
 
 CREATE TABLE `indc_feat` (

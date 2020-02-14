@@ -8,11 +8,14 @@ import (
 
 //GetIndicesV2 fetches index data from configured source.
 func GetIndicesV2() (idxlst, suclst []*model.IdxLst) {
-	_, e := dbmap.Select(&idxlst, `select * from idxlst`)
+	src := conf.Args.DataSource.Index
+	log.Infof("Querying index list for source: %s", src)
+	_, e := dbmap.Select(&idxlst, `select * from idxlst where src = ?`, src)
 	util.CheckErr(e, "failed to query idxlst")
 	log.Infof("# indices: %d", len(idxlst))
 	idxMap := make(map[string]*model.IdxLst)
 	for _, idx := range idxlst {
+		log.Infof("%+v", idx)
 		idxMap[idx.Code] = idx
 	}
 	stks := &model.Stocks{}

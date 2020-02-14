@@ -1854,7 +1854,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 
 // IdxLst Index List
 type IdxLst struct {
-	Code, Name, Src string
+	Src, Code, Name string
 }
 
 // FinPredict financial prediction
