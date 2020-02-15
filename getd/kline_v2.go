@@ -21,8 +21,6 @@ import (
 
 //FetchRequest specifies the arguments to fetch data from remote sources
 type FetchRequest struct {
-	//IsIndex rather than stock
-	IsIndex bool
 	//RemoteSource for the trade data.
 	RemoteSource model.DataSource
 	//LocalSource for the trade data. *model.MasterKline will be used if not specified.
@@ -558,7 +556,9 @@ func getTableColumns(i interface{}) (cols []string) {
 		} else {
 			c = strings.Split(v, ",")[0]
 		}
-		cols = append(cols, strings.ToLower(c))
+		if "-" != c{
+			cols = append(cols, strings.ToLower(c))
+		}
 	}
 	return
 }

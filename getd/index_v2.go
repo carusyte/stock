@@ -23,10 +23,9 @@ func GetIndicesV2() (idxlst, suclst []*model.IdxLst) {
 		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
 	}
 	fr := FetchRequest{
-		IsIndex:      true,
-		RemoteSource: model.DataSource(conf.Args.DataSource.Index),
-		LocalSource:  model.KlineMaster,
-		Reinstate:    model.Forward, // for backward compatibility
+		RemoteSource: model.DataSource(src),
+		LocalSource:  model.Index,
+		Reinstate:    model.None,
 	}
 	cs := []model.CYTP{model.DAY, model.WEEK, model.MONTH}
 	frs := make([]FetchRequest, len(cs))

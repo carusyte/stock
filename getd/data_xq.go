@@ -68,7 +68,7 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 
 	code := stk.Code
 	symbol := ""
-	if fr.IsIndex {
+	if fr.LocalSource == model.Index {
 		symbol = strings.ToUpper(code)
 	} else {
 		mkt := strings.ToUpper(stk.Market.String)

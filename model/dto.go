@@ -55,6 +55,8 @@ const (
 	UnknownSource DataSource = "unknown"
 	//KlineMaster the master kline table
 	KlineMaster DataSource = "kline"
+	//Index the index table
+	Index DataSource = "index"
 	//XQ xueqiu
 	XQ DataSource = "xq"
 	//EM eastmoney
@@ -636,10 +638,10 @@ type TradeDataBasic struct {
 	VarateHigh    sql.NullFloat64 `db:"varate_h"`
 	VarateOpen    sql.NullFloat64 `db:"varate_o"`
 	VarateLow     sql.NullFloat64 `db:"varate_l"`
-	VarateRgl     sql.NullFloat64 `db:"varate_rgl"`
-	VarateRglHigh sql.NullFloat64 `db:"varate_rgl_h"`
-	VarateRglOpen sql.NullFloat64 `db:"varate_rgl_o"`
-	VarateRglLow  sql.NullFloat64 `db:"varate_rgl_l"`
+	VarateRgl     sql.NullFloat64 `db:"-"`
+	VarateRglHigh sql.NullFloat64 `db:"-"`
+	VarateRglOpen sql.NullFloat64 `db:"-"`
+	VarateRglLow  sql.NullFloat64 `db:"-"`
 	Udate         sql.NullString
 	Utime         sql.NullString
 }

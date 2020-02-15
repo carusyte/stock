@@ -1349,14 +1349,14 @@ CREATE TABLE `fin_predict` (
 
 CREATE TABLE `fs_stats` (
   `method` varchar(45) NOT NULL,
-  `fields` varchar(20) NOT NULL,
   `tab` varchar(45) NOT NULL,
+  `fields` varchar(20) NOT NULL,
   `mean` double DEFAULT NULL,
   `std` double DEFAULT NULL,
   `vmax` double DEFAULT NULL,
   `udate` varchar(10) DEFAULT NULL,
   `utime` varchar(8) DEFAULT NULL,
-  PRIMARY KEY (`method`,`fields`,`tab`)
+  PRIMARY KEY (`method`,`tab`,`fields`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Feature Scaling Statistics';
 
 CREATE TABLE `grader_stats` (
@@ -1409,6 +1409,393 @@ CREATE TABLE `indc_feat_raw` (
   PRIMARY KEY (`code`,`fid`,`indc`),
   KEY `INDEX` (`smp_num`,`cytp`,`bysl`,`indc`,`smp_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指标特征原始数据总表';
+
+CREATE TABLE `index_d_n` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT '成交量(股)',
+  `amount` double DEFAULT NULL COMMENT '成交额(元)',
+  `xrate` double DEFAULT NULL COMMENT '换手率(%)',
+  `varate` double DEFAULT NULL COMMENT 'Closing price variation(%)',
+  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation(%)',
+  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
+  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_D_N_IDX1` (`code`,`date`),
+  KEY `INDEX_D_N_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Daily Index (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_d_n_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_D_N_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_D_N_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Daily Index Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_d_n_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_D_N_MA_IDX1` (`code`,`date`),
+  KEY `INDEX_D_N_MA_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Daily Index Moving Average (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_d_n_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_D_N_MA_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_D_N_MA_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Daily Index Moving Average Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_m_n` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT '成交量(股)',
+  `amount` double DEFAULT NULL COMMENT '成交额(元)',
+  `xrate` double DEFAULT NULL COMMENT '换手率(%)',
+  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
+  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
+  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
+  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_M_N_IDX1` (`code`,`date`),
+  KEY `INDEX_M_N_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Index (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_m_n_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_M_N_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_M_N_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Index Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_m_n_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_M_N_MA_IDX1` (`code`,`date`),
+  KEY `INDEX_M_N_MA_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Index Moving Average (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_m_n_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_M_N_MA_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_M_N_MA_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Monthly Index Moving Average Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_w_n` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `open` double DEFAULT NULL,
+  `high` double DEFAULT NULL,
+  `close` double DEFAULT NULL,
+  `low` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT '成交量(股)',
+  `amount` double DEFAULT NULL COMMENT '成交额(元)',
+  `xrate` double DEFAULT NULL COMMENT '换手率(%)',
+  `varate` double DEFAULT NULL COMMENT 'Closing price variation (%)',
+  `varate_h` double DEFAULT NULL COMMENT 'Highest price variation (%)',
+  `varate_o` double DEFAULT NULL COMMENT 'Opening price variation(%)',
+  `varate_l` double DEFAULT NULL COMMENT 'Lowest price variation(%)',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_W_N_IDX1` (`code`,`date`),
+  KEY `INDEX_W_N_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Index (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_w_n_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `amount` double DEFAULT NULL,
+  `xrate` double DEFAULT NULL,
+  `close` double DEFAULT NULL COMMENT 'Log Return (Close)',
+  `high` double DEFAULT NULL COMMENT 'Log Return (High)',
+  `high_close` double DEFAULT NULL,
+  `open` double DEFAULT NULL COMMENT 'Log Return (Open)',
+  `open_close` double DEFAULT NULL,
+  `low` double DEFAULT NULL COMMENT 'Log Return (Low)',
+  `low_close` double DEFAULT NULL,
+  `volume` double DEFAULT NULL COMMENT 'Log Return for Volume',
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_W_N_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_W_N_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Index Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_w_n_ma` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_W_N_MA_IDX1` (`code`,`date`),
+  KEY `INDEX_W_N_MA_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Index Moving Average (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
+
+CREATE TABLE `index_w_n_ma_lr` (
+  `code` varchar(8) NOT NULL,
+  `date` varchar(20) NOT NULL,
+  `klid` int NOT NULL,
+  `ma5` double DEFAULT NULL,
+  `ma5_o` double DEFAULT NULL,
+  `ma5_h` double DEFAULT NULL,
+  `ma5_l` double DEFAULT NULL,
+  `ma10` double DEFAULT NULL,
+  `ma10_o` double DEFAULT NULL,
+  `ma10_h` double DEFAULT NULL,
+  `ma10_l` double DEFAULT NULL,
+  `ma20` double DEFAULT NULL,
+  `ma20_o` double DEFAULT NULL,
+  `ma20_h` double DEFAULT NULL,
+  `ma20_l` double DEFAULT NULL,
+  `ma30` double DEFAULT NULL,
+  `ma30_o` double DEFAULT NULL,
+  `ma30_h` double DEFAULT NULL,
+  `ma30_l` double DEFAULT NULL,
+  `ma60` double DEFAULT NULL,
+  `ma60_o` double DEFAULT NULL,
+  `ma60_h` double DEFAULT NULL,
+  `ma60_l` double DEFAULT NULL,
+  `ma120` double DEFAULT NULL,
+  `ma120_o` double DEFAULT NULL,
+  `ma120_h` double DEFAULT NULL,
+  `ma120_l` double DEFAULT NULL,
+  `ma200` double DEFAULT NULL,
+  `ma200_o` double DEFAULT NULL,
+  `ma200_h` double DEFAULT NULL,
+  `ma200_l` double DEFAULT NULL,
+  `ma250` double DEFAULT NULL,
+  `ma250_o` double DEFAULT NULL,
+  `ma250_h` double DEFAULT NULL,
+  `ma250_l` double DEFAULT NULL,
+  `vol5` double DEFAULT NULL,
+  `vol10` double DEFAULT NULL,
+  `vol20` double DEFAULT NULL,
+  `vol30` double DEFAULT NULL,
+  `vol60` double DEFAULT NULL,
+  `vol120` double DEFAULT NULL,
+  `vol200` double DEFAULT NULL,
+  `vol250` double DEFAULT NULL,
+  `udate` varchar(10) DEFAULT NULL COMMENT 'Last update date',
+  `utime` varchar(8) DEFAULT NULL COMMENT 'Last update time',
+  PRIMARY KEY (`code`,`klid`),
+  UNIQUE KEY `INDEX_W_N_MA_LR_IDX1` (`code`,`date`),
+  KEY `INDEX_W_N_MA_LR_DATE` (`date`,`klid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED COMMENT='Weekly Index Moving Average Log Return (Non-Reinstated)'
+/*!50100 PARTITION BY KEY (`code`)
+PARTITIONS 16 */;
 
 CREATE TABLE `indicator_d` (
   `Code` varchar(8) NOT NULL,

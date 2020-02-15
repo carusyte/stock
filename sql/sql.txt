@@ -556,31 +556,13 @@ FROM
 -- name: COLLECT_STANDARDIZATION_STATS
 INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime) 
 SELECT 
-    'standardization', '%[2]s', field, @col_avg := AVG(t1.col) col_avg, @col_std := STD(t1.col) col_std, 
+    'standardization', '%[1]s', field, @col_avg := AVG(t1.col) col_avg, @col_std := STD(t1.col) col_std, 
     DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
-FROM
-    (SELECT 
-        '%[1]s' field, %[1]s col
-    FROM
-        %[3]s 
-        UNION ALL SELECT 
-            '%[1]s' field, %[1]s col
-        FROM
-            %[4]s
-        WHERE
-            code IN ('sz399001' , 'sh000001')) t1
-ON DUPLICATE KEY UPDATE mean=@col_avg, std=@col_std, udate=DATE_FORMAT(now(), '%%Y-%%m-%%d'), utime=DATE_FORMAT(now(), '%%H:%%i:%%S')
-
--- name: COLLECT_INDICATOR_STANDARDIZATION_STATS
-INSERT INTO fs_stats (method, tab, fields, mean, std, udate, utime)
-SELECT 
-    'standardization', '%[1]s', field, @col_avg := AVG(t1.col) col_avg, @col_std := STD(t1.col) col_std, DATE_FORMAT(now(), '%%Y-%%m-%%d'), DATE_FORMAT(now(), '%%H:%%i:%%S')
 FROM
     (SELECT 
         '%[2]s' field, %[2]s col
     FROM
-        %[1]s 
-	) t1
+        %[1]s) t1
 ON DUPLICATE KEY UPDATE mean=@col_avg, std=@col_std, udate=DATE_FORMAT(now(), '%%Y-%%m-%%d'), utime=DATE_FORMAT(now(), '%%H:%%i:%%S')
 
 -- name: QUERY_BWR_DAILY_4_XCORL_TRN
