@@ -551,7 +551,7 @@ func getTableColumns(i interface{}) (cols []string) {
 	if t, ok = i.(reflect.Type); ok {
 		if reflect.Ptr == t.Kind() {
 			//if it's a pointer, must indirect
-			t = reflect.Indirect(reflect.Zero(t)).Type()
+			t = t.Elem()
 		}
 	} else {
 		t = reflect.TypeOf(i)
