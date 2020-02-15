@@ -548,7 +548,12 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 func getTableColumns(i interface{}) (cols []string) {
 	var t reflect.Type
 	var ok bool
-	if t, ok = i.(reflect.Type); !ok {
+	if t, ok = i.(reflect.Type); ok {
+		if reflect.Ptr == t.Kind() {
+			//if it's a pointer, must indirect
+			t = reflect.Indirect(reflect.New(t)).Type()
+		}
+	} else {
 		t = reflect.TypeOf(i)
 	}
 	n := t.NumField()
