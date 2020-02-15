@@ -220,9 +220,10 @@ func GetTrDataBtwn(code string, qry TrDataQry, field TradeDataField, cond1, cond
 		wg.Add(1)
 		go func(table string, typ reflect.Type) {
 			defer wg.Done()
+			cols := getTableColumns(typ)
 			intf := reflect.New(reflect.SliceOf(typ)).Interface()
-			sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
-				table, cond1, cond2, d)
+			sql := fmt.Sprintf("select %s from %s where code = ? %s %s order by klid %s",
+				strings.Join(cols, ","), table, cond1, cond2, d)
 			_, e := dbmap.Select(intf, sql, args...)
 			util.CheckErr(e, "failed to query "+table+" for "+code)
 			ochan <- intf
@@ -545,7 +546,11 @@ func resolveTradeDataTables(td *model.TradeData) (tabCols map[string][]string, t
 
 //returns the column names of the ORM mapping defined in the struct.
 func getTableColumns(i interface{}) (cols []string) {
-	t := reflect.TypeOf(i)
+	var t reflect.Type
+	var ok bool
+	if t, ok = i.(reflect.Type); !ok {
+		t = reflect.TypeOf(i)
+	}
 	n := t.NumField()
 	for i := 0; i < n; i++ {
 		f := t.Field(i)
@@ -556,7 +561,7 @@ func getTableColumns(i interface{}) (cols []string) {
 		} else {
 			c = strings.Split(v, ",")[0]
 		}
-		if "-" != c{
+		if "-" != c {
 			cols = append(cols, strings.ToLower(c))
 		}
 	}
