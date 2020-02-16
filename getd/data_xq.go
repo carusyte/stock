@@ -240,7 +240,7 @@ func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchReq
 		//clone and update stk code for data fix
 		vstk := *stk
 		vstk.Code = vcode
-		extd, exlk, suc = getKlineFromSource(vstk, kf, exfr)
+		extd, exlk, suc = getKlineFromSource(&vstk, kf, exfr)
 		if !suc {
 			msg := fmt.Sprintf("%s %+v failed to fix data for the following dates: %+v", k.Code, tabs, dates)
 			e = errors.New(msg)
