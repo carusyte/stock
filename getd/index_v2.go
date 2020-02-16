@@ -27,8 +27,10 @@ func GetIndicesV2() (idxlst, suclst []*model.IdxLst) {
 				String: idx.Market,
 				Valid:  true,
 			},
-			Code: idx.Code,
-			Name: idx.Name})
+			Code:   idx.Code,
+			Name:   idx.Name,
+			Source: src,
+		})
 	}
 	fr := FetchRequest{
 		RemoteSource: model.DataSource(src),

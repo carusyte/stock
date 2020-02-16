@@ -150,7 +150,7 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	return tdmap, lkmap, true, false
 }
 
-func (f *XqKlineFetcher) mapCode(fromCode, targetSource string) (toCode string) {
+func (f *XqKlineFetcher) mapCode(fromCode, targetSource string) (toCode string, found bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -165,8 +165,7 @@ func (f *XqKlineFetcher) mapCode(fromCode, targetSource string) (toCode string) 
 		}
 	}
 
-	var ok bool
-	if toCode, ok = f.codemap[fromCode+"_"+targetSource]; !ok {
+	if toCode, found = f.codemap[fromCode+"_"+targetSource]; !found {
 		toCode = fromCode
 	}
 
@@ -181,7 +180,11 @@ func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchReq
 		return
 	}
 	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
-	vcode := f.mapCode(k.Code, conf.Args.DataSource.Validate.Source)
+	vcode, found := f.mapCode(k.Code, conf.Args.DataSource.Validate.Source)
+	if len(stk.Source) > 0 && !found {
+		//if the stock is index and no mapping code is found, skip it
+		return
+	}
 	//check whether local validate kline has the latest data
 	dates := make([]string, len(k.Dates))
 	copy(dates, k.Dates)
@@ -231,7 +234,7 @@ func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchReq
 			Cycle:        fr.Cycle,
 			Reinstate:    fr.Reinstate,
 		}
-		//TODO clone and update stk code for data fix
+		//clone and update stk code for data fix
 		vstk := *stk
 		vstk.Code = vcode
 		extd, exlk, suc = getKlineFromSource(stk, kf, exfr)
