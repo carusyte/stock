@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 )
 
@@ -75,4 +76,10 @@ func TestCloneStock(t *testing.T) {
 	s2.Code = "Changed_02"
 	log.Debug(s1)
 	log.Debug(s2)
+}
+
+func TestMapCode(t *testing.T){
+	f := &XqKlineFetcher{}
+	toCode, found := f.mapCode(".INX", conf.Args.DataSource.Validate.Source)
+	log.Debug(toCode, found)
 }

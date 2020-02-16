@@ -179,12 +179,15 @@ func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchReq
 	if len(k.MissingData) == 0 && len(k.MissingAmount) == 0 {
 		return
 	}
+
 	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
 	vcode, found := f.mapCode(k.Code, conf.Args.DataSource.Validate.Source)
+	
 	if len(stk.Source) > 0 && !found {
 		//if the stock is index and no mapping code is found, skip it
 		return
 	}
+
 	//check whether local validate kline has the latest data
 	dates := make([]string, len(k.Dates))
 	copy(dates, k.Dates)
@@ -237,7 +240,7 @@ func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchReq
 		//clone and update stk code for data fix
 		vstk := *stk
 		vstk.Code = vcode
-		extd, exlk, suc = getKlineFromSource(stk, kf, exfr)
+		extd, exlk, suc = getKlineFromSource(vstk, kf, exfr)
 		if !suc {
 			msg := fmt.Sprintf("%s %+v failed to fix data for the following dates: %+v", k.Code, tabs, dates)
 			e = errors.New(msg)
