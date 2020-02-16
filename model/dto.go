@@ -48,6 +48,8 @@ const (
 const (
 	MarketSZ string = "SZ"
 	MarketSH string = "SH"
+	MarketUS string = "US"
+	MarketHK string = "HK"
 )
 
 const (
@@ -1397,6 +1399,7 @@ type EMKline struct {
 	Period   string
 	AuthType string
 	Dates    []string
+	DataSource
 	//Data unmarshalled will be in chronological order.
 	Data []*TradeDataBasic
 	//DataMap for date -> TradeDataBasic
@@ -1421,8 +1424,17 @@ func (x *EMKline) UnmarshalJSON(b []byte) (e error) {
 	if m, ok = f.(map[string]interface{}); !ok {
 		return errors.Errorf("unrecognized data structure, cant't cast to map: %+v", f)
 	}
-	if ss, ok = m["data"].([]interface{}); !ok {
-		return errors.Errorf("unrecognized data structure, cant't cast 'data' to slice: %+v", m)
+	if x.DataSource == Index {
+		if m, ok = m["data"].(map[string]interface{}); !ok {
+			return errors.Errorf("unrecognized data structure, cant't cast 'data' to map: %+v", m)
+		}
+		if ss, ok = m["klines"].([]interface{}); !ok {
+			return errors.Errorf("unrecognized data structure, cant't cast 'klines' to slice: %+v", m)
+		}
+	} else {
+		if ss, ok = m["data"].([]interface{}); !ok {
+			return errors.Errorf("unrecognized data structure, cant't cast 'data' to slice: %+v", m)
+		}
 	}
 	if len(ss) == 0 {
 		log.Debugf("no item data for %s", x.Code)
@@ -1856,7 +1868,7 @@ func (qj *QQJson) UnmarshalJSON(b []byte) error {
 
 // IdxLst Index List
 type IdxLst struct {
-	Src, Code, Name string
+	Src, Market, Code, Name string
 }
 
 // FinPredict financial prediction
@@ -2086,4 +2098,14 @@ type Params struct {
 	Value   string
 	Udate   sql.NullString
 	Utime   sql.NullString
+}
+
+//CodeMap represents the table structure for code_map
+type CodeMap struct {
+	ID       int
+	FromSrc  string `db:"f_src"`
+	FromCode string `db:"f_code"`
+	ToSrc    string `db:"t_src"`
+	ToCode   string `db:"t_code"`
+	Remark   string
 }

@@ -3437,3 +3437,14 @@ CREATE TABLE `xdxr` (
   PRIMARY KEY (`code`,`idx`),
   UNIQUE KEY `XDXR_IDX1` (`code`,`xdxr_date`,`reg_date`,`idx`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `secu`.`code_map` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `f_src` VARCHAR(10) NOT NULL,
+  `f_code` VARCHAR(20) NOT NULL,
+  `t_src` VARCHAR(10) NOT NULL,
+  `t_code` VARCHAR(20) NOT NULL,
+  `remark` VARCHAR(45) NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE,
+  UNIQUE INDEX `code_map_UNIQUE` (`f_src` ASC, `f_code` ASC, `t_src` ASC, `t_code` ASC) VISIBLE);

@@ -64,3 +64,15 @@ func modmap(m map[string]int) {
 	m["c"] = 3
 	m["a"] = 10
 }
+
+func TestCloneStock(t *testing.T) {
+	s1 := &model.Stock{
+		Code: "01",
+		Name: "n1",
+		Source: "s1",
+	}
+	s2 := *s1
+	s2.Code = "Changed_02"
+	log.Debug(s1)
+	log.Debug(s2)
+}

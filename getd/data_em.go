@@ -29,8 +29,8 @@ func (f *EmKlineFetcher) cleanup() {
 }
 
 func (f *EmKlineFetcher) cache(td *model.TradeData) {
-	lock.Lock()
-	defer lock.Unlock()
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	if f.klineData == nil {
 		f.klineData = make(map[string][]*model.TradeDataBasic)
 	}
@@ -85,16 +85,15 @@ func (f *EmKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		mkt = "1"
 	case model.MarketSZ:
 		mkt = "2"
+	case model.MarketUS:
+		mkt = "_UI" //maybe for index only
+	case model.MarketHK:
+		mkt = "5"
 	default:
 		log.Panicf("unsupported market type: %s", stk.Market.String)
 	}
-	var symbol string
-	if isIndex(symbol) {
-		symbol = code[2:] + mkt
-	} else {
-		symbol = code + mkt
-	}
 
+	symbol := code + mkt
 	tabs := resolveTableNames(fr)
 
 	//if target data has been cached previously, fetch from cache
@@ -112,10 +111,13 @@ func (f *EmKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		}
 	}
 
-	e = fixEMKline(f, emk, fr)
-	if e != nil {
-		log.Warn(e)
-		return tdmap, lkmap, false, true
+	if len(stk.Source) == 0 {
+		//fix non-index stocks
+		e = fixEMKline(f, emk, fr)
+		if e != nil {
+			log.Warn(e)
+			return tdmap, lkmap, false, true
+		}
 	}
 
 	//construct trade data

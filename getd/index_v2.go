@@ -1,6 +1,8 @@
 package getd
 
 import (
+	"database/sql"
+
 	"github.com/carusyte/stock/conf"
 	"github.com/carusyte/stock/model"
 	"github.com/carusyte/stock/util"
@@ -20,7 +22,13 @@ func GetIndicesV2() (idxlst, suclst []*model.IdxLst) {
 	}
 	stks := &model.Stocks{}
 	for _, idx := range idxlst {
-		stks.Add(&model.Stock{Code: idx.Code, Name: idx.Name})
+		stks.Add(&model.Stock{
+			Market: sql.NullString{
+				String: idx.Market,
+				Valid:  true,
+			},
+			Code: idx.Code,
+			Name: idx.Name})
 	}
 	fr := FetchRequest{
 		RemoteSource: model.DataSource(src),

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/carusyte/stock/conf"
@@ -20,7 +21,14 @@ import (
 )
 
 //XqKlineFetcher is capable of fetching kline data from Xueqiu.
-type XqKlineFetcher struct{}
+type XqKlineFetcher struct {
+	codemap map[string]string
+	lock    sync.RWMutex
+}
+
+func (f *XqKlineFetcher) cleanup() {
+	f.codemap = nil
+}
 
 func (f *XqKlineFetcher) extraRequest(fr FetchRequest) FetchRequest {
 	return FetchRequest{
@@ -74,7 +82,7 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		mkt := strings.ToUpper(stk.Market.String)
 		symbol = mkt + code
 	}
-	
+
 	tabs := resolveTableNames(fr)
 	lkmap[fr] = -1
 	ldate := ""
@@ -114,7 +122,7 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 		return tdmap, lkmap, false, true
 	}
 
-	if extd, exlk, e := fixXqData(stk, xqk, fr); e != nil {
+	if extd, exlk, e := f.fixData(stk, xqk, fr); e != nil {
 		return tdmap, lkmap, false, false
 	} else if len(extd) > 0 && len(exlk) > 0 {
 		for k, v := range extd {
@@ -142,20 +150,44 @@ func (f *XqKlineFetcher) fetchKline(stk *model.Stock, fr FetchRequest, incr bool
 	return tdmap, lkmap, true, false
 }
 
+func (f *XqKlineFetcher) mapCode(fromCode, targetSource string) (toCode string) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.codemap == nil {
+		f.codemap = make(map[string]string)
+		var codemap []model.CodeMap
+		if _, e := dbmap.Select(&codemap, `select * from code_map where f_src = ?`, "xq"); e != nil {
+			log.Panicf("failed to query code_map [%s, %s]: %+v", fromCode, targetSource, e)
+		}
+		for _, el := range codemap {
+			f.codemap[el.FromCode+"_"+el.ToSrc] = el.ToCode
+		}
+	}
+
+	var ok bool
+	if toCode, ok = f.codemap[fromCode+"_"+targetSource]; !ok {
+		toCode = fromCode
+	}
+
+	return
+}
+
 //supplement kline data from validate table if any
-func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
+func (f *XqKlineFetcher) fixData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 	extd map[FetchRequest]*model.TradeData, exlk map[FetchRequest]int, e error) {
 
 	if len(k.MissingData) == 0 && len(k.MissingAmount) == 0 {
 		return
 	}
 	vsrc := model.DataSource(conf.Args.DataSource.Validate.Source)
+	vcode := f.mapCode(k.Code, conf.Args.DataSource.Validate.Source)
 	//check whether local validate kline has the latest data
 	dates := make([]string, len(k.Dates))
 	copy(dates, k.Dates)
 	sort.Strings(dates)
 	trdat := GetTrDataAt(
-		k.Code,
+		vcode,
 		TrDataQry{
 			LocalSource: vsrc,
 			Cycle:       fr.Cycle,
@@ -175,7 +207,7 @@ func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 		log.Infof("%s %+v data for the following dates will be updated from local validate kline: %+v",
 			k.Code, tabs, dates)
 		trdat := GetTrDataAt(
-			k.Code,
+			vcode,
 			TrDataQry{
 				LocalSource: vsrc,
 				Cycle:       fr.Cycle,
@@ -199,6 +231,9 @@ func fixXqData(stk *model.Stock, k *model.XQKline, fr FetchRequest) (
 			Cycle:        fr.Cycle,
 			Reinstate:    fr.Reinstate,
 		}
+		//TODO clone and update stk code for data fix
+		vstk := *stk
+		vstk.Code = vcode
 		extd, exlk, suc = getKlineFromSource(stk, kf, exfr)
 		if !suc {
 			msg := fmt.Sprintf("%s %+v failed to fix data for the following dates: %+v", k.Code, tabs, dates)

@@ -111,11 +111,11 @@ func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model
 		wg.Add(1)
 		go func(tab string, typ reflect.Type) {
 			defer wg.Done()
+			cols := getTableColumns(typ)
 			intf := reflect.New(reflect.SliceOf(typ)).Interface()
-			// sql := fmt.Sprintf("select * from %s where code = ? %s %s order by klid %s",
-			// 	table, cond1, cond2, d)
 			if limit <= 0 {
-				sql := fmt.Sprintf("select * from %s where code = ? order by klid", tab)
+				sql := fmt.Sprintf("select %s from %s where code = ? order by klid",
+					strings.Join(cols, ","), tab)
 				if desc {
 					sql += " desc"
 				}
@@ -126,8 +126,8 @@ func GetTrDataDB(code string, qry TrDataQry, limit int, desc bool) (trdat *model
 				if desc {
 					d = "desc"
 				}
-				sql := fmt.Sprintf("select * from (select * from %s where code = ? order by klid desc limit ?) t "+
-					"order by t.klid %s", tab, d)
+				sql := fmt.Sprintf("select %[1]s from (select %[1]s from %[2]s where code = ? order by klid desc limit ?) t "+
+					"order by t.klid %[3]s", strings.Join(cols, ","), tab, d)
 				_, e := dbmap.Select(&intf, sql, code, limit)
 				util.CheckErr(e, "failed to query "+tab+" for "+code)
 			}
@@ -297,12 +297,13 @@ func GetTrDataAt(code string, qry TrDataQry, field TradeDataField, desc bool, va
 		wg.Add(1)
 		go func(table string, typ reflect.Type) {
 			defer wg.Done()
+			cols := getTableColumns(typ)
 			intf := reflect.Zero(reflect.SliceOf(typ)).Interface()
 			for i := range args {
 				cond := fmt.Sprintf("%s in (%s)", field, strings.Join(holders[i], ","))
 				ss := reflect.New(reflect.SliceOf(typ)).Interface()
-				sql := fmt.Sprintf("select * from %s where code = ? and %s order by klid %s",
-					table, cond, d)
+				sql := fmt.Sprintf("select %s from %s where code = ? and %s order by klid %s",
+					strings.Join(cols, ","), table, cond, d)
 				_, e := dbmap.Select(ss, sql, args[i]...)
 				util.CheckErr(e, "failed to query "+table+" for "+code)
 				intf = reflect.AppendSlice(
