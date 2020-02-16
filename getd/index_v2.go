@@ -17,7 +17,7 @@ func GetIndicesV2() (idxlst, suclst []*model.IdxLst) {
 	log.Infof("# indices: %d", len(idxlst))
 	idxMap := make(map[string]*model.IdxLst)
 	for _, idx := range idxlst {
-		log.Infof("%+v", idx)
+		log.Infof("%v", idx)
 		idxMap[idx.Code] = idx
 	}
 	stks := &model.Stocks{}
