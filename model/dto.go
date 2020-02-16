@@ -2107,5 +2107,5 @@ type CodeMap struct {
 	FromCode string `db:"f_code"`
 	ToSrc    string `db:"t_src"`
 	ToCode   string `db:"t_code"`
-	Remark   string
+	Remark   sql.NullString
 }
