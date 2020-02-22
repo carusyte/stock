@@ -106,7 +106,7 @@ func UpdateProxyScore(p *Proxy, success bool) {
 			`where host = ? and port = ?`, p.Host, p.Port)
 	}
 	if e != nil {
-		log.Printf("failed to increase fail counter for proxy %+v", p)
+		log.Printf("failed to increase scoring counter for proxy %+v", p)
 	}
 }
 
@@ -454,6 +454,10 @@ type Proxy struct {
 	Suc         int     `db:"suc"`
 	Fail        int     `db:"fail"`
 	Score       float64 `db:"score"`
+	StatusG     string  `db:"status_g"`
+	SucG        int     `db:"suc_g"`
+	FailG       int     `db:"fail_g"`
+	ScoreG      float64 `db:"score_g"`
 	LastCheck   string  `db:"last_check"`
 	LastScanned string  `db:"last_scanned"`
 }
